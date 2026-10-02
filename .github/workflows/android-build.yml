@@ -1,14 +1,16 @@
-name: Build Android APK
+name: Build and Release Android APK
+
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
-    name: Assemble Debug APK
+    name: Assemble & Release APK
     runs-on: ubuntu-latest
 
     steps:
@@ -37,3 +39,22 @@ jobs:
         with:
           name: lloyd-attendance-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          tag_name: "v1.0.${{ github.run_number }}"
+          name: "Lloyd Attendance v1.0.${{ github.run_number }}"
+          body: |
+            ### Automated Release v1.0.${{ github.run_number }}
+            - Commit: `${{ github.sha }}`
+            - Built automatically from `${{ github.ref_name }}` branch
+            - Material Design 3 Expressive Native Android Application
+            
+            #### Assets
+            Download and install the APK below directly onto your Android device.
+          files: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

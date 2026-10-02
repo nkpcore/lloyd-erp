@@ -23,7 +23,6 @@
                 android:id="@+id/tv_subject_name"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Cloud Computing &amp; DevOps"
                 android:textColor="@color/text_primary"
                 android:textSize="15sp"
                 android:textStyle="bold" />
@@ -33,16 +32,15 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
-                android:text="Faculty: Dr. Rajesh Sharma"
                 android:textColor="#A5B4FC"
-                android:textSize="11sp" />
+                android:textSize="11sp"
+                android:visibility="gone" />
         </LinearLayout>
 
         <TextView
             android:id="@+id/tv_subject_percentage"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="85.5%"
             android:textColor="@color/status_safe"
             android:textSize="18sp"
             android:textStyle="bold" />
@@ -55,7 +53,7 @@
         android:layout_height="8dp"
         android:layout_marginTop="10dp"
         android:max="100"
-        android:progress="85"
+        android:progress="0"
         android:progressTint="@color/status_safe"
         android:progressBackgroundTint="@color/card_dark_elevated" />
 
@@ -71,7 +69,6 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="18 Attended • 2 Missed • 20 Total"
             android:textColor="@color/text_secondary"
             android:textSize="11sp" />
 
@@ -84,7 +81,6 @@
             android:paddingEnd="8dp"
             android:paddingTop="3dp"
             android:paddingBottom="3dp"
-            android:text="Can miss 2 classes"
             android:textColor="#34D399"
             android:textSize="11sp"
             android:textStyle="bold" />

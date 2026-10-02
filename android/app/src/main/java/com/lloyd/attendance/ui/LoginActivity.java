@@ -27,7 +27,6 @@ public class LoginActivity extends AppCompatActivity {
     private View btnBiometric;
     private ProgressBar pbLogin;
     private TextView tvError;
-    private View btnDemoMode;
     private View cardLoginForm;
 
     private AppPreferences prefs;
@@ -56,7 +55,6 @@ public class LoginActivity extends AppCompatActivity {
         btnBiometric = findViewById(R.id.btn_biometric_login);
         pbLogin = findViewById(R.id.progress_login);
         tvError = findViewById(R.id.tv_login_error);
-        btnDemoMode = findViewById(R.id.btn_demo_mode);
         cardLoginForm = findViewById(R.id.card_login_form);
 
         // Entrance motion
@@ -93,15 +91,6 @@ public class LoginActivity extends AppCompatActivity {
                 } else {
                     Toast.makeText(this, "Sign in with password once to enable quick login", Toast.LENGTH_SHORT).show();
                 }
-            });
-        }
-
-        if (btnDemoMode != null) {
-            btnDemoMode.setOnClickListener(v -> {
-                AnimationHelper.animateCardPress(v);
-                prefs.setDemoMode(true);
-                startActivity(new Intent(this, MainActivity.class));
-                finish();
             });
         }
     }

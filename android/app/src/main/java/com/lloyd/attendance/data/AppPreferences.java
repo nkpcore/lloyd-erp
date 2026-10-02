@@ -208,12 +208,4 @@ public class AppPreferences {
     public String getMonthlyAttendanceJson() {
         return getMonthlyData();
     }
-
-    public void setDemoMode(boolean demo) {
-        prefs.edit().putBoolean("demo_mode", demo).apply();
-    }
-
-    public boolean isDemoMode() {
-        return prefs.getBoolean("demo_mode", false);
-    }
 }

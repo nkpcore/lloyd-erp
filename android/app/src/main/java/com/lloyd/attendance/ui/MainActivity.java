@@ -648,6 +648,7 @@ public class MainActivity extends AppCompatActivity {
         containerSubjectItems.removeAllViews();
 
         Map<String, int[]> subjectCounts = new LinkedHashMap<>(); // [present, total]
+        Map<String, String> subjectFaculty = new LinkedHashMap<>();
         for (Models.StudentAttendanceItem item : allAttendanceLogs) {
             String name = item.getSubjectDisplayName();
             if (!subjectCounts.containsKey(name)) {
@@ -656,6 +657,11 @@ public class MainActivity extends AppCompatActivity {
             int[] c = subjectCounts.get(name);
             c[1]++;
             if (item.isPresent()) c[0]++;
+
+            String fac = item.getFacultyDisplayName();
+            if (fac != null && !fac.trim().isEmpty() && !subjectFaculty.containsKey(name)) {
+                subjectFaculty.put(name, fac);
+            }
         }
 
         LayoutInflater inflater = LayoutInflater.from(this);
@@ -667,12 +673,20 @@ public class MainActivity extends AppCompatActivity {
 
             View card = inflater.inflate(R.layout.item_subject, containerSubjectItems, false);
             TextView tvName = card.findViewById(R.id.tv_subject_name);
+            TextView tvFaculty = card.findViewById(R.id.tv_subject_faculty);
             TextView tvPct = card.findViewById(R.id.tv_subject_percentage);
             TextView tvCounts = card.findViewById(R.id.tv_subject_stats);
             TextView tvAdvice = card.findViewById(R.id.tv_subject_bunk);
             ProgressBar pb = card.findViewById(R.id.pb_subject_progress);
 
             tvName.setText(subName);
+            String faculty = subjectFaculty.get(subName);
+            if (faculty != null && !faculty.trim().isEmpty()) {
+                tvFaculty.setText("Faculty: " + faculty);
+                tvFaculty.setVisibility(View.VISIBLE);
+            } else {
+                tvFaculty.setVisibility(View.GONE);
+            }
             tvPct.setText(String.format(Locale.US, "%.1f%%", pct));
             tvCounts.setText(present + " / " + total + " attended");
             pb.setProgress((int) pct);
