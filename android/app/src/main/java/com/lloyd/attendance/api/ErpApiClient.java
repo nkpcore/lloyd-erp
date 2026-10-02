@@ -249,6 +249,7 @@ public class ErpApiClient {
         int targetStudentId = studentId > 0 ? studentId : prefs.getStudentId();
         if (targetStudentId <= 0) targetStudentId = 28960;
 
+        android.util.Log.i("ERP_RAW", "getStudentAttendanceLogs for target ID: " + targetStudentId);
         List<Models.StudentAttendanceItem> allItems = new ArrayList<>();
         int page = 1;
         int totalPages = 1;
@@ -256,6 +257,7 @@ public class ErpApiClient {
         do {
             String url = BASE_URL + "/attendance/student?student_id=" + targetStudentId +
                     "&page=" + page + "&page_size=100&sort_by=attendance_date&sort_dir=desc";
+            android.util.Log.i("ERP_RAW", "Requesting URL: " + url);
 
             Request request = new Request.Builder()
                     .url(url)
@@ -270,16 +272,19 @@ public class ErpApiClient {
                     return getStudentAttendanceLogs(targetStudentId);
                 }
 
+                String resStr = response.body() != null ? response.body().string() : "";
+                android.util.Log.i("ERP_RAW", "Logs response (" + response.code() + "): " + (resStr.length() > 200 ? resStr.substring(0, 200) : resStr));
+
                 if (!response.isSuccessful()) {
                     break;
                 }
 
-                String resStr = response.body() != null ? response.body().string() : "";
                 Type type = new TypeToken<Models.PaginatedApiResponse<List<Models.StudentAttendanceItem>>>() {}.getType();
                 Models.PaginatedApiResponse<List<Models.StudentAttendanceItem>> apiRes = gson.fromJson(resStr, type);
 
                 if (apiRes != null && apiRes.data != null && !apiRes.data.isEmpty()) {
                     allItems.addAll(apiRes.data);
+                    android.util.Log.i("ERP_RAW", "Page " + page + " items: " + apiRes.data.size() + ", total so far: " + allItems.size());
                     if (apiRes.meta != null && apiRes.meta.totalPages > 0) {
                         totalPages = apiRes.meta.totalPages;
                     } else {
