@@ -100,6 +100,44 @@ public class Models {
         public String createdAt;
         @SerializedName("created_by_name")
         public String createdByName; // Faculty name
+
+        public boolean isPresent() {
+            return "Present".equalsIgnoreCase(status);
+        }
+
+        public String getSubjectDisplayName() {
+            return subjectName != null && !subjectName.isEmpty() ? subjectName : "Class Lecture";
+        }
+
+        public String getFacultyDisplayName() {
+            return createdByName != null && !createdByName.isEmpty() ? createdByName : "Faculty";
+        }
+
+        public String getMonthYearLabel() {
+            if (attendanceDate != null && attendanceDate.length() >= 7) {
+                try {
+                    String[] parts = attendanceDate.split("-");
+                    int year = Integer.parseInt(parts[0]);
+                    int month = Integer.parseInt(parts[1]);
+                    String[] months = {"", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+                    return months[month] + " " + year;
+                } catch (Exception ignored) {}
+            }
+            return "Other";
+        }
+
+        public String getFormattedDate() {
+            if (attendanceDate != null) {
+                try {
+                    java.text.SimpleDateFormat inFormat = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US);
+                    java.text.SimpleDateFormat outFormat = new java.text.SimpleDateFormat("EEE, MMM dd", java.util.Locale.US);
+                    java.util.Date d = inFormat.parse(attendanceDate);
+                    if (d != null) return outFormat.format(d);
+                } catch (Exception ignored) {}
+                return attendanceDate;
+            }
+            return "—";
+        }
     }
 
     public static class UserProfile {

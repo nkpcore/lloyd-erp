@@ -9,10 +9,12 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import com.lloyd.attendance.R;
 import com.lloyd.attendance.api.ErpApiClient;
 import com.lloyd.attendance.data.AppPreferences;
+import com.lloyd.attendance.util.AnimationHelper;
 import com.lloyd.attendance.widget.AttendanceWidgetProvider;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -22,8 +24,11 @@ public class LoginActivity extends AppCompatActivity {
     private EditText etUsername;
     private EditText etPassword;
     private Button btnLogin;
+    private View btnBiometric;
     private ProgressBar pbLogin;
     private TextView tvError;
+    private View btnDemoMode;
+    private View cardLoginForm;
 
     private AppPreferences prefs;
     private ErpApiClient apiClient;
@@ -48,8 +53,23 @@ public class LoginActivity extends AppCompatActivity {
         etUsername = findViewById(R.id.et_username);
         etPassword = findViewById(R.id.et_password);
         btnLogin = findViewById(R.id.btn_login);
-        pbLogin = findViewById(R.id.pb_login);
+        btnBiometric = findViewById(R.id.btn_biometric_login);
+        pbLogin = findViewById(R.id.progress_login);
         tvError = findViewById(R.id.tv_login_error);
+        btnDemoMode = findViewById(R.id.btn_demo_mode);
+        cardLoginForm = findViewById(R.id.card_login_form);
+
+        // Entrance motion
+        if (cardLoginForm != null) {
+            cardLoginForm.setAlpha(0f);
+            cardLoginForm.setTranslationY(40f);
+            cardLoginForm.animate()
+                    .alpha(1f)
+                    .translationY(0f)
+                    .setDuration(400)
+                    .setInterpolator(new androidx.interpolator.view.animation.FastOutSlowInInterpolator())
+                    .start();
+        }
 
         // Pre-fill username if remembered
         String savedUser = prefs.getUsername();
@@ -58,7 +78,32 @@ public class LoginActivity extends AppCompatActivity {
             etPassword.requestFocus();
         }
 
-        btnLogin.setOnClickListener(v -> attemptLogin());
+        btnLogin.setOnClickListener(v -> {
+            AnimationHelper.animateCardPress(v);
+            attemptLogin();
+        });
+
+        if (btnBiometric != null) {
+            btnBiometric.setOnClickListener(v -> {
+                AnimationHelper.animateCardPress(v);
+                String savedPassword = prefs.getPassword();
+                if (!savedUser.isEmpty() && !savedPassword.isEmpty()) {
+                    etPassword.setText(savedPassword);
+                    attemptLogin();
+                } else {
+                    Toast.makeText(this, "Sign in with password once to enable quick login", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
+        if (btnDemoMode != null) {
+            btnDemoMode.setOnClickListener(v -> {
+                AnimationHelper.animateCardPress(v);
+                prefs.setDemoMode(true);
+                startActivity(new Intent(this, MainActivity.class));
+                finish();
+            });
+        }
     }
 
     private void attemptLogin() {
@@ -105,7 +150,8 @@ public class LoginActivity extends AppCompatActivity {
     }
 
     private void setLoading(boolean loading) {
-        btnLogin.setEnabled(!loading);
         pbLogin.setVisibility(loading ? View.VISIBLE : View.GONE);
+        btnLogin.setEnabled(!loading);
+        if (btnBiometric != null) btnBiometric.setEnabled(!loading);
     }
 }

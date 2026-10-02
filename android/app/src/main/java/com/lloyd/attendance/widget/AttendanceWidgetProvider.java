@@ -134,7 +134,20 @@ public class AttendanceWidgetProvider extends AppWidgetProvider {
             }
 
             views.setTextViewText(R.id.tv_widget_percentage, String.format(Locale.US, "%.1f%%", stats.overallPercentage));
-            views.setTextViewText(R.id.tv_widget_classes, stats.totalPresent + " / " + stats.totalClasses + " classes attended");
+            
+            com.lloyd.attendance.schedule.TimetableRepository.ActiveClassStatus sched = 
+                    com.lloyd.attendance.schedule.TimetableRepository.getActiveOrNextClass();
+            if (sched != null) {
+                if (sched.isOngoing && sched.activePeriod != null) {
+                    views.setTextViewText(R.id.tv_widget_classes, "Live: " + sched.activePeriod.subjectName + " (" + sched.remainingMinutes + "m)");
+                } else if (sched.nextPeriod != null) {
+                    views.setTextViewText(R.id.tv_widget_classes, "Next: " + sched.nextPeriod.startTime + " " + sched.nextPeriod.subjectName);
+                } else {
+                    views.setTextViewText(R.id.tv_widget_classes, stats.totalPresent + " / " + stats.totalClasses + " classes attended");
+                }
+            } else {
+                views.setTextViewText(R.id.tv_widget_classes, stats.totalPresent + " / " + stats.totalClasses + " classes attended");
+            }
 
             if (stats.overallPercentage >= 75.0) {
                 views.setTextColor(R.id.tv_widget_percentage, Color.parseColor("#10B981")); // Emerald

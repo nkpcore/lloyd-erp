@@ -192,4 +192,28 @@ public class AppPreferences {
         String devId = getOrCreateDeviceId();
         prefs.edit().clear().putString(KEY_DEVICE_ID, devId).apply();
     }
+
+    public void logout() {
+        clearAll();
+    }
+
+    public void saveAttendanceLogsJson(String json) {
+        saveAttendanceLogs(json);
+    }
+
+    public String getAttendanceLogsJson() {
+        return getAttendanceLogs();
+    }
+
+    public String getMonthlyAttendanceJson() {
+        return getMonthlyData();
+    }
+
+    public void setDemoMode(boolean demo) {
+        prefs.edit().putBoolean("demo_mode", demo).apply();
+    }
+
+    public boolean isDemoMode() {
+        return prefs.getBoolean("demo_mode", false);
+    }
 }

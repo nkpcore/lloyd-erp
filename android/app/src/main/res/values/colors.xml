@@ -1,34 +1,61 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="primary">#4F46E5</color>
-    <color name="primary_dark">#3730A3</color>
-    <color name="primary_light">#EEF2FF</color>
-    <color name="primary_gradient_start">#6366F1</color>
-    <color name="primary_gradient_end">#4338CA</color>
+    <!-- Material Design 3 Tonal Surface Roles (Dark Theme) -->
+    <color name="md_theme_dark_surface">#0F172A</color>
+    <color name="md_theme_dark_onSurface">#F8FAFC</color>
+    <color name="md_theme_dark_onSurfaceVariant">#94A3B8</color>
+    <color name="md_theme_dark_surfaceContainerLowest">#0B0F19</color>
+    <color name="md_theme_dark_surfaceContainerLow">#141C2E</color>
+    <color name="md_theme_dark_surfaceContainer">#1B243B</color>
+    <color name="md_theme_dark_surfaceContainerHigh">#222E49</color>
+    <color name="md_theme_dark_surfaceContainerHighest">#2B3958</color>
 
-    <color name="bg_dark">#0F172A</color>
-    <color name="card_dark">#1E293B</color>
-    <color name="card_dark_elevated">#273549</color>
-    <color name="card_border">#334155</color>
+    <!-- Material Design 3 Brand Accents -->
+    <color name="md_theme_dark_primary">#818CF8</color>
+    <color name="md_theme_dark_onPrimary">#1E1B4B</color>
+    <color name="md_theme_dark_primaryContainer">#312E81</color>
+    <color name="md_theme_dark_onPrimaryContainer">#E0E7FF</color>
 
-    <color name="text_primary">#F8FAFC</color>
-    <color name="text_secondary">#94A3B8</color>
-    <color name="text_muted">#64748B</color>
+    <color name="md_theme_dark_secondary">#38BDF8</color>
+    <color name="md_theme_dark_onSecondary">#082F49</color>
+    <color name="md_theme_dark_secondaryContainer">#0C4A6E</color>
+    <color name="md_theme_dark_onSecondaryContainer">#E0F2FE</color>
 
+    <color name="md_theme_dark_tertiary">#A78BFA</color>
+    <color name="md_theme_dark_onTertiary">#2E1065</color>
+    <color name="md_theme_dark_tertiaryContainer">#4C1D95</color>
+    <color name="md_theme_dark_onTertiaryContainer">#EDE9FE</color>
+
+    <!-- Material Design 3 Semantic Status Colors -->
     <color name="status_safe">#10B981</color>
     <color name="status_safe_bg">#132E27</color>
     <color name="status_safe_text">#34D399</color>
-
-    <color name="status_warning">#F59E0B</color>
-    <color name="status_warning_bg">#342410</color>
-    <color name="status_warning_text">#FBBF24</color>
 
     <color name="status_danger">#EF4444</color>
     <color name="status_danger_bg">#36171A</color>
     <color name="status_danger_text">#F87171</color>
 
-    <color name="widget_bg">#181E2E</color>
-    <color name="widget_card_inner">#222B40</color>
+    <color name="status_warning">#F59E0B</color>
+    <color name="status_warning_bg">#342410</color>
+    <color name="status_warning_text">#FBBF24</color>
+
+    <!-- Outlines & Boundaries -->
+    <color name="md_theme_dark_outline">#475569</color>
+    <color name="md_theme_dark_outlineVariant">#334155</color>
+
+    <!-- Legacy / Compatibility Aliases -->
+    <color name="primary">#818CF8</color>
+    <color name="primary_dark">#4F46E5</color>
+    <color name="primary_light">#EEF2FF</color>
+    <color name="primary_gradient_start">#6366F1</color>
+    <color name="primary_gradient_end">#4338CA</color>
+    <color name="bg_dark">#0F172A</color>
+    <color name="card_dark">#1B243B</color>
+    <color name="card_dark_elevated">#222E49</color>
+    <color name="card_border">#334155</color>
+    <color name="text_primary">#F8FAFC</color>
+    <color name="text_secondary">#94A3B8</color>
+    <color name="text_muted">#64748B</color>
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
     <color name="transparent">#00000000</color>
