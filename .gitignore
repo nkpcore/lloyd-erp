@@ -1,0 +1,35 @@
+# Built application files
+*.apk
+*.aab
+*.ap_
+
+# Gradle and build cache
+.gradle/
+build/
+android/build/
+android/app/build/
+android/.gradle/
+**/build/
+**/intermediates/
+**/tmp/
+
+# Android Studio / IntelliJ IDEA / VSCode
+*.iml
+.idea/
+.vscode/
+local.properties
+.DS_Store
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+
+# Log files
+*.log
+
+# Temporary test and probe files
+test_*.py
+inspect_*.py
+scan_*.py
+find_*.py
+print_*.py

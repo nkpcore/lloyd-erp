@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">Lloyd Attendance</string>
+    <string name="widget_name">Lloyd Attendance Widget</string>
+    <string name="login_title">Lloyd ERP Sign In</string>
+    <string name="login_subtitle">Enter your erp.lloydcollege.in credentials</string>
+    <string name="username_hint">Admission No / Username</string>
+    <string name="password_hint">Password</string>
+    <string name="btn_login">Sign In &amp; Sync Widget</string>
+    <string name="overall_attendance">Overall Attendance</string>
+    <string name="classes_attended">Classes Attended</string>
+    <string name="monthly_breakdown">Monthly Breakdown</string>
+    <string name="timetable_today">Today\'s Classes</string>
+    <string name="widget_instructions">Add Widget to Home Screen</string>
+    <string name="bunk_calculator">Smart Bunk Buffer</string>
+</resources>
