@@ -84,12 +84,27 @@ public class LoginActivity extends AppCompatActivity {
         if (btnBiometric != null) {
             btnBiometric.setOnClickListener(v -> {
                 AnimationHelper.animateCardPress(v);
-                String savedPassword = prefs.getPassword();
-                if (!savedUser.isEmpty() && !savedPassword.isEmpty()) {
-                    etPassword.setText(savedPassword);
-                    attemptLogin();
+                if (prefs.isLoggedIn()) {
+                    setLoading(true);
+                    executor.execute(() -> {
+                        try {
+                            apiClient.ensureValidToken();
+                            new Handler(Looper.getMainLooper()).post(() -> {
+                                setLoading(false);
+                                Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+                                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                                startActivity(intent);
+                                finish();
+                            });
+                        } catch (Exception e) {
+                            new Handler(Looper.getMainLooper()).post(() -> {
+                                setLoading(false);
+                                Toast.makeText(this, "Session expired. Please sign in with your password.", Toast.LENGTH_SHORT).show();
+                            });
+                        }
+                    });
                 } else {
-                    Toast.makeText(this, "Sign in with password once to enable quick login", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Please sign in with your admission number and password first.", Toast.LENGTH_SHORT).show();
                 }
             });
         }

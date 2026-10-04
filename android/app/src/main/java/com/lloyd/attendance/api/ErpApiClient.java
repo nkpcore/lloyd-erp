@@ -73,14 +73,20 @@ public class ErpApiClient {
             Models.ApiResponse<Models.LoginData> apiRes = gson.fromJson(resStr, type);
 
             if (apiRes != null && apiRes.status && apiRes.data != null) {
-                // Permanently persist credentials & tokens on this phone
-                prefs.saveCredentials(username, password);
+                // Persist username & encrypted tokens on this phone
+                prefs.saveUsername(username);
                 prefs.saveTokens(apiRes.data.access_token, apiRes.data.refresh_token);
                 if (apiRes.data.profileId != null && apiRes.data.profileId > 0) {
                     prefs.saveStudentId(apiRes.data.profileId);
                 }
                 if (apiRes.data.user != null) {
                     prefs.saveUserProfile(apiRes.data.user);
+                    if (apiRes.data.user.id > 0) {
+                        prefs.saveStudentId(apiRes.data.user.id);
+                    }
+                    if (apiRes.data.user.section != null && !apiRes.data.user.section.trim().isEmpty()) {
+                        prefs.saveSelectedSection(apiRes.data.user.section.trim());
+                    }
                 }
                 return apiRes.data;
             } else {
@@ -122,8 +128,7 @@ public class ErpApiClient {
 
     /**
      * Guarantees a valid authorization token.
-     * If token is missing/expired, it automatically refreshes or transparently
-     * re-authenticates using the phone's stored credentials.
+     * If token is missing/expired, it automatically refreshes via refresh token.
      */
     public synchronized String ensureValidToken() throws Exception {
         String token = prefs.getAccessToken();
@@ -131,32 +136,17 @@ public class ErpApiClient {
             return token;
         }
 
-        // 1. Try refresh token
+        // Try refresh token
         if (refreshToken()) {
             return prefs.getAccessToken();
-        }
-
-        // 2. Seamless auto re-login with phone's stored credentials
-        String username = prefs.getUsername();
-        String password = prefs.getPassword();
-        if (!username.isEmpty() && !password.isEmpty()) {
-            Models.LoginData data = login(username, password);
-            if (data != null && data.access_token != null) {
-                return data.access_token;
-            }
         }
 
         throw new ErpException("Please sign in to your Lloyd ERP account.");
     }
 
     private synchronized void handleUnauthorized() throws Exception {
+        prefs.saveTokens("", "");
         if (refreshToken()) {
-            return;
-        }
-        String username = prefs.getUsername();
-        String password = prefs.getPassword();
-        if (!username.isEmpty() && !password.isEmpty()) {
-            login(username, password);
             return;
         }
         throw new ErpException("Session expired. Please sign in again.");
@@ -183,7 +173,6 @@ public class ErpApiClient {
             }
 
             String resStr = response.body() != null ? response.body().string() : "";
-            android.util.Log.i("ERP_RAW", "Monthly (" + response.code() + "): " + resStr);
             Type type = new TypeToken<Models.ApiResponse<Models.MonthlyAttendanceData>>() {}.getType();
             Models.ApiResponse<Models.MonthlyAttendanceData> apiRes = gson.fromJson(resStr, type);
 
@@ -216,7 +205,6 @@ public class ErpApiClient {
             }
 
             String resStr = response.body() != null ? response.body().string() : "";
-            android.util.Log.i("ERP_RAW", "Weekly (" + response.code() + "): " + resStr);
 
             if (!response.isSuccessful()) {
                 throw new ErpException("Server error (" + response.code() + "): " + resStr);
@@ -246,10 +234,30 @@ public class ErpApiClient {
 
     public List<Models.StudentAttendanceItem> getStudentAttendanceLogs(int studentId) throws Exception {
         String token = ensureValidToken();
-        int targetStudentId = studentId > 0 ? studentId : prefs.getStudentId();
-        if (targetStudentId <= 0) targetStudentId = 28960;
+        int verifiedId = prefs.getStudentId();
+        if (verifiedId <= 0) {
+            // Dynamically resolve verified student ID directly from student/me/monthly-attendance
+            try {
+                Models.MonthlyAttendanceData monthly = getMonthlyAttendance();
+                if (monthly != null && monthly.studentId > 0) {
+                    verifiedId = monthly.studentId;
+                    prefs.saveStudentId(verifiedId);
+                }
+            } catch (Exception ignored) {
+            }
+        }
 
-        android.util.Log.i("ERP_RAW", "getStudentAttendanceLogs for target ID: " + targetStudentId);
+        int targetStudentId = studentId > 0 ? studentId : verifiedId;
+
+        // BOLA Security Check: strictly reject requests for unverified student IDs
+        if (verifiedId > 0 && targetStudentId != verifiedId) {
+            throw new SecurityException("BOLA security violation: Requesting unverified student ID: " + targetStudentId + " does not match authenticated student ID: " + verifiedId);
+        }
+
+        if (targetStudentId <= 0) {
+            return new ArrayList<>();
+        }
+
         List<Models.StudentAttendanceItem> allItems = new ArrayList<>();
         int page = 1;
         int totalPages = 1;
@@ -257,7 +265,6 @@ public class ErpApiClient {
         do {
             String url = BASE_URL + "/attendance/student?student_id=" + targetStudentId +
                     "&page=" + page + "&page_size=100&sort_by=attendance_date&sort_dir=desc";
-            android.util.Log.i("ERP_RAW", "Requesting URL: " + url);
 
             Request request = new Request.Builder()
                     .url(url)
@@ -272,21 +279,18 @@ public class ErpApiClient {
                     return getStudentAttendanceLogs(targetStudentId);
                 }
 
-                String resStr = response.body() != null ? response.body().string() : "";
-                android.util.Log.i("ERP_RAW", "Logs response (" + response.code() + "): " + (resStr.length() > 200 ? resStr.substring(0, 200) : resStr));
-
                 if (!response.isSuccessful()) {
                     break;
                 }
 
+                String resStr = response.body() != null ? response.body().string() : "";
                 Type type = new TypeToken<Models.PaginatedApiResponse<List<Models.StudentAttendanceItem>>>() {}.getType();
                 Models.PaginatedApiResponse<List<Models.StudentAttendanceItem>> apiRes = gson.fromJson(resStr, type);
 
                 if (apiRes != null && apiRes.data != null && !apiRes.data.isEmpty()) {
                     allItems.addAll(apiRes.data);
-                    android.util.Log.i("ERP_RAW", "Page " + page + " items: " + apiRes.data.size() + ", total so far: " + allItems.size());
                     if (apiRes.meta != null && apiRes.meta.totalPages > 0) {
-                        totalPages = apiRes.meta.totalPages;
+                        totalPages = Math.min(apiRes.meta.totalPages, 20); // Safety limit
                     } else {
                         break;
                     }

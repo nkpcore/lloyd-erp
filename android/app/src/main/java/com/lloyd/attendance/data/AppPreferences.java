@@ -2,19 +2,16 @@ package com.lloyd.attendance.data;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import androidx.security.crypto.EncryptedSharedPreferences;
-import androidx.security.crypto.MasterKey;
 import com.google.gson.Gson;
 import com.lloyd.attendance.api.Models;
+import com.lloyd.attendance.core.security.KeystoreTokenStore;
+import com.lloyd.attendance.core.security.SecureTokenStore;
 import java.util.UUID;
 
 public class AppPreferences {
     private static final String PREF_NAME = "lloyd_attendance_secure_prefs";
     private static final String KEY_DEVICE_ID = "device_id";
     private static final String KEY_USERNAME = "username";
-    private static final String KEY_PASSWORD = "password";
-    private static final String KEY_ACCESS_TOKEN = "access_token";
-    private static final String KEY_REFRESH_TOKEN = "refresh_token";
     private static final String KEY_USER_PROFILE = "user_profile";
     private static final String KEY_CACHED_STATS = "cached_stats";
     private static final String KEY_MONTHLY_JSON = "monthly_json";
@@ -23,9 +20,11 @@ public class AppPreferences {
     private static final String KEY_STUDENT_ID = "student_id";
     private static final String KEY_LAST_SEEN_ATTENDANCE_ID = "last_seen_attendance_id";
     private static final String KEY_NOTIFICATION_ENABLED = "notification_enabled";
+    private static final String KEY_SELECTED_SECTION = "selected_section";
 
     private static volatile AppPreferences instance;
-    private SharedPreferences prefs;
+    private final SharedPreferences prefs;
+    private final SecureTokenStore tokenStore;
     private final Gson gson = new Gson();
 
     public static AppPreferences getInstance(Context context) {
@@ -41,22 +40,12 @@ public class AppPreferences {
 
     public AppPreferences(Context context) {
         Context appContext = context.getApplicationContext();
-        try {
-            MasterKey masterKey = new MasterKey.Builder(appContext)
-                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                    .build();
+        this.prefs = appContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        this.tokenStore = new KeystoreTokenStore(appContext);
+    }
 
-            this.prefs = EncryptedSharedPreferences.create(
-                    appContext,
-                    PREF_NAME,
-                    masterKey,
-                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            );
-        } catch (Exception e) {
-            // Fallback to standard private preferences if Keystore unavailable
-            this.prefs = appContext.getSharedPreferences(PREF_NAME + "_fallback", Context.MODE_PRIVATE);
-        }
+    public SecureTokenStore getTokenStore() {
+        return tokenStore;
     }
 
     public synchronized String getOrCreateDeviceId() {
@@ -68,45 +57,44 @@ public class AppPreferences {
         return id;
     }
 
-    public void saveCredentials(String username, String password) {
-        prefs.edit()
-                .putString(KEY_USERNAME, username)
-                .putString(KEY_PASSWORD, password)
-                .apply();
+    public void saveUsername(String username) {
+        prefs.edit().putString(KEY_USERNAME, username).apply();
     }
 
     public void saveCredentials(String username) {
-        prefs.edit()
-                .putString(KEY_USERNAME, username)
-                .apply();
+        saveUsername(username);
     }
 
     public String getUsername() {
         return prefs.getString(KEY_USERNAME, "");
     }
 
-    public String getPassword() {
-        return prefs.getString(KEY_PASSWORD, "");
-    }
-
     public void saveTokens(String accessToken, String refreshToken) {
-        SharedPreferences.Editor editor = prefs.edit();
-        if (accessToken != null) editor.putString(KEY_ACCESS_TOKEN, accessToken);
-        if (refreshToken != null) editor.putString(KEY_REFRESH_TOKEN, refreshToken);
-        editor.apply();
+        tokenStore.setAccessToken(accessToken);
+        if (refreshToken != null) {
+            tokenStore.setRefreshToken(refreshToken);
+        }
     }
 
     public String getAccessToken() {
-        return prefs.getString(KEY_ACCESS_TOKEN, "");
+        String token = tokenStore.getAccessToken();
+        return token != null ? token : "";
     }
 
     public String getRefreshToken() {
-        return prefs.getString(KEY_REFRESH_TOKEN, "");
+        String token = tokenStore.getRefreshToken();
+        return token != null ? token : "";
     }
 
     public void saveUserProfile(Models.UserProfile profile) {
         if (profile != null) {
             prefs.edit().putString(KEY_USER_PROFILE, gson.toJson(profile)).apply();
+            if (profile.id > 0) {
+                saveStudentId(profile.id);
+            }
+            if (profile.section != null && !profile.section.trim().isEmpty()) {
+                saveSelectedSection(profile.section.trim());
+            }
         }
     }
 
@@ -154,10 +142,22 @@ public class AppPreferences {
 
     public void saveStudentId(int id) {
         prefs.edit().putInt(KEY_STUDENT_ID, id).apply();
+        tokenStore.setVerifiedStudentId(id);
     }
 
     public int getStudentId() {
-        return prefs.getInt(KEY_STUDENT_ID, 28960);
+        int id = tokenStore.getVerifiedStudentId();
+        if (id > 0) return id;
+        return prefs.getInt(KEY_STUDENT_ID, 0);
+    }
+
+    public void saveSelectedSection(String section) {
+        prefs.edit().putString(KEY_SELECTED_SECTION, section != null ? section.trim() : "").apply();
+    }
+
+    public String getSelectedSection() {
+        // Strict: Never default to Section A-1. If empty, returns empty string.
+        return prefs.getString(KEY_SELECTED_SECTION, "");
     }
 
     public void saveAttendanceLogs(String json) {
@@ -177,7 +177,7 @@ public class AppPreferences {
     }
 
     public boolean isLoggedIn() {
-        return !getAccessToken().isEmpty() || (!getUsername().isEmpty() && !getPassword().isEmpty());
+        return !getAccessToken().isEmpty() || tokenStore.hasValidRefreshToken();
     }
 
     public void setNotificationsEnabled(boolean enabled) {
@@ -190,6 +190,7 @@ public class AppPreferences {
 
     public void clearAll() {
         String devId = getOrCreateDeviceId();
+        tokenStore.clearTokens();
         prefs.edit().clear().putString(KEY_DEVICE_ID, devId).apply();
     }
 
