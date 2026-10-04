@@ -1,775 +1,128 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Lloyd Attendance Pro Max</title>
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#0F172A">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Lloyd Att">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg: #0B1120;
-      --card: #151F32;
-      --card-elevated: #1D2A44;
-      --card-border: #2A3B5C;
-      --primary: #4F46E5;
-      --primary-gradient: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);
-      --accent: #818CF8;
-      --text: #F8FAFC;
-      --text-sec: #94A3B8;
-      --text-muted: #64748B;
-      --safe: #10B981;
-      --safe-bg: rgba(16, 185, 129, 0.14);
-      --safe-text: #34D399;
-      --danger: #EF4444;
-      --danger-bg: rgba(239, 68, 68, 0.14);
-      --danger-text: #F87171;
-      --warning: #F59E0B;
-    }
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif;
-      -webkit-tap-highlight-color: transparent;
-    }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 16px;
-    }
-    .container {
-      width: 100%;
-      max-width: 480px;
-      margin: 0 auto;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-    /* Tabs */
-    .nav-tabs {
-      display: flex;
-      gap: 8px;
-      overflow-x: auto;
-      padding-bottom: 2px;
-      scrollbar-width: none;
-    }
-    .nav-tabs::-webkit-scrollbar { display: none; }
-    .tab-btn {
-      background: var(--card);
-      border: 1px solid var(--card-border);
-      color: var(--text-sec);
-      font-size: 12px;
-      font-weight: 700;
-      padding: 10px 14px;
-      border-radius: 12px;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: all 0.2s ease;
-    }
-    .tab-btn.active {
-      background: var(--primary-gradient);
-      color: white;
-      border-color: transparent;
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
-    }
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#0B0F19" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Lloyd Attendance" />
+    <title>Lloyd Attendance — Student Portal</title>
 
-    /* Cards */
-    .card {
-      background: var(--card);
-      border: 1px solid var(--card-border);
-      border-radius: 20px;
-      padding: 20px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-      position: relative;
-    }
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    
+    <!-- Material Design 3 Design Tokens -->
+    <style>
+      :root {
+        /* MD3 Brand Color Tokens (Light Scheme) */
+        --md-sys-color-primary: #1E40AF;
+        --md-sys-color-on-primary: #FFFFFF;
+        --md-sys-color-primary-container: #DBEAFE;
+        --md-sys-color-on-primary-container: #1E3A8A;
+        --md-sys-color-secondary: #0F766E;
+        --md-sys-color-on-secondary: #FFFFFF;
+        --md-sys-color-secondary-container: #CCFBF1;
+        --md-sys-color-on-secondary-container: #115E59;
+        --md-sys-color-tertiary: #6D28D9;
+        --md-sys-color-on-tertiary: #FFFFFF;
+        --md-sys-color-tertiary-container: #EDE9FE;
+        --md-sys-color-on-tertiary-container: #4C1D95;
+        --md-sys-color-error: #BA1A1A;
+        --md-sys-color-on-error: #FFFFFF;
+        --md-sys-color-error-container: #FFDAD6;
+        --md-sys-color-on-error-container: #410002;
+        --md-sys-color-surface: #F8FAFC;
+        --md-sys-color-on-surface: #0F172A;
+        --md-sys-color-surface-variant: #E2E8F0;
+        --md-sys-color-on-surface-variant: #475569;
+        --md-sys-color-outline: #94A3B8;
+        --md-sys-color-outline-variant: #CBD5E1;
+        --md-sys-color-surface-container-lowest: #FFFFFF;
+        --md-sys-color-surface-container-low: #F1F5F9;
+        --md-sys-color-surface-container: #E2E8F0;
+        --md-sys-color-surface-container-high: #CBD5E1;
+        --md-sys-color-surface-container-highest: #94A3B8;
 
-    /* Top Bar */
-    .top-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .school-logo-badge {
-      width: 44px;
-      height: 44px;
-      background: var(--primary-gradient);
-      border-radius: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 22px;
-      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
-    }
-    .header-info {
-      flex: 1;
-    }
-    .header-info h1 {
-      font-size: 16px;
-      font-weight: 800;
-      color: white;
-    }
-    .header-info p {
-      font-size: 12px;
-      color: var(--text-sec);
-    }
-    .btn-header-action {
-      background: var(--card-elevated);
-      border: 1px solid var(--card-border);
-      color: var(--text-sec);
-      width: 36px;
-      height: 36px;
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      font-size: 14px;
-    }
+        /* Semantic Attendance Health Tokens */
+        --md-custom-color-healthy: #059669;
+        --md-custom-color-healthy-container: #D1FAE5;
+        --md-custom-color-on-healthy-container: #065F46;
+        --md-custom-color-borderline: #D97706;
+        --md-custom-color-borderline-container: #FEF3C7;
+        --md-custom-color-on-borderline-container: #92400E;
+        --md-custom-color-critical: #DC2626;
+        --md-custom-color-critical-container: #FEE2E2;
+        --md-custom-color-on-critical-container: #991B1B;
 
-    /* Hero Attendance Card */
-    .hero-attendance {
-      background: linear-gradient(145deg, #18243C 0%, #10192A 100%);
-      border: 1.5px solid #2F4066;
-    }
-    .hero-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .hero-title {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--text-sec);
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-    .status-badge {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.02em;
-    }
-    .status-safe {
-      color: var(--safe-text);
-      background: var(--safe-bg);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-    }
-    .status-danger {
-      color: var(--danger-text);
-      background: var(--danger-bg);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-    }
-    .big-percentage {
-      font-size: 46px;
-      font-weight: 800;
-      line-height: 1.1;
-      margin: 12px 0;
-    }
-    .stats-row {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
-      margin: 14px 0;
-    }
-    .stat-chip {
-      background: #141E30;
-      border: 1px solid #23314B;
-      padding: 10px 8px;
-      border-radius: 12px;
-      text-align: center;
-    }
-    .stat-chip-num {
-      font-size: 18px;
-      font-weight: 800;
-    }
-    .stat-chip-lbl {
-      font-size: 10px;
-      color: var(--text-sec);
-      margin-top: 2px;
-      font-weight: 600;
-    }
-    .bunk-banner {
-      background: #172338;
-      border: 1px solid #2B3D5E;
-      border-radius: 12px;
-      padding: 12px 14px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 12px;
-      font-weight: 700;
-    }
+        /* MD3 Shape Tokens */
+        --md-sys-shape-corner-none: 0px;
+        --md-sys-shape-corner-extra-small: 4px;
+        --md-sys-shape-corner-small: 8px;
+        --md-sys-shape-corner-medium: 12px;
+        --md-sys-shape-corner-large: 16px;
+        --md-sys-shape-corner-extra-large: 28px;
+        --md-sys-shape-corner-full: 9999px;
 
-    /* Timetable / Schedule Items */
-    .period-card {
-      background: var(--card);
-      border: 1px solid var(--card-border);
-      border-radius: 16px;
-      padding: 16px;
-      margin-bottom: 12px;
-    }
-    .period-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-    }
-    .period-time {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--accent);
-    }
-    .period-room {
-      background: var(--card-elevated);
-      padding: 3px 8px;
-      border-radius: 8px;
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--text-sec);
-    }
-    .period-subject {
-      font-size: 15px;
-      font-weight: 800;
-      color: var(--text);
-      margin-bottom: 10px;
-    }
-    .period-bottom {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    /* Simulator */
-    .sim-slider-box {
-      margin: 18px 0;
-    }
-    input[type=range] {
-      width: 100%;
-      accent-color: var(--primary);
-      height: 6px;
-      background: var(--card-elevated);
-      border-radius: 4px;
-    }
-
-    /* Inputs */
-    .form-group { margin-bottom: 14px; }
-    label { display: block; font-size: 12px; color: var(--text-sec); margin-bottom: 6px; font-weight: 600; }
-    input[type=text], input[type=password] {
-      width: 100%;
-      background: #101827;
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 13px 15px;
-      color: white;
-      font-size: 14px;
-      outline: none;
-    }
-    input[type=text]:focus, input[type=password]:focus {
-      border-color: var(--primary);
-    }
-    .btn-primary {
-      width: 100%;
-      background: var(--primary-gradient);
-      color: white;
-      border: none;
-      border-radius: 12px;
-      padding: 14px;
-      font-size: 15px;
-      font-weight: 800;
-      cursor: pointer;
-      box-shadow: 0 4px 16px rgba(79, 70, 229, 0.45);
-      margin-top: 6px;
-    }
-    .btn-secondary {
-      width: 100%;
-      background: transparent;
-      border: 1px solid var(--card-border);
-      color: #A5B4FC;
-      border-radius: 12px;
-      padding: 10px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      margin-top: 8px;
-    }
-
-    /* Months */
-    .month-item {
-      background: #141F32;
-      border-radius: 14px;
-      padding: 14px;
-      margin-bottom: 10px;
-    }
-    .progress-bar-bg {
-      background: #23314B;
-      height: 8px;
-      border-radius: 4px;
-      overflow: hidden;
-      margin: 8px 0;
-    }
-    .progress-bar-fill {
-      height: 100%;
-      border-radius: 4px;
-      transition: width 0.4s ease;
-    }
-
-    .hidden { display: none !important; }
-    .err-msg {
-      background: rgba(239, 68, 68, 0.15);
-      color: #FCA5A5;
-      padding: 10px 12px;
-      border-radius: 10px;
-      font-size: 12px;
-      margin-bottom: 12px;
-    }
-    .rotating { animation: spin 0.8s linear infinite; }
-    @keyframes spin { 100% { transform: rotate(360deg); } }
-  </style>
-</head>
-<body>
-
-  <div class="container">
-    <!-- Top Header -->
-    <div class="top-header">
-      <div class="school-logo-badge">🎓</div>
-      <div class="header-info">
-        <h1 id="headerStudentName">Lloyd College ERP</h1>
-        <p id="headerStudentInfo">erp.lloydcollege.in</p>
-      </div>
-      <button class="btn-header-action" id="btnSync" onclick="refreshAttendance()" title="Sync Attendance">🔄</button>
-      <button class="btn-header-action" onclick="handleLogout()" title="Sign Out">🚪</button>
-    </div>
-
-    <!-- Navigation Tabs -->
-    <div class="nav-tabs" id="navTabs">
-      <button class="tab-btn active" onclick="selectTab('overview')">📊 Overview</button>
-      <button class="tab-btn" onclick="selectTab('schedule')">📅 Today's Schedule</button>
-      <button class="tab-btn" onclick="selectTab('simulator')">🎯 Bunk Simulator</button>
-      <button class="tab-btn" onclick="selectTab('widget')">⚡ Widget Mode</button>
-    </div>
-
-    <!-- Login View -->
-    <div id="viewLogin" class="card">
-      <div style="text-align: center; margin-bottom: 20px;">
-        <h2 style="font-size: 20px; font-weight: 800;">Sign In to Lloyd ERP</h2>
-        <p style="font-size: 12px; color: var(--text-sec); margin-top: 4px;">Sync attendance and timetable directly with your device</p>
-      </div>
-      <div id="loginError" class="err-msg hidden"></div>
-      <div class="form-group">
-        <label>Admission No / Username</label>
-        <input type="text" id="inputUsername" placeholder="e.g. 2023LLOYD1234">
-      </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" id="inputPassword" placeholder="••••••••">
-      </div>
-      <button id="btnLogin" class="btn-primary" onclick="handleLogin()">Sign In &amp; Sync Widget</button>
-    </div>
-
-    <!-- Tab 1: Overview -->
-    <div id="tabOverviewContent" class="hidden" style="display: flex; flex-direction: column; gap: 14px;">
-      <div class="card hero-attendance">
-        <div class="hero-top">
-          <span class="hero-title">Overall Attendance</span>
-          <span id="badgeStatus" class="status-badge status-safe">SAFE (≥75%)</span>
-        </div>
-        <div id="textPercentage" class="big-percentage" style="color: var(--safe-text);">--%</div>
-
-        <div class="stats-row">
-          <div class="stat-chip">
-            <div id="statPresent" class="stat-chip-num" style="color: var(--safe-text);">0</div>
-            <div class="stat-chip-lbl">Attended</div>
-          </div>
-          <div class="stat-chip">
-            <div id="statAbsent" class="stat-chip-num" style="color: var(--danger-text);">0</div>
-            <div class="stat-chip-lbl">Missed</div>
-          </div>
-          <div class="stat-chip">
-            <div id="statTotal" class="stat-chip-num">0</div>
-            <div class="stat-chip-lbl">Total</div>
-          </div>
-        </div>
-
-        <div id="bannerBunk" class="bunk-banner">
-          <span id="iconBunk">✅</span>
-          <span id="textBunkAdvice">Calculating bunk buffer...</span>
-        </div>
-
-        <div style="font-size: 11px; color: var(--text-muted); margin-top: 12px;" id="textLastUpdated">Updated: Just now</div>
-      </div>
-
-      <!-- Monthly Breakdown -->
-      <div class="card">
-        <h3 style="font-size: 15px; font-weight: 800; margin-bottom: 12px;">Monthly Breakdown</h3>
-        <div id="listMonthly"></div>
-      </div>
-    </div>
-
-    <!-- Tab 2: Today's Schedule -->
-    <div id="tabScheduleContent" class="hidden" style="display: flex; flex-direction: column; gap: 12px;">
-      <div class="card" style="padding: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <h3 id="scheduleDateHeader" style="font-size: 15px; font-weight: 800;">Today's Classes</h3>
-          <span class="status-badge" style="background: rgba(99,102,241,0.18); color: var(--accent);">LECTURES</span>
-        </div>
-      </div>
-      <div id="listSchedule"></div>
-    </div>
-
-    <!-- Tab 3: Bunk Simulator -->
-    <div id="tabSimulatorContent" class="hidden">
-      <div class="card">
-        <h3 style="font-size: 16px; font-weight: 800;">🎯 Bunk &amp; Goal Simulator</h3>
-        <p style="font-size: 12px; color: var(--text-sec); margin-top: 4px;">
-          Adjust the slider to see what happens to your percentage before missing or attending classes:
-        </p>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
-          <span id="simProjectedPct" style="font-size: 38px; font-weight: 800; color: var(--safe-text);">85.2%</span>
-          <span id="simAdviceNote" style="font-size: 12px; font-weight: 700; color: var(--text-sec); max-width: 60%; text-align: right;">Safe</span>
-        </div>
-        <div class="sim-slider-box">
-          <input type="range" id="sliderSim" min="-10" max="15" value="0" step="1" oninput="runSimulation()">
-        </div>
-        <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700;">
-          <span style="color: var(--danger-text);">-10 Missed</span>
-          <span id="sliderLabel" style="color: white;">Current (0)</span>
-          <span style="color: var(--safe-text);">+15 Attended</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tab 4: Compact Widget Mode -->
-    <div id="tabWidgetContent" class="hidden">
-      <div class="card" style="background: linear-gradient(145deg, #172236, #0F1626); border: 2px solid #374669; border-radius: 24px; padding: 18px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <div style="font-size: 11px; font-weight: 800; color: #94A3B8; letter-spacing: 0.05em;">🏛️ LLOYD ATTENDANCE WIDGET</div>
-          <span style="font-size: 10px; color: var(--text-muted);" id="widgetModeTime">Live</span>
-        </div>
-        <div style="display: flex; align-items: center; gap: 16px; margin: 10px 0;">
-          <div id="widgetModePct" style="font-size: 44px; font-weight: 800; color: var(--safe-text);">--%</div>
-          <div>
-            <div id="widgetModeBadge" class="status-badge status-safe">SAFE</div>
-            <div id="widgetModeClasses" style="font-size: 12px; color: var(--text-sec); margin-top: 4px;">-- classes</div>
-          </div>
-        </div>
-        <div id="widgetModeBunk" class="bunk-banner" style="margin-top: 10px;">
-          <span>✅</span>
-          <span id="widgetModeBunkText">Calculating...</span>
-        </div>
-      </div>
-    </div>
-
-  </div>
-
-  <script>
-    const API_BASE = 'https://erp.lloydcollege.in/api';
-    let basePresent = 0;
-    let baseTotal = 0;
-
-    window.addEventListener('DOMContentLoaded', () => {
-      const savedUser = localStorage.getItem('lloyd_user');
-      const savedToken = localStorage.getItem('lloyd_access_token');
-
-      if (savedUser) document.getElementById('inputUsername').value = savedUser;
-      if (savedToken) {
-        showDashboard();
-        refreshAttendance();
+        /* MD3 Spacing 8dp System */
+        --md-sys-spacing-1: 4px;
+        --md-sys-spacing-2: 8px;
+        --md-sys-spacing-3: 12px;
+        --md-sys-spacing-4: 16px;
+        --md-sys-spacing-6: 24px;
+        --md-sys-spacing-8: 32px;
       }
-    });
 
-    function selectTab(tab) {
-      const tabs = ['overview', 'schedule', 'simulator', 'widget'];
-      tabs.forEach(t => {
-        const btn = document.querySelector(`button[onclick="selectTab('${t}')"]`);
-        const content = document.getElementById(`tab${capitalize(t)}Content`);
-        if (t === tab) {
-          btn.classList.add('active');
-          content.classList.remove('hidden');
-        } else {
-          btn.classList.remove('active');
-          content.classList.add('hidden');
+      /* Dark Theme Overrides */
+      :root.dark,
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --md-sys-color-primary: #93C5FD;
+          --md-sys-color-on-primary: #1E3A8A;
+          --md-sys-color-primary-container: #1E40AF;
+          --md-sys-color-on-primary-container: #DBEAFE;
+          --md-sys-color-secondary: #5EEAD4;
+          --md-sys-color-on-secondary: #115E59;
+          --md-sys-color-secondary-container: #0F766E;
+          --md-sys-color-on-secondary-container: #CCFBF1;
+          --md-sys-color-tertiary: #C4B5FD;
+          --md-sys-color-on-tertiary: #4C1D95;
+          --md-sys-color-tertiary-container: #6D28D9;
+          --md-sys-color-on-tertiary-container: #EDE9FE;
+          --md-sys-color-error: #FFB4AB;
+          --md-sys-color-on-error: #690005;
+          --md-sys-color-error-container: #93000A;
+          --md-sys-color-on-error-container: #FFDAD6;
+          --md-sys-color-surface: #0B0F19;
+          --md-sys-color-on-surface: #F1F5F9;
+          --md-sys-color-surface-variant: #1E293B;
+          --md-sys-color-on-surface-variant: #94A3B8;
+          --md-sys-color-outline: #475569;
+          --md-sys-color-outline-variant: #334155;
+          --md-sys-color-surface-container-lowest: #030712;
+          --md-sys-color-surface-container-low: #0F172A;
+          --md-sys-color-surface-container: #1E293B;
+          --md-sys-color-surface-container-high: #334155;
+          --md-sys-color-surface-container-highest: #475569;
+
+          --md-custom-color-healthy: #34D399;
+          --md-custom-color-healthy-container: #064E3B;
+          --md-custom-color-on-healthy-container: #A7F3D0;
+          --md-custom-color-borderline: #FBBF24;
+          --md-custom-color-borderline-container: #78350F;
+          --md-custom-color-on-borderline-container: #FDE68A;
+          --md-custom-color-critical: #F87171;
+          --md-custom-color-critical-container: #7F1D1D;
+          --md-custom-color-on-critical-container: #FECACA;
         }
-      });
-    }
-
-    function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
-
-    function showDashboard() {
-      document.getElementById('viewLogin').classList.add('hidden');
-      selectTab('overview');
-    }
-
-    function handleLogout() {
-      localStorage.removeItem('lloyd_access_token');
-      localStorage.removeItem('lloyd_refresh_token');
-      document.getElementById('viewLogin').classList.remove('hidden');
-      ['overview', 'schedule', 'simulator', 'widget'].forEach(t => {
-        document.getElementById(`tab${capitalize(t)}Content`).classList.add('hidden');
-      });
-    }
-
-    async function handleLogin() {
-      const u = document.getElementById('inputUsername').value.trim();
-      const p = document.getElementById('inputPassword').value;
-      const errBox = document.getElementById('loginError');
-      const btn = document.getElementById('btnLogin');
-
-      if (!u || !p) {
-        errBox.textContent = 'Please enter both username and password.';
-        errBox.classList.remove('hidden');
-        return;
       }
-      errBox.classList.add('hidden');
-      btn.disabled = true;
-      btn.textContent = 'Signing In...';
+    </style>
 
-      let deviceId = localStorage.getItem('lloyd_device_id') || 'web-' + Math.random().toString(36).substring(2, 10);
-      localStorage.setItem('lloyd_device_id', deviceId);
-
-      try {
-        const res = await fetch(`${API_BASE}/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username: u, password: p, device_id: deviceId, app_version: '2.0.0',
-            timezone: 'Asia/Kolkata', browser_name: 'Chrome', browser_version: '124',
-            os_name: 'Android', device_type: 'mobile'
-          })
-        });
-        const data = await res.json();
-        if (data.status && data.data?.access_token) {
-          localStorage.setItem('lloyd_user', u);
-          localStorage.setItem('lloyd_access_token', data.data.access_token);
-          localStorage.setItem('lloyd_refresh_token', data.data.refresh_token);
-          showDashboard();
-          await refreshAttendance();
-        } else {
-          throw new Error(data.message || 'Invalid credentials');
-        }
-      } catch (err) {
-        errBox.textContent = err.message || 'Login failed. Check connectivity.';
-        errBox.classList.remove('hidden');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Sign In & Sync Widget';
-      }
-    }
-
-    async function refreshAttendance() {
-      const btnSync = document.getElementById('btnSync');
-      btnSync.classList.add('rotating');
-
-      const token = localStorage.getItem('lloyd_access_token');
-      try {
-        const [monthlyRes, weeklyRes] = await Promise.all([
-          fetch(`${API_BASE}/student/me/monthly-attendance`, { headers: { 'Authorization': `Bearer ${token}` } }),
-          fetch(`${API_BASE}/student/me/weekly-attendance`, { headers: { 'Authorization': `Bearer ${token}` } })
-        ]);
-
-        if (monthlyRes.status === 401) {
-          const refreshed = await tryTokenRefresh();
-          if (refreshed) return refreshAttendance();
-          handleLogout();
-          return;
-        }
-
-        const mData = await monthlyRes.json();
-        const wData = await weeklyRes.json();
-
-        if (mData.status && mData.data) renderStats(mData.data);
-        if (wData.status && wData.data) renderSchedule(wData.data);
-      } catch (e) {
-        console.error('Refresh error:', e);
-      } finally {
-        btnSync.classList.remove('rotating');
-        document.getElementById('textLastUpdated').textContent = 'Last Synced: ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-      }
-    }
-
-    async function tryTokenRefresh() {
-      const r = localStorage.getItem('lloyd_refresh_token');
-      if (!r) return false;
-      try {
-        const res = await fetch(`${API_BASE}/auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_token: r })
-        });
-        const d = await res.json();
-        if (d.status && d.data?.access_token) {
-          localStorage.setItem('lloyd_access_token', d.data.access_token);
-          localStorage.setItem('lloyd_refresh_token', d.data.refresh_token);
-          return true;
-        }
-      } catch (e) {}
-      return false;
-    }
-
-    function renderStats(data) {
-      const name = data.studentName || data.student_name || 'Lloyd Student';
-      document.getElementById('headerStudentName').textContent = name;
-
-      let p = 0, t = 0;
-      (data.months || []).forEach(m => { p += (m.present || 0); t += (m.total || 0); });
-      basePresent = p;
-      baseTotal = t;
-
-      const pct = t > 0 ? ((p / t) * 100) : 100;
-      const pctStr = pct.toFixed(1) + '%';
-      const isSafe = pct >= 75;
-
-      document.getElementById('textPercentage').textContent = pctStr;
-      document.getElementById('textPercentage').style.color = isSafe ? 'var(--safe-text)' : 'var(--danger-text)';
-
-      const badge = document.getElementById('badgeStatus');
-      badge.className = `status-badge ${isSafe ? 'status-safe' : 'status-danger'}`;
-      badge.textContent = isSafe ? 'SAFE (≥75%)' : 'SHORTAGE (<75%)';
-
-      document.getElementById('statPresent').textContent = p;
-      document.getElementById('statAbsent').textContent = Math.max(0, t - p);
-      document.getElementById('statTotal').textContent = t;
-
-      const bunkAdvice = document.getElementById('textBunkAdvice');
-      const bunkIcon = document.getElementById('iconBunk');
-      if (isSafe) {
-        bunkIcon.textContent = '✅';
-        const canBunk = Math.floor((p - 0.75 * t) / 0.75);
-        bunkAdvice.textContent = canBunk > 0 ? `Can safely bunk ${canBunk} next class${canBunk > 1 ? 'es' : ''}!` : 'Safe! Do not miss upcoming lectures.';
-      } else {
-        bunkIcon.textContent = '⚠️';
-        const needed = Math.ceil((0.75 * t - p) / 0.25);
-        bunkAdvice.textContent = `Must attend ${needed} class${needed > 1 ? 'es' : ''} in a row to reach 75%!`;
-      }
-
-      // Widget Mode sync
-      document.getElementById('widgetModePct').textContent = pctStr;
-      document.getElementById('widgetModePct').style.color = isSafe ? 'var(--safe-text)' : 'var(--danger-text)';
-      document.getElementById('widgetModeBadge').className = `status-badge ${isSafe ? 'status-safe' : 'status-danger'}`;
-      document.getElementById('widgetModeBadge').textContent = isSafe ? 'SAFE' : 'SHORTAGE';
-      document.getElementById('widgetModeClasses').textContent = `${p} / ${t} attended`;
-      document.getElementById('widgetModeBunkText').textContent = bunkAdvice.textContent;
-
-      // Render Months
-      const mList = document.getElementById('listMonthly');
-      mList.innerHTML = '';
-      (data.months || []).forEach(m => {
-        const mPct = Number(m.percentage || 0).toFixed(1);
-        const safe = mPct >= 75;
-        const color = safe ? 'var(--safe-text)' : 'var(--danger-text)';
-        const barColor = safe ? '#10B981' : '#EF4444';
-
-        const div = document.createElement('div');
-        div.className = 'month-item';
-        div.innerHTML = `
-          <div style="display: flex; justify-content: space-between; font-weight: 700; font-size: 14px;">
-            <span>${m.monthLabel || 'Month'}</span>
-            <span style="color: ${color};">${mPct}%</span>
-          </div>
-          <div class="progress-bar-bg">
-            <div class="progress-bar-fill" style="width: ${Math.min(100, mPct)}%; background: ${barColor};"></div>
-          </div>
-          <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-sec);">
-            <span>${m.present} Present / ${m.total} Total</span>
-            <span style="color: ${color}; font-weight: 700;">${safe ? 'Safe' : 'Shortage'}</span>
-          </div>
-        `;
-        mList.appendChild(div);
-      });
-
-      document.getElementById('sliderSim').value = 0;
-      runSimulation();
-    }
-
-    function renderSchedule(data) {
-      const list = document.getElementById('listSchedule');
-      list.innerHTML = '';
-      const days = data.days || [];
-      if (days.length === 0) {
-        list.innerHTML = '<div class="card" style="text-align: center; color: var(--text-sec);">No lecture schedule found for this week.</div>';
-        return;
-      }
-
-      const today = days[0];
-      document.getElementById('scheduleDateHeader').textContent = `${today.day || 'Today'}, ${today.date || ''}`;
-
-      (today.periods || []).forEach(p => {
-        const status = (p.status || 'unmarked').toLowerCase();
-        let statusBadge = `<span class="status-badge" style="background: rgba(129,140,248,0.2); color: var(--accent);">SCHEDULED</span>`;
-        let hint = 'Upcoming Lecture';
-        if (status === 'present') {
-          statusBadge = `<span class="status-badge status-safe">PRESENT</span>`;
-          hint = 'Marked Present ✅';
-        } else if (status === 'absent') {
-          statusBadge = `<span class="status-badge status-danger">ABSENT</span>`;
-          hint = 'Marked Missed ❌';
-        }
-
-        const div = document.createElement('div');
-        div.className = 'period-card';
-        div.innerHTML = `
-          <div class="period-top">
-            <span class="period-time">${p.startTime || ''} - ${p.endTime || ''}</span>
-            <span class="period-room">${p.roomNo ? '📍 Room ' + p.roomNo : '🏛️ Room —'}</span>
-          </div>
-          <div class="period-subject">${p.subjectName || 'Lecture'}</div>
-          <div class="period-bottom">
-            ${statusBadge}
-            <span style="font-size: 11px; color: var(--text-muted);">${hint}</span>
-          </div>
-        `;
-        list.appendChild(div);
-      });
-    }
-
-    function runSimulation() {
-      const delta = parseInt(document.getElementById('sliderSim').value, 10);
-      const label = document.getElementById('sliderLabel');
-      const resPct = document.getElementById('simProjectedPct');
-      const advice = document.getElementById('simAdviceNote');
-
-      let newP = basePresent;
-      let newT = baseTotal;
-
-      if (delta > 0) {
-        newP += delta;
-        newT += delta;
-        label.textContent = `+${delta} Attended`;
-        label.style.color = 'var(--safe-text)';
-      } else if (delta < 0) {
-        newT += Math.abs(delta);
-        label.textContent = `${delta} Missed`;
-        label.style.color = 'var(--danger-text)';
-      } else {
-        label.textContent = 'Current (0)';
-        label.style.color = 'white';
-      }
-
-      const pct = newT > 0 ? ((newP / newT) * 100) : 100;
-      resPct.textContent = pct.toFixed(1) + '%';
-      const isSafe = pct >= 75;
-      resPct.style.color = isSafe ? 'var(--safe-text)' : 'var(--danger-text)';
-
-      if (isSafe) {
-        const canBunk = Math.max(0, Math.floor((newP - 0.75 * newT) / 0.75));
-        advice.textContent = `Safe! You can afford to miss ${canBunk} more classes after this.`;
-      } else {
-        const needed = Math.max(1, Math.ceil((0.75 * newT - newP) / 0.25));
-        advice.textContent = `Shortage! Will require attending ${needed} consecutive classes.`;
-      }
-    }
-  </script>
-</body>
+    <script type="module" crossorigin src="/assets/index-DhavIe_O.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CrUXqs6E.css">
+  </head>
+  <body class="bg-[#0B0F19] text-[#F1F5F9] antialiased selection:bg-[#1E40AF]/30 selection:text-[#93C5FD]">
+    <div id="root"></div>
+  </body>
 </html>

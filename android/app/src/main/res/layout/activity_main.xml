@@ -51,7 +51,7 @@
                     android:layout_height="wrap_content"
                     android:ellipsize="end"
                     android:singleLine="true"
-                    android:text="NIKHIL KUMAR PANDEY"
+                    android:text="Lloyd Student"
                     android:textColor="@color/md_theme_dark_onSurface"
                     android:textSize="16sp"
                     android:textStyle="bold" />
@@ -76,11 +76,24 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="6dp"
-                        android:text="Live Sync • Section A-1"
+                        android:text="Syncing..."
                         android:textColor="@color/md_theme_dark_onSurfaceVariant"
                         android:textSize="11sp" />
                 </LinearLayout>
             </LinearLayout>
+
+            <!-- Share / Export Attendance Report -->
+            <ImageButton
+                android:id="@+id/btn_main_share"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/bg_widget_pill"
+                android:contentDescription="Share Report"
+                android:padding="9dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_share"
+                app:tint="@color/md_theme_dark_onSurfaceVariant" />
 
             <!-- Privacy / Stealth Eye Toggle -->
             <ImageButton

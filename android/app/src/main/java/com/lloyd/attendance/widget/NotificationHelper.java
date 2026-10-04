@@ -70,11 +70,11 @@ public class NotificationHelper {
         views.setTextColor(R.id.notif_overall_pct, overallPercentage >= 75.0 ? Color.parseColor("#10B981") : Color.parseColor("#EF4444"));
 
         if (isPresent) {
-            views.setTextViewText(R.id.notif_header_tag, "MARKED PRESENT ✅");
+            views.setTextViewText(R.id.notif_header_tag, "MARKED PRESENT");
             views.setTextColor(R.id.notif_header_tag, Color.parseColor("#34D399"));
             views.setImageViewResource(R.id.notif_status_icon, R.drawable.ic_check);
         } else {
-            views.setTextViewText(R.id.notif_header_tag, "MARKED ABSENT ❌");
+            views.setTextViewText(R.id.notif_header_tag, "MARKED ABSENT");
             views.setTextColor(R.id.notif_header_tag, Color.parseColor("#F87171"));
             views.setImageViewResource(R.id.notif_status_icon, R.drawable.ic_alert);
         }
