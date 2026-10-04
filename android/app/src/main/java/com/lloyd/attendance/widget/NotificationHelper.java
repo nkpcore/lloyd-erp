@@ -11,12 +11,12 @@ import android.os.Build;
 import android.widget.RemoteViews;
 import androidx.core.app.NotificationCompat;
 import com.lloyd.attendance.R;
-import com.lloyd.attendance.ui.MainActivity;
+import com.lloyd.attendance.ui.MainComposeActivity;
 import java.util.Locale;
 
 public class NotificationHelper {
 
-    public static final String CHANNEL_ID = "lloyd_attendance_dynamic_island";
+    public static final String CHANNEL_ID = "lloyd_attendance_marks";
     private static final String CHANNEL_NAME = "Live Attendance Alerts";
 
     public static void createNotificationChannel(Context context) {
@@ -29,9 +29,9 @@ public class NotificationHelper {
                     CHANNEL_NAME,
                     NotificationManager.IMPORTANCE_HIGH
             );
-            channel.setDescription("Instant Apple Dynamic Island-styled alerts when faculty marks attendance");
+            channel.setDescription("Instant alerts when faculty marks attendance as Present or Absent");
             channel.enableLights(true);
-            channel.setLightColor(Color.parseColor("#4F46E5"));
+            channel.setLightColor(Color.parseColor("#1E40AF"));
             channel.enableVibration(true);
             channel.setVibrationPattern(new long[]{0, 250, 150, 250});
             manager.createNotificationChannel(channel);
@@ -42,7 +42,27 @@ public class NotificationHelper {
             Context context,
             String subjectName,
             String teacherName,
-            String roomNo,
+            String lectureDetails,
+            boolean isPresent,
+            double overallPercentage
+    ) {
+        showAttendanceMarkedNotification(
+                context,
+                System.currentTimeMillis(),
+                subjectName,
+                teacherName,
+                lectureDetails,
+                isPresent,
+                overallPercentage
+        );
+    }
+
+    public static void showAttendanceMarkedNotification(
+            Context context,
+            long attendanceId,
+            String subjectName,
+            String teacherName,
+            String lectureDetails,
             boolean isPresent,
             double overallPercentage
     ) {
@@ -51,36 +71,56 @@ public class NotificationHelper {
 
         createNotificationChannel(context);
 
-        Intent intent = new Intent(context, MainActivity.class);
+        Intent intent = new Intent(context, MainComposeActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pendingIntent = PendingIntent.getActivity(
-                context, (int) System.currentTimeMillis(), intent,
+                context,
+                (int) (Math.abs(attendanceId) % Integer.MAX_VALUE),
+                intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
 
+        String cleanSubject = (subjectName != null && !subjectName.trim().isEmpty())
+                ? subjectName.trim()
+                : "Class Lecture";
+
+        String facultyStr = (teacherName != null && !teacherName.trim().isEmpty())
+                ? teacherName.trim()
+                : "Assigned Faculty";
+
+        String statusTag = isPresent ? "MARKED PRESENT" : "MARKED ABSENT";
+        String statusColor = isPresent ? "#34D399" : "#F87171";
+
+        // Standard notification text for Smartwatches, Wear OS, Lockscreen, and Accessibility
+        String titleText = statusTag + ": " + cleanSubject;
+        String contentText = "By " + facultyStr +
+                (lectureDetails != null && !lectureDetails.isEmpty() ? " • " + lectureDetails : "") +
+                " • Overall: " + String.format(Locale.US, "%.1f%%", overallPercentage);
+
         // RemoteViews for Apple-styled Dynamic Island banner
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.notification_dynamic);
-        views.setTextViewText(R.id.notif_subject, subjectName != null ? subjectName : "Class Lecture");
+        views.setTextViewText(R.id.notif_subject, cleanSubject);
 
-        String teacherInfo = (teacherName != null && !teacherName.isEmpty() ? "Faculty: " + teacherName : "Faculty: Assigned Teacher") +
-                (roomNo != null && !roomNo.isEmpty() ? " • Room " + roomNo : "");
+        String teacherInfo = "Faculty: " + facultyStr +
+                (lectureDetails != null && !lectureDetails.isEmpty() ? " • " + lectureDetails : "");
         views.setTextViewText(R.id.notif_teacher_room, teacherInfo);
 
         views.setTextViewText(R.id.notif_overall_pct, String.format(Locale.US, "%.1f%%", overallPercentage));
         views.setTextColor(R.id.notif_overall_pct, overallPercentage >= 75.0 ? Color.parseColor("#10B981") : Color.parseColor("#EF4444"));
 
+        views.setTextViewText(R.id.notif_header_tag, statusTag);
+        views.setTextColor(R.id.notif_header_tag, Color.parseColor(statusColor));
+
         if (isPresent) {
-            views.setTextViewText(R.id.notif_header_tag, "MARKED PRESENT");
-            views.setTextColor(R.id.notif_header_tag, Color.parseColor("#34D399"));
             views.setImageViewResource(R.id.notif_status_icon, R.drawable.ic_check);
         } else {
-            views.setTextViewText(R.id.notif_header_tag, "MARKED ABSENT");
-            views.setTextColor(R.id.notif_header_tag, Color.parseColor("#F87171"));
             views.setImageViewResource(R.id.notif_status_icon, R.drawable.ic_alert);
         }
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_school)
+                .setContentTitle(titleText)
+                .setContentText(contentText)
                 .setStyle(new NotificationCompat.DecoratedCustomViewStyle())
                 .setCustomContentView(views)
                 .setCustomHeadsUpContentView(views)
@@ -91,7 +131,10 @@ public class NotificationHelper {
                 .setVibrate(new long[]{0, 200, 100, 200})
                 .setAutoCancel(true);
 
-        int notifId = (int) (System.currentTimeMillis() % 100000);
+        int notifId = attendanceId > 0
+                ? (int) (attendanceId % 100000)
+                : (int) (System.currentTimeMillis() % 100000);
+
         manager.notify(notifId, builder.build());
     }
 }

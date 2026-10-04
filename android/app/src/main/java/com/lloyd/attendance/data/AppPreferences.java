@@ -19,6 +19,8 @@ public class AppPreferences {
     private static final String KEY_ATTENDANCE_LOGS_JSON = "attendance_logs_json";
     private static final String KEY_STUDENT_ID = "student_id";
     private static final String KEY_LAST_SEEN_ATTENDANCE_ID = "last_seen_attendance_id";
+    private static final String KEY_SEEN_ATTENDANCE_IDS = "seen_attendance_ids_set";
+    private static final String KEY_INITIALIZED_ATTENDANCE_HISTORY = "initialized_attendance_history";
     private static final String KEY_NOTIFICATION_ENABLED = "notification_enabled";
     private static final String KEY_SELECTED_SECTION = "selected_section";
 
@@ -174,6 +176,35 @@ public class AppPreferences {
 
     public long getLastSeenAttendanceId() {
         return prefs.getLong(KEY_LAST_SEEN_ATTENDANCE_ID, 0);
+    }
+
+    public boolean hasInitializedAttendanceHistory() {
+        return prefs.getBoolean(KEY_INITIALIZED_ATTENDANCE_HISTORY, false);
+    }
+
+    public void setInitializedAttendanceHistory(boolean initialized) {
+        prefs.edit().putBoolean(KEY_INITIALIZED_ATTENDANCE_HISTORY, initialized).apply();
+    }
+
+    public java.util.Set<String> getSeenAttendanceIds() {
+        java.util.Set<String> set = prefs.getStringSet(KEY_SEEN_ATTENDANCE_IDS, null);
+        return set != null ? new java.util.HashSet<>(set) : new java.util.HashSet<>();
+    }
+
+    public void addSeenAttendanceIds(java.util.Collection<Long> ids) {
+        if (ids == null || ids.isEmpty()) return;
+        java.util.Set<String> current = getSeenAttendanceIds();
+        for (Long id : ids) {
+            if (id != null && id > 0) {
+                current.add(String.valueOf(id));
+            }
+        }
+        // Limit cache size to last 200 IDs to keep SharedPreferences fast and compact
+        if (current.size() > 200) {
+            java.util.List<String> list = new java.util.ArrayList<>(current);
+            current = new java.util.HashSet<>(list.subList(list.size() - 200, list.size()));
+        }
+        prefs.edit().putStringSet(KEY_SEEN_ATTENDANCE_IDS, current).apply();
     }
 
     public boolean isLoggedIn() {
