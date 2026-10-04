@@ -1,4 +1,4 @@
-name: Build and Release Android APK
+name: Build & Release Android APK
 
 on:
   push:
@@ -8,14 +8,22 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  build:
-    name: Assemble & Release APK
+  release:
+    name: Build & Release APK
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -24,37 +32,74 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
-      - name: Grant Execute Permission for Gradle Wrapper
+      - name: Grant execute permission for Gradle wrapper
         run: |
           cd android
           chmod +x gradlew
 
-      - name: Build with Gradle
+      - name: Run Unit Tests
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew testDebugUnitTest --no-daemon --stacktrace
 
-      - name: Upload Debug APK Artifact
+      - name: Build Release APK
+        env:
+          APP_VERSION_CODE: ${{ github.run_number }}
+          APP_VERSION_NAME: "1.0.${{ github.run_number }}"
+        run: |
+          cd android
+          ./gradlew assembleRelease -PappVersionCode=${{ github.run_number }} -PappVersionName="1.0.${{ github.run_number }}" --no-daemon --stacktrace
+
+      - name: Prepare Release Artifacts
+        run: |
+          mkdir -p release-artifacts
+          VERSION_TAG="v1.0.${{ github.run_number }}"
+          RELEASE_APK="android/app/build/outputs/apk/release/app-release.apk"
+          DEST_APK="release-artifacts/LloydAttendance-${VERSION_TAG}.apk"
+          
+          if [ -f "$RELEASE_APK" ]; then
+            cp "$RELEASE_APK" "$DEST_APK"
+          else
+            FOUND_APK=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+            cp "$FOUND_APK" "$DEST_APK"
+          fi
+          
+          cd release-artifacts
+          sha256sum "LloydAttendance-${VERSION_TAG}.apk" > "LloydAttendance-${VERSION_TAG}.apk.sha256"
+          ls -la
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: lloyd-attendance-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: LloydAttendance-v1.0.${{ github.run_number }}
+          path: release-artifacts/*
 
-      - name: Create GitHub Release
+      - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
         with:
           tag_name: "v1.0.${{ github.run_number }}"
           name: "Lloyd Attendance v1.0.${{ github.run_number }}"
+          draft: false
+          prerelease: false
+          make_latest: true
+          generate_release_notes: true
+          target_commitish: ${{ github.sha }}
           body: |
-            ### Automated Release v1.0.${{ github.run_number }}
-            - Commit: `${{ github.sha }}`
-            - Built automatically from `${{ github.ref_name }}` branch
-            - Material Design 3 Expressive Native Android Application
+            ## 🚀 Lloyd Attendance Release `v1.0.${{ github.run_number }}`
             
-            #### Assets
-            Download and install the APK below directly onto your Android device.
+            ### 📱 What's New & Included
+            - **Native Material Design 3 Expressive UI** (dynamic color theming, edge-to-edge system bars, M3 typography & cards).
+            - **Intelligent Attendance Change Detector**: Real-time notifications triggered exclusively on actual status changes (marked Present or Absent).
+            - **Comprehensive ERP Discovery Integration**: High-fidelity subject metadata, room numbers, teacher names, syllabus trackers, and Bunk Safe zone analytics.
+            - **Automated Continuous Versioning**: Built dynamically from commit `${{ github.sha }}` on `${{ github.ref_name }}`.
+            
+            ### 📥 Download & Installation
+            Download the signed APK below directly to your Android device to install or update.
+            - **File**: `LloydAttendance-v1.0.${{ github.run_number }}.apk`
+            - Checksum verification available in `.sha256`.
           files: |
-            android/app/build/outputs/apk/debug/app-debug.apk
+            release-artifacts/LloydAttendance-v1.0.${{ github.run_number }}.apk
+            release-artifacts/LloydAttendance-v1.0.${{ github.run_number }}.apk.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
