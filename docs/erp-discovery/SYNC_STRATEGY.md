@@ -77,16 +77,19 @@ The Lloyd Student client enforces a strict **Cache-Then-Network** unidirectional
 - **Policy:** `ExistingPeriodicWorkPolicy.KEEP` ensures only one sync job runs concurrently across reboots.
 
 ### 3.2 Attendance Diffing & Dynamic Alert Engine
-To deliver real-time feedback without battery-draining continuous polling:
+To deliver real-time feedback without battery-draining continuous polling or noisy ambient shortage spam:
 1. `AttendanceSyncWorker` fetches `getStudentAttendanceLogs(studentId)`.
-2. Compares the primary key of the latest record (`latest.id`) against `prefs.getLastSeenAttendanceId()`.
-3. **If `latest.id != lastSeenId` and notifications are enabled**:
-   - Compares the `status` string ("Present" vs "Absent").
-   - Dispatches a custom heads-up banner via `NotificationHelper.showAttendanceMarkedNotification()`:
+2. Passes incoming attendance records, the persisted seen ID set (`KEY_SEEN_ATTENDANCE_IDS`), and the bootstrap flag (`KEY_INITIALIZED_ATTENDANCE_HISTORY`) into `AttendanceChangeDetector.kt`.
+3. **Bootstrap Suppression**:
+   - On the first post-login sync run, all historical records are ingested into the seen ID set without triggering historical notifications.
+4. **Event-Driven Present/Absent Detection**:
+   - Compares incoming records against the seen set. Only genuine newly marked classes with status `Present` or `Absent` emit `AttendanceMarkEvent.Marked` events.
+   - Non-attendance ledger entries (e.g. cancelled/leave) and pre-existing classes are strictly ignored.
+   - For each marked event, dispatches a notification via `NotificationHelper.showAttendanceMarkedNotification()`:
      - Title: `MARKED PRESENT` (Emerald) or `MARKED ABSENT` (Rose).
      - Context: Course title, faculty name, lecture period, and updated overall percentage.
-   - Saves `latest.id` to `last_seen_attendance_id`.
-4. Automatically updates all home screen widgets via `AttendanceWidgetProvider.updateAllWidgets()`.
+   - Adds newly marked IDs to the persistent seen ID set.
+5. Automatically updates all home screen widgets via `AttendanceWidgetProvider.updateAllWidgets()`.
 
 ---
 
@@ -95,8 +98,12 @@ To deliver real-time feedback without battery-draining continuous polling:
 - **Widget Class:** `AttendanceWidgetProvider` (RemoteViews).
 - **User-Initiated Refresh**:
   - The widget contains an interactive refresh button (`btn_widget_refresh`).
-  - Tapping the button dispatches broadcast `com.lloyd.attendance.ACTION_REFRESH_WIDGET`.
-  - The widget UI immediately displays a spinning progress tag (`Syncing...`).
+  - Tapping the button dispatches an explicit broadcast targeting `AttendanceWidgetRefreshReceiver` (`com.lloyd.attendance.ACTION_REFRESH_WIDGET`).
+  - **Security & Throttling (SEC-FINDING-006)**:
+    - Protected by custom signature-level permission `com.lloyd.attendance.permission.WIDGET_REFRESH`.
+    - Marked `android:exported="false"` in `AndroidManifest.xml` to prevent third-party IPC injection.
+    - Rate-limited with a 15-second debounce throttle (`MIN_REFRESH_INTERVAL_MS = 15_000L`) to prevent battery drain or network DoS.
+  - The widget UI displays a spinning progress tag (`Syncing...`).
   - An asynchronous worker fetches fresh stats and updates the RemoteViews upon arrival.
 - **Fail-Safe Offline Mode**:
   - If the widget refresh fails due to network outage, it gracefully redisplays the last-known cached percentage with tag `Offline`.

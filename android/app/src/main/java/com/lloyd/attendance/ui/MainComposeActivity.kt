@@ -185,6 +185,7 @@ fun MainAppShell(
                     ProfileScreen(
                         userProfile = prefs.userProfile,
                         studentId = prefs.getStudentId(),
+                        stats = prefs.cachedStats,
                         onLogout = onLogout
                     )
                 }

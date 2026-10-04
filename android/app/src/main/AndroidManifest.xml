@@ -5,6 +5,13 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Custom Signature Permission for Widget IPC Security (SEC-FINDING-006) -->
+    <permission
+        android:name="com.lloyd.attendance.permission.WIDGET_REFRESH"
+        android:protectionLevel="signature" />
+
+    <uses-permission android:name="com.lloyd.attendance.permission.WIDGET_REFRESH" />
+
     <application
         android:allowBackup="false"
         android:icon="@drawable/ic_school"
@@ -35,19 +42,28 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 
-        <!-- Home Screen Widget Receiver -->
+        <!-- Home Screen Widget Receiver (System AppWidget update only) -->
         <receiver
             android:name=".widget.AttendanceWidgetProvider"
             android:exported="true"
             android:label="@string/widget_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.lloyd.attendance.ACTION_REFRESH_WIDGET" />
             </intent-filter>
 
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/attendance_widget_info" />
+        </receiver>
+
+        <!-- Internal Refresh Receiver protected with signature permission & unexported (SEC-FINDING-006) -->
+        <receiver
+            android:name=".widget.AttendanceWidgetRefreshReceiver"
+            android:exported="false"
+            android:permission="com.lloyd.attendance.permission.WIDGET_REFRESH">
+            <intent-filter>
+                <action android:name="com.lloyd.attendance.ACTION_REFRESH_WIDGET" />
+            </intent-filter>
         </receiver>
 
     </application>

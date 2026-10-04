@@ -16,14 +16,14 @@
 | **Student Profile Identity** | **✓ Verified** | `user` object in `/api/auth/login` | Implemented in Android Header & User Preferences. | Production Ready |
 | **Overall Attendance Stats** | **✓ Verified** | `GET /api/student/me/monthly-attendance` | Rendered on Hero Dashboard card & Widget. | Production Ready |
 | **Monthly Attendance Summary**| **✓ Verified** | `GET /api/student/me/monthly-attendance` | Rendered in Dashboard monthly breakdown list. | Production Ready |
-| **Weekly Timetable Routine** | **✓ Verified** | `GET /api/student/me/weekly-attendance` | API fetched; Android UI currently uses hardcoded Section A-1 fallback. | High (Requires UI hookup) |
-| **Subject Attendance Analytics**| **✓ Verified** | Aggregated from `/api/attendance/student` | Rendered in Tab 4 Subject Breakdown cards. | Production Ready |
-| **Attendance History Ledger**| **✓ Verified** | `GET /api/attendance/student` | Rendered in Tab 3 Chronological list with multi-filters. | Production Ready |
+| **Weekly Timetable Routine** | **✓ Verified** | `GET /api/student/me/weekly-attendance` | Fully implemented via `TimetableRepository.kt`, Jetpack Compose `ScheduleScreen`, and Widget. | Production Ready |
+| **Subject Attendance Analytics**| **✓ Verified** | Aggregated from `/api/attendance/student` | Rendered in Compose Drilldown & Subject Breakdown cards. | Production Ready |
+| **Attendance History Ledger**| **✓ Verified** | `GET /api/attendance/student` | Rendered in Compose Ledger with multi-filters & BOLA validation. | Production Ready |
 | **Faculty Attribution** | **✓ Verified** | `created_by_name` in `/attendance/student` | Displayed on lecture cards and notification banners. | Production Ready |
-| **Classroom Locations** | **✓ Verified** | `room_no` in `/student/me/weekly-attendance` | Available in weekly schedule DTOs. | High |
-| **Bunk & Recovery Planner** | **✓ Verified** | Client-side domain engine | Implemented via continuous seekbar simulator in Tab 4. | Production Ready |
-| **Home Screen Widgets** | **✓ Verified** | Client-side `AttendanceWidgetProvider` | Native 4x2 Android widget with on-demand refresh. | Production Ready |
-| **Dynamic Heads-Up Alerts** | **✓ Verified** | Client-side `NotificationHelper` | Apple Dynamic Island-styled RemoteViews banner. | Production Ready |
+| **Classroom Locations** | **✓ Verified** | `room_no` in `/student/me/weekly-attendance` | Displayed on Compose timeline & Widget live indicator. | Production Ready |
+| **Bunk & Recovery Planner** | **✓ Verified** | Client-side domain engine | Implemented via Compose slider & What-If Simulation screen. | Production Ready |
+| **Home Screen Widgets** | **✓ Verified** | Client-side `AttendanceWidgetProvider` | Native 4x2 Android widget with dynamic live schedule & 15s debounce. | Production Ready |
+| **Dynamic Heads-Up Alerts** | **✓ Verified** | `AttendanceChangeDetector.kt` + `NotificationHelper` | Event-driven alerts on authentic Present/Absent teacher markings. | Production Ready |
 | **Examinations & Schedules** | **? Unknown** | *None observed* | Not present in codebase. | Dependent on backend discovery |
 | **Exam Results & Grades** | **? Unknown** | *None observed* | Not present in codebase. | Dependent on backend discovery |
 | **Notices & Bulletins** | **? Unknown** | *None observed* | Not present in codebase. | Dependent on backend discovery |
@@ -40,10 +40,11 @@
 
 ## 2. In-Depth Verification Notes
 
-1. **Timetable Status (`⚠ Partially verified`)**:
+1. **Timetable Status (`✓ Verified & Implemented`)**:
    - The ERP server reliably serves `/api/student/me/weekly-attendance`.
    - The data contains real periods, room numbers (e.g. `NB-101`), and teacher names.
-   - However, because `MainActivity.java` currently renders from `TimetableRepository.java` (which has hardcoded Section A-1 slots), this capability is classified as partially verified until the UI layer is connected directly to the remote DTO.
-2. **Push Notifications (`✗ Not available`)**:
+   - Fully integrated in Jetpack Compose `ScheduleScreen` with dynamic fallback section parsing and real-time live class tracking in `AttendanceWidgetProvider`.
+2. **Push Notifications & Marking Alerts (`✓ Verified & Implemented`)**:
    - The Lloyd ERP does not maintain a Firebase Cloud Messaging (FCM) server key or WebSocket connection for student clients.
-   - All notifications in the Android app are generated through a local diff engine inside `AttendanceSyncWorker.java` running on an hourly/15-minute background loop.
+   - All notifications in the Android app are generated through pure domain event detection in `AttendanceChangeDetector.kt` inside `AttendanceSyncWorker.java` running on an hourly/15-minute background loop.
+   - Strictly dispatches alerts when faculty marks attendance (Present or Absent), with persistent seen ID tracking and bootstrap suppression to prevent notification spam.

@@ -25,7 +25,22 @@ import java.util.concurrent.Executors;
 public class AttendanceWidgetProvider extends AppWidgetProvider {
 
     public static final String ACTION_REFRESH_WIDGET = "com.lloyd.attendance.ACTION_REFRESH_WIDGET";
+    public static final long MIN_REFRESH_INTERVAL_MS = 15_000L; // 15-second debounce against DoS/battery drain
+    private static volatile long lastRefreshTimeMillis = 0L;
     private static final ExecutorService backgroundExecutor = Executors.newSingleThreadExecutor();
+
+    public static synchronized boolean canRefresh() {
+        long now = System.currentTimeMillis();
+        if (now - lastRefreshTimeMillis < MIN_REFRESH_INTERVAL_MS) {
+            return false;
+        }
+        lastRefreshTimeMillis = now;
+        return true;
+    }
+
+    public static synchronized void resetThrottleForTesting() {
+        lastRefreshTimeMillis = 0L;
+    }
 
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
@@ -44,22 +59,33 @@ public class AttendanceWidgetProvider extends AppWidgetProvider {
     public void onReceive(Context context, Intent intent) {
         super.onReceive(context, intent);
 
-        if (ACTION_REFRESH_WIDGET.equals(intent.getAction())) {
-            // Immediately show refreshing state on widget
-            AppWidgetManager manager = AppWidgetManager.getInstance(context);
-            ComponentName thisWidget = new ComponentName(context, AttendanceWidgetProvider.class);
-            int[] allIds = manager.getAppWidgetIds(thisWidget);
-
-            AppPreferences prefs = AppPreferences.getInstance(context);
-            Models.CalculatedStats cached = prefs.getCachedStats();
-
-            for (int id : allIds) {
-                updateWidgetUI(context, manager, id, cached, true);
-            }
-
-            // Perform network update
-            triggerRefresh(context);
+        if (intent != null && ACTION_REFRESH_WIDGET.equals(intent.getAction())) {
+            handleRefreshRequest(context);
         }
+    }
+
+    /**
+     * Handles manual widget refresh requests with rate-limiting debounce.
+     */
+    public static void handleRefreshRequest(Context context) {
+        if (!canRefresh()) {
+            return;
+        }
+
+        // Immediately show refreshing state on widget
+        AppWidgetManager manager = AppWidgetManager.getInstance(context);
+        ComponentName thisWidget = new ComponentName(context, AttendanceWidgetProvider.class);
+        int[] allIds = manager.getAppWidgetIds(thisWidget);
+
+        AppPreferences prefs = AppPreferences.getInstance(context);
+        Models.CalculatedStats cached = prefs.getCachedStats();
+
+        for (int id : allIds) {
+            updateWidgetUI(context, manager, id, cached, true);
+        }
+
+        // Perform network update
+        triggerRefresh(context);
     }
 
     public static void triggerRefresh(Context context) {
@@ -113,9 +139,10 @@ public class AttendanceWidgetProvider extends AppWidgetProvider {
         );
         views.setOnClickPendingIntent(R.id.widget_root, pendingOpen);
 
-        // Click on refresh button -> Broadcast refresh action
-        Intent refreshIntent = new Intent(context, AttendanceWidgetProvider.class);
+        // Click on refresh button -> Broadcast refresh action to internal secured receiver (SEC-FINDING-006)
+        Intent refreshIntent = new Intent(context, AttendanceWidgetRefreshReceiver.class);
         refreshIntent.setAction(ACTION_REFRESH_WIDGET);
+        refreshIntent.setPackage(context.getPackageName());
         PendingIntent pendingRefresh = PendingIntent.getBroadcast(
                 context, widgetId, refreshIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
