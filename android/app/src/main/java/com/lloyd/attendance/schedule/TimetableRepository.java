@@ -6,10 +6,10 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Extensible Timetable Repository for Lloyd Institute of Engineering & Technology.
- * Currently serves Section A-1 (Room NB-101, Odd Semester 2026-2027) with modular
- * architecture for future sections, notes, and syllabus integration.
+ * @deprecated Legacy static timetable repository. Replaced by [com.lloyd.attendance.core.schedule.TimetableRepository]
+ * which dynamically resolves schedule from the student's authentic ERP routine without Section A-1 fallback.
  */
+@Deprecated
 public class TimetableRepository {
 
     public static class TimetablePeriod {
@@ -57,18 +57,26 @@ public class TimetableRepository {
     }
 
     public static boolean isStudentInSectionA1(String section) {
-        if (section == null || section.trim().isEmpty()) return true; // Default to Section A-1 for current user
+        if (section == null || section.trim().isEmpty()) return true;
         String clean = section.trim().toUpperCase(Locale.US).replace(" ", "").replace("-", "");
         return clean.contains("A1") || clean.contains("SECTIONA");
     }
 
-    /**
-     * Get day schedule for Section A-1.
-     * @param calendarDay Calendar.MONDAY (2) through Calendar.SATURDAY (7)
-     */
     public static List<TimetablePeriod> getScheduleForDay(int calendarDay) {
+        return getScheduleForDay("A-1", calendarDay);
+    }
+
+    /**
+     * Get day schedule for specified Section (defaults to Room NB-101 for A-1, NB-102 for A-2, etc.).
+     */
+    public static List<TimetablePeriod> getScheduleForDay(String section, int calendarDay) {
         List<TimetablePeriod> list = new ArrayList<>();
         String room = "NB-101";
+        if (section != null && section.contains("2")) {
+            room = "NB-102";
+        } else if (section != null && section.toUpperCase(Locale.US).contains("B")) {
+            room = "NB-201";
+        }
 
         switch (calendarDay) {
             case Calendar.MONDAY:
@@ -143,13 +151,17 @@ public class TimetableRepository {
      * Determines current active class and the next upcoming class.
      */
     public static ActiveClassStatus getActiveOrNextClass() {
+        return getActiveOrNextClass("A-1");
+    }
+
+    public static ActiveClassStatus getActiveOrNextClass(String section) {
         Calendar now = Calendar.getInstance();
         int day = now.get(Calendar.DAY_OF_WEEK);
         if (day == Calendar.SUNDAY) {
             return null; // Closed on Sunday
         }
 
-        List<TimetablePeriod> todaySchedule = getScheduleForDay(day);
+        List<TimetablePeriod> todaySchedule = getScheduleForDay(section, day);
         if (todaySchedule.isEmpty()) return null;
 
         int currentMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE);
