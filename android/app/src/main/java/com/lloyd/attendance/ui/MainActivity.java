@@ -45,6 +45,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+/**
+ * @deprecated Replaced by [com.lloyd.attendance.ui.MainComposeActivity], which provides
+ * full Material Design 3 Expressive UI, dynamic color theming, and multi-tab Jetpack Compose navigation.
+ */
+@Deprecated
 public class MainActivity extends AppCompatActivity {
 
     private SwipeRefreshLayout swipeRefresh;

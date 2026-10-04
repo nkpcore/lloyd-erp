@@ -136,7 +136,7 @@ public class LoginActivity extends AppCompatActivity {
                 new Handler(Looper.getMainLooper()).post(() -> {
                     setLoading(false);
                     AttendanceWidgetProvider.triggerRefresh(LoginActivity.this);
-                    Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+                    Intent intent = new Intent(LoginActivity.this, MainComposeActivity.class);
                     intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
                     startActivity(intent);
                     finish();

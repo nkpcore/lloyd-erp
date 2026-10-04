@@ -15,6 +15,7 @@ import com.lloyd.attendance.api.ErpApiClient;
 import com.lloyd.attendance.api.Models;
 import com.lloyd.attendance.data.AppPreferences;
 import com.lloyd.attendance.ui.MainActivity;
+import com.lloyd.attendance.ui.MainComposeActivity;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -105,8 +106,8 @@ public class AttendanceWidgetProvider extends AppWidgetProvider {
     private static void updateWidgetUI(Context context, AppWidgetManager appWidgetManager, int widgetId, Models.CalculatedStats stats, boolean isRefreshing, String customStatus) {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_attendance);
 
-        // Click on widget -> Open MainActivity
-        Intent openAppIntent = new Intent(context, MainActivity.class);
+        // Click on widget -> Open MainComposeActivity
+        Intent openAppIntent = new Intent(context, MainComposeActivity.class);
         PendingIntent pendingOpen = PendingIntent.getActivity(
                 context, 0, openAppIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
