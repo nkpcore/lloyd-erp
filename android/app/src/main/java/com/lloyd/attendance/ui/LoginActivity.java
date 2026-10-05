@@ -42,7 +42,9 @@ public class LoginActivity extends AppCompatActivity {
 
         // Auto-navigate if already logged in
         if (prefs.isLoggedIn()) {
-            startActivity(new Intent(this, MainActivity.class));
+            Intent intent = new Intent(this, MainComposeActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
             finish();
             return;
         }
@@ -91,8 +93,8 @@ public class LoginActivity extends AppCompatActivity {
                             apiClient.ensureValidToken();
                             new Handler(Looper.getMainLooper()).post(() -> {
                                 setLoading(false);
-                                Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-                                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                                Intent intent = new Intent(LoginActivity.this, MainComposeActivity.class);
+                                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                                 startActivity(intent);
                                 finish();
                             });
@@ -137,7 +139,7 @@ public class LoginActivity extends AppCompatActivity {
                     setLoading(false);
                     AttendanceWidgetProvider.triggerRefresh(LoginActivity.this);
                     Intent intent = new Intent(LoginActivity.this, MainComposeActivity.class);
-                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                     startActivity(intent);
                     finish();
                 });

@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Calculate
-import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
@@ -54,7 +53,6 @@ import com.lloyd.attendance.core.domain.AttendanceHealth
 import com.lloyd.attendance.core.domain.AttendancePercentage
 import com.lloyd.attendance.core.domain.BunkAdvisor
 import com.lloyd.attendance.core.domain.SubjectAttendance
-import com.lloyd.attendance.core.schedule.DayScheduleResult
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,7 +60,6 @@ fun DashboardScreen(
     viewModel: DashboardViewModel,
     onNavigateToSubjectSimulation: (SubjectAttendance) -> Unit,
     onNavigateToOverallSimulation: (present: Int, total: Int) -> Unit,
-    onNavigateToSchedule: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -252,79 +249,6 @@ fun DashboardScreen(
                     }
                 }
 
-                // Live Class Quick Glance
-                val schedule = uiState.scheduleResult
-                if (schedule is DayScheduleResult.Success && (schedule.activePeriod != null || schedule.nextPeriod != null)) {
-                    item {
-                        OutlinedCard(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .clickable(onClick = onNavigateToSchedule),
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(14.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    modifier = Modifier.weight(1f),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.CalendarToday,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column {
-                                        if (schedule.activePeriod != null) {
-                                            Text(
-                                                text = "HAPPENING NOW",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                            Text(
-                                                text = schedule.activePeriod.subjectName,
-                                                style = MaterialTheme.typography.titleSmall,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = "${schedule.activePeriod.remainingMinutes}m remaining in ${schedule.activePeriod.roomNumber ?: "class"}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        } else if (schedule.nextPeriod != null) {
-                                            Text(
-                                                text = "UPCOMING NEXT",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.secondary
-                                            )
-                                            Text(
-                                                text = schedule.nextPeriod.subjectName,
-                                                style = MaterialTheme.typography.titleSmall,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = "Starts at ${schedule.nextPeriod.startTime}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                }
-
-                                StatusBadge(text = "View Routine")
-                            }
-                        }
-                    }
-                }
 
                 // Section Header: Subject Breakdown
                 item {

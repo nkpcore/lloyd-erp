@@ -10,15 +10,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.core.content.ContextCompat
-import com.lloyd.attendance.widget.AttendanceSyncWorker
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Calculate
-import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -32,21 +30,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.core.content.ContextCompat
+import androidx.work.WorkManager
 import com.lloyd.attendance.core.designsystem.theme.LloydTheme
 import com.lloyd.attendance.core.domain.SubjectAttendance
 import com.lloyd.attendance.data.AppPreferences
 import com.lloyd.attendance.feature.dashboard.DashboardScreen
 import com.lloyd.attendance.feature.dashboard.DashboardViewModel
+import com.lloyd.attendance.feature.logs.AttendanceLogsScreen
+import com.lloyd.attendance.feature.logs.AttendanceLogsViewModel
 import com.lloyd.attendance.feature.profile.ProfileScreen
-import com.lloyd.attendance.feature.schedule.ScheduleScreen
-import com.lloyd.attendance.feature.schedule.ScheduleViewModel
 import com.lloyd.attendance.feature.simulation.SimulationScreen
 import com.lloyd.attendance.feature.simulation.SimulationViewModel
+import com.lloyd.attendance.widget.AttendanceSyncWorker
+import com.lloyd.attendance.widget.AttendanceWidgetProvider
+import androidx.compose.material.icons.automirrored.filled.EventNote
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.Person
 
 enum class MainTab(val title: String, val icon: ImageVector) {
     DASHBOARD("Attendance", Icons.Default.BarChart),
-    SCHEDULE("Schedule", Icons.Default.CalendarToday),
-    SIMULATOR("Simulator", Icons.Default.Calculate),
+    LOGS("Daily Logs", Icons.AutoMirrored.Filled.EventNote),
+    SIMULATOR("Bunk Advisor", Icons.Default.Calculate),
     PROFILE("Profile", Icons.Default.Person)
 }
 
@@ -54,7 +60,7 @@ class MainComposeActivity : ComponentActivity() {
 
     private lateinit var prefs: AppPreferences
     private val dashboardViewModel: DashboardViewModel by viewModels()
-    private val scheduleViewModel: ScheduleViewModel by viewModels()
+    private val logsViewModel: AttendanceLogsViewModel by viewModels()
     private val simulationViewModel: SimulationViewModel by viewModels()
 
     private val notificationPermissionLauncher = registerForActivityResult(
@@ -77,10 +83,13 @@ class MainComposeActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        prefs = AppPreferences(this)
+        prefs = AppPreferences.getInstance(this)
 
         if (!prefs.isLoggedIn) {
-            startActivity(Intent(this, LoginActivity::class.java))
+            val loginIntent = Intent(this, LoginActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            }
+            startActivity(loginIntent)
             finish()
             return
         }
@@ -95,13 +104,26 @@ class MainComposeActivity : ComponentActivity() {
                 MainAppShell(
                     prefs = prefs,
                     dashboardViewModel = dashboardViewModel,
-                    scheduleViewModel = scheduleViewModel,
+                    logsViewModel = logsViewModel,
                     simulationViewModel = simulationViewModel,
                     onLogout = {
-                        prefs.tokenStore.clearTokens()
-                        prefs.saveStudentId(0)
-                        startActivity(Intent(this, LoginActivity::class.java))
-                        finish()
+                        try {
+                            WorkManager.getInstance(this).cancelAllWork()
+                        } catch (ignored: Exception) {
+                        }
+
+                        prefs.logout()
+
+                        try {
+                            AttendanceWidgetProvider.updateAllWidgets(this, null, false, "Signed out")
+                        } catch (ignored: Exception) {
+                        }
+
+                        val intent = Intent(this, LoginActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                        }
+                        startActivity(intent)
+                        finishAffinity()
                     }
                 )
             }
@@ -113,7 +135,7 @@ class MainComposeActivity : ComponentActivity() {
 fun MainAppShell(
     prefs: AppPreferences,
     dashboardViewModel: DashboardViewModel,
-    scheduleViewModel: ScheduleViewModel,
+    logsViewModel: AttendanceLogsViewModel,
     simulationViewModel: SimulationViewModel,
     onLogout: () -> Unit
 ) {
@@ -160,17 +182,13 @@ fun MainAppShell(
                                 total = t
                             )
                             selectedTab = MainTab.SIMULATOR
-                        },
-                        onNavigateToSchedule = {
-                            selectedTab = MainTab.SCHEDULE
                         }
                     )
                 }
 
-                MainTab.SCHEDULE -> {
-                    ScheduleScreen(
-                        viewModel = scheduleViewModel,
-                        onNavigateBack = { selectedTab = MainTab.DASHBOARD }
+                MainTab.LOGS -> {
+                    AttendanceLogsScreen(
+                        viewModel = logsViewModel
                     )
                 }
 

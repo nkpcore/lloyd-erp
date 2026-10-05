@@ -14,7 +14,6 @@ import com.lloyd.attendance.R;
 import com.lloyd.attendance.api.ErpApiClient;
 import com.lloyd.attendance.api.Models;
 import com.lloyd.attendance.data.AppPreferences;
-import com.lloyd.attendance.ui.MainActivity;
 import com.lloyd.attendance.ui.MainComposeActivity;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -165,46 +164,20 @@ public class AttendanceWidgetProvider extends AppWidgetProvider {
                 views.setTextViewText(R.id.tv_widget_student_name, "LLOYD ERP");
             }
 
-            // Authentic Schedule Resolution via modern TimetableRepository
-            try {
-                com.lloyd.attendance.core.schedule.TimetableRepository repo = 
-                        new com.lloyd.attendance.core.schedule.TimetableRepository(context, new AppPreferences(context), new com.google.gson.Gson());
-                com.lloyd.attendance.core.schedule.DayScheduleResult scheduleResult = repo.getScheduleForDay(
-                        java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK),
-                        com.lloyd.attendance.core.schedule.TimetableRepository.Companion.getCurrentMinutesFromMidnight()
-                );
-
-                if (scheduleResult instanceof com.lloyd.attendance.core.schedule.DayScheduleResult.Success) {
-                    com.lloyd.attendance.core.schedule.DayScheduleResult.Success success = 
-                            (com.lloyd.attendance.core.schedule.DayScheduleResult.Success) scheduleResult;
-                    if (success.getActivePeriod() != null) {
-                        views.setTextViewText(R.id.tv_widget_classes, "Live: " + success.getActivePeriod().getSubjectName() + " (" + success.getActivePeriod().getRemainingMinutes() + "m)");
-                    } else if (success.getNextPeriod() != null) {
-                        views.setTextViewText(R.id.tv_widget_classes, "Next: " + success.getNextPeriod().getStartTime() + " " + success.getNextPeriod().getSubjectName());
-                    } else {
-                        views.setTextViewText(R.id.tv_widget_classes, stats.totalPresent + " / " + stats.totalClasses + " classes attended");
-                    }
-                } else if (scheduleResult instanceof com.lloyd.attendance.core.schedule.DayScheduleResult.Weekend) {
-                    views.setTextViewText(R.id.tv_widget_classes, "Sunday • Campus Closed");
-                } else {
-                    views.setTextViewText(R.id.tv_widget_classes, stats.totalPresent + " / " + stats.totalClasses + " classes attended");
-                }
-            } catch (Exception e) {
-                views.setTextViewText(R.id.tv_widget_classes, stats.totalPresent + " / " + stats.totalClasses + " classes attended");
-            }
+            views.setTextViewText(R.id.tv_widget_classes, stats.totalPresent + " / " + stats.totalClasses + " classes attended");
 
             if (stats.totalClasses == 0) {
                 views.setTextViewText(R.id.tv_widget_percentage, "--.-%");
-                views.setTextColor(R.id.tv_widget_percentage, Color.parseColor("#94A3B8"));
+                views.setTextColor(R.id.tv_widget_percentage, Color.parseColor("#C4C7C5"));
                 views.setTextViewText(R.id.tv_widget_badge, "NO RECORDS");
-                views.setTextColor(R.id.tv_widget_badge, Color.parseColor("#94A3B8"));
+                views.setTextColor(R.id.tv_widget_badge, Color.parseColor("#C4C7C5"));
                 views.setTextViewText(R.id.tv_widget_bunk, "No classes recorded yet");
                 views.setImageViewResource(R.id.iv_widget_bunk_icon, R.drawable.ic_check);
             } else if (stats.overallPercentage >= 75.0) {
                 views.setTextViewText(R.id.tv_widget_percentage, String.format(Locale.US, "%.1f%%", stats.overallPercentage));
-                views.setTextColor(R.id.tv_widget_percentage, Color.parseColor("#10B981")); // Emerald
+                views.setTextColor(R.id.tv_widget_percentage, Color.parseColor("#6DD58C")); // M3 Safe Green
                 views.setTextViewText(R.id.tv_widget_badge, "SAFE (>= 75%)");
-                views.setTextColor(R.id.tv_widget_badge, Color.parseColor("#34D399"));
+                views.setTextColor(R.id.tv_widget_badge, Color.parseColor("#6DD58C"));
                 views.setImageViewResource(R.id.iv_widget_bunk_icon, R.drawable.ic_check);
 
                 if (stats.bunkAllowance > 0) {
@@ -214,9 +187,9 @@ public class AttendanceWidgetProvider extends AppWidgetProvider {
                 }
             } else {
                 views.setTextViewText(R.id.tv_widget_percentage, String.format(Locale.US, "%.1f%%", stats.overallPercentage));
-                views.setTextColor(R.id.tv_widget_percentage, Color.parseColor("#EF4444")); // Red
+                views.setTextColor(R.id.tv_widget_percentage, Color.parseColor("#F2B8B5")); // M3 Danger Red
                 views.setTextViewText(R.id.tv_widget_badge, "SHORTAGE (< 75%)");
-                views.setTextColor(R.id.tv_widget_badge, Color.parseColor("#F87171"));
+                views.setTextColor(R.id.tv_widget_badge, Color.parseColor("#F2B8B5"));
                 views.setImageViewResource(R.id.iv_widget_bunk_icon, R.drawable.ic_alert);
 
                 views.setTextViewText(R.id.tv_widget_bunk, "Attend next " + stats.neededToReach75 + " class" + (stats.neededToReach75 > 1 ? "es" : "") + " to reach 75%");
@@ -224,9 +197,9 @@ public class AttendanceWidgetProvider extends AppWidgetProvider {
         } else {
             views.setTextViewText(R.id.tv_widget_student_name, "LLOYD ERP");
             views.setTextViewText(R.id.tv_widget_percentage, "--%");
-            views.setTextColor(R.id.tv_widget_percentage, Color.parseColor("#94A3B8"));
+            views.setTextColor(R.id.tv_widget_percentage, Color.parseColor("#C4C7C5"));
             views.setTextViewText(R.id.tv_widget_badge, "NOT LOGGED IN");
-            views.setTextColor(R.id.tv_widget_badge, Color.parseColor("#FBBF24"));
+            views.setTextColor(R.id.tv_widget_badge, Color.parseColor("#F2B8B5"));
             views.setTextViewText(R.id.tv_widget_classes, (customStatus != null && !customStatus.isEmpty()) ? customStatus : "Tap here to log in");
             views.setTextViewText(R.id.tv_widget_bunk, "Sign in to track attendance");
         }

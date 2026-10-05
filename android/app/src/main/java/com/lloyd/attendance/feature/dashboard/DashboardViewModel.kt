@@ -8,11 +8,8 @@ import com.google.gson.reflect.TypeToken
 import com.lloyd.attendance.api.ErpApiClient
 import com.lloyd.attendance.api.Models
 import com.lloyd.attendance.core.domain.AttendanceCalculator
-import com.lloyd.attendance.core.domain.AttendancePercentage
 import com.lloyd.attendance.core.domain.OverallAttendance
 import com.lloyd.attendance.core.domain.SubjectAttendance
-import com.lloyd.attendance.core.schedule.DayScheduleResult
-import com.lloyd.attendance.core.schedule.TimetableRepository
 import com.lloyd.attendance.data.AppPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,7 +29,6 @@ data class DashboardUiState(
         totalPresent = 0,
         totalClasses = 0
     ),
-    val scheduleResult: DayScheduleResult = DayScheduleResult.Unavailable("Loading..."),
     val lastSyncMillis: Long = 0L,
     val errorMessage: String? = null
 )
@@ -41,7 +37,6 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val prefs = AppPreferences(application)
     private val apiClient = ErpApiClient(application)
-    private val timetableRepo = TimetableRepository(application, prefs)
     private val gson = Gson()
 
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -72,15 +67,12 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             lastUpdatedMillis = cachedStats?.lastUpdatedMillis ?: System.currentTimeMillis()
         )
 
-        val sched = timetableRepo.getScheduleForDay()
-
         _uiState.value = _uiState.value.copy(
             isLoading = false,
             studentName = studentName,
             studentId = prefs.getStudentId(),
             section = prefs.getSelectedSection().ifBlank { user?.section.orEmpty() },
             overall = overall,
-            scheduleResult = sched,
             lastSyncMillis = cachedStats?.lastUpdatedMillis ?: 0L
         )
     }
@@ -100,10 +92,13 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 // 1. Fetch monthly aggregate attendance
                 val monthlyData = apiClient.monthlyAttendance
 
-                // 2. Fetch weekly schedule
-                try {
-                    apiClient.weeklyAttendance
-                } catch (ignored: Exception) {
+                // 2. Concurrently sync student attendance logs for teacher breakdown
+                val targetStudentId = monthlyData.studentId.takeIf { it > 0 } ?: prefs.getStudentId()
+                if (targetStudentId > 0) {
+                    try {
+                        apiClient.getStudentAttendanceLogs(targetStudentId)
+                    } catch (ignored: Exception) {
+                    }
                 }
 
                 // 3. Update parsed state
@@ -128,8 +123,6 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 // Cache calculated stats for widget and offline
                 apiClient.calculateStatsFromMonthly(monthlyData)
 
-                val sched = timetableRepo.getScheduleForDay()
-
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isRefreshing = false,
@@ -138,7 +131,6 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                     studentId = overall.studentId,
                     section = prefs.getSelectedSection().ifBlank { user?.section.orEmpty() },
                     overall = overall,
-                    scheduleResult = sched,
                     lastSyncMillis = nowMillis,
                     errorMessage = null
                 )
@@ -160,8 +152,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             val res: Models.ApiResponse<Models.MonthlyAttendanceData>? = gson.fromJson(json, type)
             val months = res?.data?.months ?: return emptyList()
 
-            // In Lloyd ERP, monthly attendance returns MonthItem list.
-            // Also parse logs for fine-grained subject breakdown if available
+            // Parse logs for fine-grained subject breakdown if available
             val logsJson = prefs.getAttendanceLogs()
             if (!logsJson.isNullOrBlank()) {
                 val logType = object : TypeToken<List<Models.StudentAttendanceItem>>() {}.type
@@ -202,8 +193,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun logout(onLoggedOut: () -> Unit) {
-        prefs.tokenStore.clearTokens()
-        prefs.saveStudentId(0)
+        prefs.logout()
         onLoggedOut()
     }
 }
