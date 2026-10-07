@@ -42,17 +42,17 @@ import com.lloyd.attendance.feature.logs.AttendanceLogsViewModel
 import com.lloyd.attendance.feature.profile.ProfileScreen
 import com.lloyd.attendance.feature.simulation.SimulationScreen
 import com.lloyd.attendance.feature.simulation.SimulationViewModel
+import com.lloyd.attendance.feature.subject.SubjectDetailScreen
+import com.lloyd.attendance.feature.subject.SubjectDetailViewModel
 import com.lloyd.attendance.widget.AttendanceSyncWorker
 import com.lloyd.attendance.widget.AttendanceWidgetProvider
 import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Person
 
 enum class MainTab(val title: String, val icon: ImageVector) {
     DASHBOARD("Attendance", Icons.Default.BarChart),
     LOGS("Daily Logs", Icons.AutoMirrored.Filled.EventNote),
-    SIMULATOR("Bunk Advisor", Icons.Default.Calculate),
     PROFILE("Profile", Icons.Default.Person)
 }
 
@@ -61,6 +61,7 @@ class MainComposeActivity : ComponentActivity() {
     private lateinit var prefs: AppPreferences
     private val dashboardViewModel: DashboardViewModel by viewModels()
     private val logsViewModel: AttendanceLogsViewModel by viewModels()
+    private val subjectDetailViewModel: SubjectDetailViewModel by viewModels()
     private val simulationViewModel: SimulationViewModel by viewModels()
 
     private val notificationPermissionLauncher = registerForActivityResult(
@@ -98,13 +99,13 @@ class MainComposeActivity : ComponentActivity() {
         AttendanceSyncWorker.schedulePeriodicSync(this)
 
         enableEdgeToEdge()
-
         setContent {
             LloydTheme {
                 MainAppShell(
                     prefs = prefs,
                     dashboardViewModel = dashboardViewModel,
                     logsViewModel = logsViewModel,
+                    subjectDetailViewModel = subjectDetailViewModel,
                     simulationViewModel = simulationViewModel,
                     onLogout = {
                         try {
@@ -136,76 +137,78 @@ fun MainAppShell(
     prefs: AppPreferences,
     dashboardViewModel: DashboardViewModel,
     logsViewModel: AttendanceLogsViewModel,
+    subjectDetailViewModel: SubjectDetailViewModel,
     simulationViewModel: SimulationViewModel,
     onLogout: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(MainTab.DASHBOARD) }
+    var selectedSubjectForDetail by remember { mutableStateOf<SubjectAttendance?>(null) }
+    var showOverallSimulation by remember { mutableStateOf(false) }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        bottomBar = {
-            NavigationBar {
-                MainTab.entries.forEach { tab ->
-                    NavigationBarItem(
-                        selected = selectedTab == tab,
-                        onClick = { selectedTab = tab },
-                        icon = { Icon(imageVector = tab.icon, contentDescription = tab.title) },
-                        label = { Text(tab.title) }
-                    )
+    if (selectedSubjectForDetail != null) {
+        SubjectDetailScreen(
+            subject = selectedSubjectForDetail!!,
+            onBack = { selectedSubjectForDetail = null },
+            viewModel = subjectDetailViewModel
+        )
+    } else if (showOverallSimulation) {
+        SimulationScreen(
+            viewModel = simulationViewModel,
+            onNavigateBack = { showOverallSimulation = false }
+        )
+    } else {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            bottomBar = {
+                NavigationBar {
+                    MainTab.entries.forEach { tab ->
+                        NavigationBarItem(
+                            selected = selectedTab == tab,
+                            onClick = { selectedTab = tab },
+                            icon = { Icon(imageVector = tab.icon, contentDescription = tab.title) },
+                            label = { Text(tab.title) }
+                        )
+                    }
                 }
             }
-        }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            when (selectedTab) {
-                MainTab.DASHBOARD -> {
-                    DashboardScreen(
-                        viewModel = dashboardViewModel,
-                        onNavigateToSubjectSimulation = { subject: SubjectAttendance ->
-                            simulationViewModel.initialize(
-                                subjectName = subject.subjectName,
-                                present = subject.presentCount,
-                                total = subject.totalClasses,
-                                code = subject.subjectCode,
-                                teacher = subject.teacherName
-                            )
-                            selectedTab = MainTab.SIMULATOR
-                        },
-                        onNavigateToOverallSimulation = { p: Int, t: Int ->
-                            simulationViewModel.initialize(
-                                subjectName = "Overall Attendance",
-                                present = p,
-                                total = t
-                            )
-                            selectedTab = MainTab.SIMULATOR
-                        }
-                    )
-                }
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
+                when (selectedTab) {
+                    MainTab.DASHBOARD -> {
+                        DashboardScreen(
+                            viewModel = dashboardViewModel,
+                            onNavigateToSubjectDetail = { subject: SubjectAttendance ->
+                                selectedSubjectForDetail = subject
+                            },
+                            onNavigateToOverallSimulation = { p: Int, t: Int ->
+                                simulationViewModel.initialize(
+                                    subjectName = "Overall Attendance",
+                                    present = p,
+                                    total = t
+                                )
+                                showOverallSimulation = true
+                            }
+                        )
+                    }
 
-                MainTab.LOGS -> {
-                    AttendanceLogsScreen(
-                        viewModel = logsViewModel
-                    )
-                }
+                    MainTab.LOGS -> {
+                        AttendanceLogsScreen(
+                            viewModel = logsViewModel
+                        )
+                    }
 
-                MainTab.SIMULATOR -> {
-                    SimulationScreen(
-                        viewModel = simulationViewModel,
-                        onNavigateBack = { selectedTab = MainTab.DASHBOARD }
-                    )
-                }
-
-                MainTab.PROFILE -> {
-                    ProfileScreen(
-                        userProfile = prefs.userProfile,
-                        studentId = prefs.getStudentId(),
-                        stats = prefs.cachedStats,
-                        onLogout = onLogout
-                    )
+                    MainTab.PROFILE -> {
+                        ProfileScreen(
+                            userProfile = prefs.userProfile,
+                            studentId = prefs.getStudentId(),
+                            stats = prefs.cachedStats,
+                            onLogout = onLogout
+                        )
+                    }
                 }
             }
         }

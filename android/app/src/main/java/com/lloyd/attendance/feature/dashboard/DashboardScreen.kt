@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,17 +55,19 @@ import com.lloyd.attendance.core.domain.AttendanceHealth
 import com.lloyd.attendance.core.domain.AttendancePercentage
 import com.lloyd.attendance.core.domain.BunkAdvisor
 import com.lloyd.attendance.core.domain.SubjectAttendance
+import com.lloyd.attendance.core.export.AttendanceReportExporter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel,
-    onNavigateToSubjectSimulation: (SubjectAttendance) -> Unit,
+    onNavigateToSubjectDetail: (SubjectAttendance) -> Unit,
     onNavigateToOverallSimulation: (present: Int, total: Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val overall = uiState.overall
+    val context = LocalContext.current
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -87,6 +91,24 @@ fun DashboardScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            val report = AttendanceReportExporter.generateTextReport(
+                                studentName = uiState.studentName,
+                                section = uiState.section,
+                                overallPercentage = overall.percentage.displayValue,
+                                totalPresent = overall.totalPresent,
+                                totalClasses = overall.totalClasses,
+                                subjects = overall.subjects
+                            )
+                            AttendanceReportExporter.shareReport(context, report)
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Share Attendance Report"
+                        )
+                    }
                     IconButton(
                         onClick = { viewModel.refresh() },
                         enabled = !uiState.isRefreshing
@@ -304,7 +326,7 @@ fun DashboardScreen(
                     items(overall.subjects, key = { it.subjectCode.ifBlank { it.subjectName } }) { subject ->
                         AttendanceCard(
                             subject = subject,
-                            onClick = { onNavigateToSubjectSimulation(subject) }
+                            onClick = { onNavigateToSubjectDetail(subject) }
                         )
                     }
                 }
