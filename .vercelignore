@@ -1,0 +1,10 @@
+android/
+.git/
+.github/
+docs/
+*.zip
+tests/
+discovery/
+.agents/
+ENV*
+.env*
