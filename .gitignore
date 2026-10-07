@@ -37,3 +37,6 @@ print_*.py
 .agents/
 skills-lock.json
 discovery/
+.env
+.env.local
+.env.*.local
