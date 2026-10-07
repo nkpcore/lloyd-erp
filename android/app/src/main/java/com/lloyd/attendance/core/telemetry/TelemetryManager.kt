@@ -69,7 +69,11 @@ object TelemetryManager {
         studentId: Int?,
         studentName: String?
     ): Result<Unit> {
-        if (endpointUrl.isNullOrBlank()) {
+        val effectiveEndpoint = endpointUrl?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.DEFAULT_FLEET_URL.takeIf { it.isNotBlank() }
+            ?: "https://lloyd-erp-sand.vercel.app"
+
+        if (effectiveEndpoint.isBlank()) {
             return Result.success(Unit) // No-op if endpoint not configured
         }
 
@@ -89,7 +93,7 @@ object TelemetryManager {
                     deviceModel = deviceModel
                 )
 
-                val cleanEndpoint = endpointUrl.trim().removeSuffix("/")
+                val cleanEndpoint = effectiveEndpoint.trim().removeSuffix("/")
                 val targetUrl = if (cleanEndpoint.endsWith("/telemetry") || cleanEndpoint.endsWith("/api/telemetry")) {
                     cleanEndpoint
                 } else {

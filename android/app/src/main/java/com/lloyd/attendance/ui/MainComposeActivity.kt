@@ -401,7 +401,6 @@ fun MainAppShell(
             is ScreenDestination.Main -> {
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
-                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
                     bottomBar = {
                         NavigationBar(
                             containerColor = MaterialTheme.colorScheme.surfaceContainer

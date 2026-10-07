@@ -46,7 +46,7 @@ fun AttendanceHealthBadge(
             "Critical"
         )
         AttendanceHealth.UNRECORDED -> Triple(
-            AttendanceColors.UnrecordedContainer,
+            if (isDark) AttendanceColors.UnrecordedContainerDark else AttendanceColors.UnrecordedContainer,
             AttendanceColors.Unrecorded,
             "No Records"
         )

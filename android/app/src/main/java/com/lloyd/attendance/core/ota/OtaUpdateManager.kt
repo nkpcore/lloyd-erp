@@ -70,9 +70,13 @@ object OtaUpdateManager {
         return withContext(Dispatchers.IO) {
             val cleanCurrent = cleanVersion(currentVersion)
 
-            // 1. Check live fleet server /ota or /config if endpoint configured
-            if (!fleetEndpoint.isNullOrBlank()) {
-                val cleanBase = fleetEndpoint.trim().removeSuffix("/")
+            val effectiveFleet = fleetEndpoint?.takeIf { it.isNotBlank() }
+                ?: BuildConfig.DEFAULT_FLEET_URL.takeIf { it.isNotBlank() }
+                ?: "https://lloyd-erp-sand.vercel.app"
+
+            // 1. Check live fleet server /ota or /config
+            if (effectiveFleet.isNotBlank()) {
+                val cleanBase = effectiveFleet.trim().removeSuffix("/")
 
                 // Attempt 1: Query dedicated /ota endpoint
                 try {

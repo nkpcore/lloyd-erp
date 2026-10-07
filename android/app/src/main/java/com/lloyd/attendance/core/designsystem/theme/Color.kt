@@ -21,17 +21,17 @@ val LightOnSurface = Color(0xFF2B2D42)
 val LightOnSurfaceVariant = Color(0xFF6C757D)
 val LightOutline = Color(0xFFD8D2C2)
 
-// Dark Theme Variants
-val DarkBackground = Color(0xFF161B22)
-val DarkSurface = Color(0xFF21262D)
-val DarkSurfaceVariant = Color(0xFF30363D)
-val HoneyBronzeDark = Color(0xFFF8C87A)
-val MutedTealDark = Color(0xFF9DC0B8)
-val LightCoralDark = Color(0xFFF59D9B)
-val DarkOnSurface = Color(0xFFF0F6FC)
-val DarkOnSurfaceVariant = Color(0xFF8B949E)
-val DarkOutline = Color(0xFF484F58)
-val DarkOutlineVariant = Color(0xFF30363D)
+// Dark Theme Variants — High-Definition Contrast & Clear Separation
+val DarkBackground = Color(0xFF0D1117)
+val DarkSurface = Color(0xFF161B22)
+val DarkSurfaceVariant = Color(0xFF21262D)
+val HoneyBronzeDark = Color(0xFFFBBF24)
+val MutedTealDark = Color(0xFF34D399)
+val LightCoralDark = Color(0xFFF87171)
+val DarkOnSurface = Color(0xFFF3F4F6)
+val DarkOnSurfaceVariant = Color(0xFFA0AEC0)
+val DarkOutline = Color(0xFF384352)
+val DarkOutlineVariant = Color(0xFF242C37)
 
 // Surface Container Hierarchy (Light)
 val LloydSurfaceContainerLowestLight = Color(0xFFFFFFFF)
@@ -42,45 +42,46 @@ val LloydSurfaceContainerHighestLight = Color(0xFFE4D5C4)
 val LloydSurfaceDimLight = Color(0xFFEBE0D3)
 val LloydSurfaceBrightLight = Color(0xFFFFFFFF)
 
-// Surface Container Hierarchy (Dark)
-val LloydSurfaceContainerLowestDark = Color(0xFF0D1117)
-val LloydSurfaceContainerLowDark = Color(0xFF161B22)
-val LloydSurfaceContainerDark = Color(0xFF21262D)
-val LloydSurfaceContainerHighDark = Color(0xFF2C323B)
-val LloydSurfaceContainerHighestDark = Color(0xFF373E47)
-val LloydSurfaceDimDark = Color(0xFF161B22)
-val LloydSurfaceBrightDark = Color(0xFF30363D)
+// Surface Container Hierarchy (Dark — Distinct Visual Elevation)
+val LloydSurfaceContainerLowestDark = Color(0xFF090D12)
+val LloydSurfaceContainerLowDark = Color(0xFF181F28) // Distinctly elevated from #0D1117 background
+val LloydSurfaceContainerDark = Color(0xFF212A36)    // Elevated cards & surfaces
+val LloydSurfaceContainerHighDark = Color(0xFF2B3644)
+val LloydSurfaceContainerHighestDark = Color(0xFF364354)
+val LloydSurfaceDimDark = Color(0xFF10141A)
+val LloydSurfaceBrightDark = Color(0xFF2D3748)
 
 // ==========================================
 // Semantic Attendance Health Colors
 // ==========================================
 object AttendanceColors {
-    val HealthyLight = Color(0xFF4D8B7D)
+    val HealthyLight = Color(0xFF2E7D6F)
     val HealthyContainerLight = Color(0xFFD4EAE5)
-    val OnHealthyContainerLight = Color(0xFF1B4D43)
+    val OnHealthyContainerLight = Color(0xFF0E3830)
 
-    val HealthyDark = MutedTealDark
-    val HealthyContainerDark = Color(0xFF204840)
-    val OnHealthyContainerDark = Color(0xFFCBE8E1)
+    val HealthyDark = Color(0xFF34D399) // Radiant Emerald Mint
+    val HealthyContainerDark = Color(0xFF064E3B)
+    val OnHealthyContainerDark = Color(0xFFA7F3D0)
 
-    val BorderlineLight = Color(0xFFE5A638)
-    val BorderlineContainerLight = Color(0xFFFFF2D6)
-    val OnBorderlineContainerLight = Color(0xFF634100)
+    val BorderlineLight = Color(0xFFD97706)
+    val BorderlineContainerLight = Color(0xFFFEF3C7)
+    val OnBorderlineContainerLight = Color(0xFF78350F)
 
-    val BorderlineDark = HoneyBronzeDark
-    val BorderlineContainerDark = Color(0xFF5E4300)
-    val OnBorderlineContainerDark = Color(0xFFFFECC4)
+    val BorderlineDark = Color(0xFFFBBF24) // Luminous Honey Amber
+    val BorderlineContainerDark = Color(0xFF451A03)
+    val OnBorderlineContainerDark = Color(0xFFFDE68A)
 
-    val CriticalLight = LightCoralError
-    val CriticalContainerLight = Color(0xFFFFE0DF)
-    val OnCriticalContainerLight = Color(0xFF6B1D1D)
+    val CriticalLight = Color(0xFFDC2626)
+    val CriticalContainerLight = Color(0xFFFEE2E2)
+    val OnCriticalContainerLight = Color(0xFF7F1D1D)
 
-    val CriticalDark = LightCoralDark
-    val CriticalContainerDark = Color(0xFF631F1F)
-    val OnCriticalContainerDark = Color(0xFFFFD5D4)
+    val CriticalDark = Color(0xFFF87171) // Vivid Coral Rose
+    val CriticalContainerDark = Color(0xFF450A0A)
+    val OnCriticalContainerDark = Color(0xFFFECACA)
 
-    val Unrecorded = Color(0xFF8C929D)
+    val Unrecorded = Color(0xFF94A3B8)
     val UnrecordedContainer = LinenSurface
+    val UnrecordedContainerDark = Color(0xFF1E2633)
 }
 
 // Light Color Scheme

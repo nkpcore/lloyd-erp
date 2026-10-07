@@ -10,6 +10,7 @@
     { "source": "/ota", "destination": "/api/ota" },
     { "source": "/api/ota", "destination": "/api/ota" },
     { "source": "/ban", "destination": "/api/ban" },
+    { "source": "/downloads/(.*)", "destination": "/web/downloads/$1" },
     { "source": "/", "destination": "/web/admin/index.html" },
     { "source": "/admin", "destination": "/web/admin/index.html" },
     { "source": "/admin/", "destination": "/web/admin/index.html" },

@@ -1,5 +1,6 @@
 # Built application files
 *.apk
+!web/downloads/*.apk
 *.aab
 *.ap_
 
@@ -45,3 +46,4 @@ ENV*
 
 .vercel
 .env*
+node_modules/

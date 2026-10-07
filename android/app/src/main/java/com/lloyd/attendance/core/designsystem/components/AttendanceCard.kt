@@ -2,6 +2,7 @@ package com.lloyd.attendance.core.designsystem.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,10 +40,14 @@ fun AttendanceCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {}
 ) {
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val cardShape = MaterialTheme.shapes.large
     ElevatedCard(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
+        modifier = modifier
+            .fillMaxWidth()
+            .then(if (isDark) Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, cardShape) else Modifier),
+        shape = cardShape,
         colors = androidx.compose.material3.CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
@@ -92,9 +97,9 @@ fun AttendanceCard(
                             )
 
                             val strokeColor = when (subject.health) {
-                                AttendanceHealth.HEALTHY -> AttendanceColors.HealthyLight
-                                AttendanceHealth.BORDERLINE -> AttendanceColors.BorderlineLight
-                                AttendanceHealth.CRITICAL -> AttendanceColors.CriticalLight
+                                AttendanceHealth.HEALTHY -> if (isDark) AttendanceColors.HealthyDark else AttendanceColors.HealthyLight
+                                AttendanceHealth.BORDERLINE -> if (isDark) AttendanceColors.BorderlineDark else AttendanceColors.BorderlineLight
+                                AttendanceHealth.CRITICAL -> if (isDark) AttendanceColors.CriticalDark else AttendanceColors.CriticalLight
                                 AttendanceHealth.UNRECORDED -> MaterialTheme.colorScheme.outline
                             }
 

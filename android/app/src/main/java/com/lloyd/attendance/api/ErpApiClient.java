@@ -98,6 +98,19 @@ public class ErpApiClient {
                     if (apiRes.data.user.section != null && !apiRes.data.user.section.trim().isEmpty()) {
                         prefs.saveSelectedSection(apiRes.data.user.section.trim());
                     }
+                } else {
+                    prefs.updateOrEnrichUserProfile(
+                        apiRes.data.name,
+                        apiRes.data.profileId,
+                        username,
+                        null,
+                        null,
+                        null
+                    );
+                }
+                try {
+                    getProfile();
+                } catch (Exception ignored) {
                 }
                 return apiRes.data;
             } else {
@@ -190,6 +203,16 @@ public class ErpApiClient {
             if (apiRes != null && apiRes.data != null) {
                 if (apiRes.data.studentId > 0) {
                     prefs.saveStudentId(apiRes.data.studentId);
+                }
+                if (apiRes.data.studentName != null && !apiRes.data.studentName.trim().isEmpty()) {
+                    prefs.updateOrEnrichUserProfile(
+                        apiRes.data.studentName,
+                        apiRes.data.studentId > 0 ? apiRes.data.studentId : null,
+                        null,
+                        null,
+                        null,
+                        null
+                    );
                 }
                 prefs.saveMonthlyData(resStr);
                 return apiRes.data;
@@ -314,6 +337,18 @@ public class ErpApiClient {
 
         if (!allItems.isEmpty()) {
             prefs.saveAttendanceLogs(gson.toJson(allItems));
+            Models.StudentAttendanceItem sample = allItems.get(0);
+            if (sample != null) {
+                String sem = (sample.semesterId != null && sample.semesterId > 0) ? "Semester " + sample.semesterId : null;
+                prefs.updateOrEnrichUserProfile(
+                    sample.studentName,
+                    sample.studentId,
+                    sample.rollNo,
+                    null,
+                    sem,
+                    null
+                );
+            }
         }
 
         return allItems;
@@ -352,14 +387,48 @@ public class ErpApiClient {
             }
 
             String resStr = response.body() != null ? response.body().string() : "";
-            Type type = new TypeToken<Models.ApiResponse<Models.UserProfile>>() {}.getType();
-            Models.ApiResponse<Models.UserProfile> apiRes = null;
+            Models.UserProfile profile = null;
+
+            // 1. Parse authentic ERP nested structure: { data: { role, profile, academic } }
             try {
-                apiRes = gson.fromJson(resStr, type);
+                Type meType = new TypeToken<Models.ApiResponse<Models.ProfileMeData>>() {}.getType();
+                Models.ApiResponse<Models.ProfileMeData> meRes = gson.fromJson(resStr, meType);
+                if (meRes != null && meRes.data != null) {
+                    profile = new Models.UserProfile();
+                    if (meRes.data.profile != null) {
+                        profile.name = meRes.data.profile.name;
+                        profile.username = meRes.data.profile.username;
+                        profile.email = meRes.data.profile.email;
+                        profile.photo_url = meRes.data.profile.photo_url;
+                    }
+                    if (meRes.data.academic != null) {
+                        profile.admission_no = meRes.data.academic.admissionNo != null ? meRes.data.academic.admissionNo : profile.username;
+                        profile.course = meRes.data.academic.className;
+                        profile.semester = meRes.data.academic.semesterName;
+                        profile.section = meRes.data.academic.sectionName;
+                        if (meRes.data.academic.rollNo != null && !meRes.data.academic.rollNo.isEmpty()) {
+                            profile.admission_no = meRes.data.academic.rollNo;
+                        }
+                    }
+                    if (meRes.data.role != null) {
+                        profile.role = meRes.data.role;
+                    }
+                }
             } catch (Exception ignored) {
             }
 
-            Models.UserProfile profile = (apiRes != null && apiRes.data != null) ? apiRes.data : null;
+            // 2. Fallback to flat Models.ApiResponse<Models.UserProfile>
+            if (profile == null) {
+                try {
+                    Type flatType = new TypeToken<Models.ApiResponse<Models.UserProfile>>() {}.getType();
+                    Models.ApiResponse<Models.UserProfile> apiRes = gson.fromJson(resStr, flatType);
+                    if (apiRes != null && apiRes.data != null) {
+                        profile = apiRes.data;
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+
             if (profile == null) {
                 try {
                     profile = gson.fromJson(resStr, Models.UserProfile.class);
@@ -375,10 +444,63 @@ public class ErpApiClient {
                 if (profile.section != null && !profile.section.trim().isEmpty()) {
                     prefs.saveSelectedSection(profile.section.trim());
                 }
+                prefs.updateOrEnrichUserProfile(
+                    profile.name,
+                    profile.id > 0 ? profile.id : null,
+                    profile.admission_no,
+                    profile.course,
+                    profile.semester,
+                    profile.section,
+                    profile.photo_url
+                );
                 return profile;
             } else {
-                throw new ErpException("Unable to parse user profile response");
+                return getDashboardProfile();
             }
+        }
+    }
+
+    public Models.UserProfile getDashboardProfile() throws Exception {
+        String token = ensureValidToken();
+        Request request = new Request.Builder()
+                .url(BASE_URL + "/dashboard")
+                .get()
+                .header("Authorization", "Bearer " + token)
+                .header("Accept", "application/json")
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (response.code() == 401) {
+                handleUnauthorized();
+                return getDashboardProfile();
+            }
+            if (!response.isSuccessful()) {
+                throw new ErpException("Server error (" + response.code() + ") loading dashboard profile.");
+            }
+            String resStr = response.body() != null ? response.body().string() : "";
+            Type type = new TypeToken<Models.ApiResponse<Models.DashboardData>>() {}.getType();
+            Models.ApiResponse<Models.DashboardData> apiRes = gson.fromJson(resStr, type);
+            if (apiRes != null && apiRes.data != null && apiRes.data.dashboard != null && apiRes.data.dashboard.profile != null) {
+                Models.UserProfile profile = apiRes.data.dashboard.profile;
+                prefs.saveUserProfile(profile);
+                if (profile.id > 0) {
+                    prefs.saveStudentId(profile.id);
+                }
+                if (profile.section != null && !profile.section.trim().isEmpty()) {
+                    prefs.saveSelectedSection(profile.section.trim());
+                }
+                prefs.updateOrEnrichUserProfile(
+                    profile.name,
+                    profile.id > 0 ? profile.id : null,
+                    profile.admission_no,
+                    profile.course,
+                    profile.semester,
+                    profile.section,
+                    profile.photo_url
+                );
+                return profile;
+            }
+            throw new ErpException("Unable to parse dashboard profile response");
         }
     }
 

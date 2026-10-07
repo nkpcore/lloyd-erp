@@ -262,7 +262,6 @@ fun ProfileScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = {
@@ -311,10 +310,18 @@ fun ProfileScreen(
                         ) {
                             val photoUrl = userProfile?.photo_url?.takeIf { it.isNotBlank() }
                             if (photoUrl != null) {
-                                val fullUrl = if (photoUrl.startsWith("http://") || photoUrl.startsWith("https://")) {
-                                    photoUrl
-                                } else {
-                                    "https://erp.lloydcollege.in" + if (photoUrl.startsWith("/")) photoUrl else "/$photoUrl"
+                                val cleanPhoto = photoUrl.trim()
+                                val fullUrl = when {
+                                    cleanPhoto.startsWith("http://") || cleanPhoto.startsWith("https://") -> cleanPhoto
+                                    cleanPhoto.startsWith("/assets/resource") || cleanPhoto.startsWith("assets/resource") -> {
+                                        "https://erp.lloydcollege.in/" + cleanPhoto.removePrefix("/")
+                                    }
+                                    cleanPhoto.startsWith("/student-photo") || cleanPhoto.startsWith("student-photo") -> {
+                                        "https://erp.lloydcollege.in/assets/resource/" + cleanPhoto.removePrefix("/")
+                                    }
+                                    else -> {
+                                        "https://erp.lloydcollege.in" + if (cleanPhoto.startsWith("/")) cleanPhoto else "/$cleanPhoto"
+                                    }
                                 }
                                 AsyncImage(
                                     model = ImageRequest.Builder(LocalContext.current)
@@ -346,13 +353,20 @@ fun ProfileScreen(
                         }
                         Spacer(modifier = Modifier.width(14.dp))
                         Column {
+                            val resolvedName = userProfile?.name?.takeIf { it.isNotBlank() }
+                                ?: stats?.studentName?.takeIf { it.isNotBlank() }
+                                ?: prefs.cachedStats?.studentName?.takeIf { it.isNotBlank() }
+                                ?: "--"
                             Text(
-                                text = userProfile?.name?.takeIf { it.isNotBlank() } ?: "--",
+                                text = resolvedName,
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold
                             )
+                            val resolvedId = if (studentId > 0) studentId
+                            else if ((userProfile?.id ?: 0) > 0) userProfile?.id
+                            else "--"
                             Text(
-                                text = "Student ID: ${if (studentId > 0) studentId else "--"}",
+                                text = "Student ID: $resolvedId",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -362,11 +376,16 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     val rollOrAdmission = userProfile?.admission_no?.takeIf { it.isNotBlank() }
-                        ?: userProfile?.username?.takeIf { it.isNotBlank() } ?: "--"
+                        ?: userProfile?.username?.takeIf { it.isNotBlank() }
+                        ?: prefs.username.takeIf { it.isNotBlank() }
+                        ?: "--"
                     ProfileField("Roll / Enrollment", rollOrAdmission)
                     ProfileField("Program / Course", userProfile?.course?.takeIf { it.isNotBlank() } ?: "--")
                     ProfileField("Semester", userProfile?.semester?.takeIf { it.isNotBlank() } ?: "--")
-                    ProfileField("Assigned Section", userProfile?.section?.takeIf { it.isNotBlank() } ?: "--")
+                    val resolvedSection = userProfile?.section?.takeIf { it.isNotBlank() }
+                        ?: prefs.selectedSection.takeIf { it.isNotBlank() }
+                        ?: "--"
+                    ProfileField("Assigned Section", resolvedSection)
 
                     Spacer(modifier = Modifier.height(4.dp))
                     Row(
@@ -628,9 +647,11 @@ fun ProfileScreen(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        val currentEndpoint = prefs.telemetryEndpoint
+                        val currentEndpoint = prefs.telemetryEndpoint?.takeIf { it.isNotBlank() }
+                            ?: BuildConfig.DEFAULT_FLEET_URL.takeIf { it.isNotBlank() }
+                            ?: "https://lloyd-erp-sand.vercel.app"
                         Text(
-                            text = if (!currentEndpoint.isNullOrBlank()) "Server: $currentEndpoint" else "Server: Local Simulated / Not set",
+                            text = "Server: $currentEndpoint",
                             style = MaterialTheme.typography.bodySmall,
                             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onSurface

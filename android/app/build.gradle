@@ -46,7 +46,7 @@ android {
         versionCode appVersionCode
         versionName appVersionName
 
-        def defaultFleetUrl = project.findProperty('fleetUrl') ?: System.getenv('FLEET_URL') ?: ""
+        def defaultFleetUrl = project.findProperty('fleetUrl') ?: System.getenv('FLEET_URL') ?: "https://lloyd-erp-sand.vercel.app"
         buildConfigField "String", "DEFAULT_FLEET_URL", "\"${defaultFleetUrl}\""
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"

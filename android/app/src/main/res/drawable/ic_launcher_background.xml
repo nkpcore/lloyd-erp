@@ -1,27 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:pathData="M0,0h108v108h-108z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:type="linear"
-                android:startX="0"
-                android:startY="0"
-                android:endX="108"
-                android:endY="108">
-                <item android:color="#262833" android:offset="0.0" />
-                <item android:color="#17181E" android:offset="1.0" />
-            </gradient>
-        </aapt:attr>
-    </path>
-    <!-- Subtle Honey Bronze accent glow in center -->
-    <path
-        android:pathData="M54,18 A36,36 0 1 0 54,90 A36,36 0 1 0 54,18 Z"
-        android:fillAlpha="0.08"
-        android:fillColor="#F6BD60" />
+        android:fillColor="#FFFFFF"
+        android:pathData="M0,0h108v108h-108z" />
 </vector>

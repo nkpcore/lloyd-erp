@@ -101,6 +101,56 @@ public class AppPreferences {
         }
     }
 
+    public synchronized void updateOrEnrichUserProfile(String name, Integer id, String rollNo, String course, String semester, String section) {
+        updateOrEnrichUserProfile(name, id, rollNo, course, semester, section, null);
+    }
+
+    public synchronized void updateOrEnrichUserProfile(String name, Integer id, String rollNo, String course, String semester, String section, String photoUrl) {
+        Models.UserProfile current = getUserProfile();
+        if (current == null) {
+            current = new Models.UserProfile();
+        }
+        boolean modified = false;
+        if (name != null && !name.trim().isEmpty() && (current.name == null || current.name.trim().isEmpty())) {
+            current.name = name.trim();
+            modified = true;
+        }
+        if (id != null && id > 0 && current.id <= 0) {
+            current.id = id;
+            modified = true;
+        }
+        if (rollNo != null && !rollNo.trim().isEmpty() && (current.admission_no == null || current.admission_no.trim().isEmpty())) {
+            current.admission_no = rollNo.trim();
+            modified = true;
+        }
+        if (course != null && !course.trim().isEmpty() && (current.course == null || current.course.trim().isEmpty())) {
+            current.course = course.trim();
+            modified = true;
+        }
+        if (semester != null && !semester.trim().isEmpty() && (current.semester == null || current.semester.trim().isEmpty())) {
+            current.semester = semester.trim();
+            modified = true;
+        }
+        if (section != null && !section.trim().isEmpty() && (current.section == null || current.section.trim().isEmpty())) {
+            current.section = section.trim();
+            modified = true;
+        }
+        if (photoUrl != null && !photoUrl.trim().isEmpty() && (current.photo_url == null || current.photo_url.trim().isEmpty())) {
+            current.photo_url = photoUrl.trim();
+            modified = true;
+        }
+        if (current.username == null || current.username.trim().isEmpty()) {
+            String uname = getUsername();
+            if (uname != null && !uname.trim().isEmpty()) {
+                current.username = uname.trim();
+                modified = true;
+            }
+        }
+        if (modified || getUserProfile() == null) {
+            saveUserProfile(current);
+        }
+    }
+
     public Models.UserProfile getUserProfile() {
         String json = prefs.getString(KEY_USER_PROFILE, null);
         if (json == null) return null;
@@ -243,7 +293,11 @@ public class AppPreferences {
     }
 
     public String getTelemetryEndpoint() {
-        return prefs.getString(KEY_TELEMETRY_ENDPOINT, com.lloyd.attendance.BuildConfig.DEFAULT_FLEET_URL);
+        String endpoint = prefs.getString(KEY_TELEMETRY_ENDPOINT, "");
+        if (endpoint == null || endpoint.trim().isEmpty() || endpoint.contains("192.168.") || endpoint.contains("localhost")) {
+            return com.lloyd.attendance.BuildConfig.DEFAULT_FLEET_URL;
+        }
+        return endpoint;
     }
 
     public void setTelemetryEndpoint(String endpoint) {

@@ -60,6 +60,7 @@ class TelemetryDashboard {
 
     initGovernanceElements() {
         this.cfgMinVersion = document.getElementById('cfgMinVersion');
+        this.cfgLatestVersion = document.getElementById('cfgLatestVersion');
         this.cfgDownloadUrl = document.getElementById('cfgDownloadUrl');
         this.cfgBroadcastNotice = document.getElementById('cfgBroadcastNotice');
         this.cfgBannedDevices = document.getElementById('cfgBannedDevices');
@@ -72,6 +73,9 @@ class TelemetryDashboard {
     populateGovernanceFields() {
         if (!this.cfgMinVersion) return;
         this.cfgMinVersion.value = this.fleetConfig.min_version_code || '';
+        if (this.cfgLatestVersion) {
+            this.cfgLatestVersion.value = this.fleetConfig.latest_version_name || '';
+        }
         this.cfgDownloadUrl.value = this.fleetConfig.download_url || '';
         this.cfgBroadcastNotice.value = this.fleetConfig.broadcast_notice || '';
         if (this.cfgBannedDevices) {
@@ -82,6 +86,7 @@ class TelemetryDashboard {
 
     saveConfig() {
         const minVer = parseInt(this.cfgMinVersion.value) || 1;
+        const latestVer = this.cfgLatestVersion ? (this.cfgLatestVersion.value || '').trim() : '';
         const dlUrl = (this.cfgDownloadUrl.value || '').trim();
         const notice = (this.cfgBroadcastNotice.value || '').trim();
         const bannedDevStr = (this.cfgBannedDevices ? this.cfgBannedDevices.value : '').trim();
@@ -91,6 +96,7 @@ class TelemetryDashboard {
         const isMaint = this.cfgMaintenanceMode.checked;
 
         this.fleetConfig.min_version_code = minVer;
+        this.fleetConfig.latest_version_name = latestVer || null;
         this.fleetConfig.download_url = dlUrl;
         this.fleetConfig.broadcast_notice = notice || null;
         this.fleetConfig.banned_devices = [...new Set(bannedDevList)];
@@ -223,12 +229,14 @@ class TelemetryDashboard {
 
     async loadTelemetry() {
         const base = (this.endpointUrl || 'http://localhost:8080').replace(/\/+$/, '');
-        this.syncStatusEl.textContent = 'Syncing remote fleet...';
 
         // Candidate URLs to auto-connect (supports direct file:// browsing and web deployments)
-        const candidates = [base];
-        if (typeof window !== 'undefined' && window.location.origin && !candidates.includes(window.location.origin) && window.location.origin.startsWith('http')) {
+        const candidates = [];
+        if (typeof window !== 'undefined' && window.location.origin && window.location.origin.startsWith('http')) {
             candidates.push(window.location.origin);
+        }
+        if (base && !candidates.includes(base)) {
+            candidates.push(base);
         }
         if (!candidates.includes('http://localhost:8080')) {
             candidates.push('http://localhost:8080');
@@ -240,7 +248,8 @@ class TelemetryDashboard {
             try {
                 // Synchronize remote config if available
                 try {
-                    const cfgRes = await fetch(candidate + '/config');
+                    const cfgUrl = candidate + (candidate.includes('/api') ? '/config' : '/api/config');
+                    const cfgRes = await fetch(cfgUrl, { signal: AbortSignal.timeout(2500) });
                     if (cfgRes.ok) {
                         const remoteCfg = await cfgRes.json();
                         this.fleetConfig = { ...this.fleetConfig, ...remoteCfg };
@@ -250,7 +259,8 @@ class TelemetryDashboard {
                 } catch (e) {}
 
                 // Fetch telemetry heartbeats
-                const res = await fetch(candidate + '/telemetry');
+                const telUrl = candidate + (candidate.includes('/api') ? '/telemetry' : '/api/telemetry');
+                const res = await fetch(telUrl, { signal: AbortSignal.timeout(2500) });
                 if (res.ok) {
                     this.records = await res.json();
                     connectedUrl = candidate;
@@ -273,6 +283,11 @@ class TelemetryDashboard {
         this.computeKPIs();
         this.renderVersionBars();
         this.applyFilters();
+
+        // Setup background polling if not already started
+        if (!this.pollTimer) {
+            this.pollTimer = setInterval(() => this.loadTelemetry(), 10000);
+        }
     }
 
     populateVersionFilter() {

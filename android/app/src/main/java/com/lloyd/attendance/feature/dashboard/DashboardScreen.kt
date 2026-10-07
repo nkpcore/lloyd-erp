@@ -2,7 +2,9 @@ package com.lloyd.attendance.feature.dashboard
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,7 +76,6 @@ fun DashboardScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = {
@@ -199,9 +200,13 @@ fun DashboardScreen(
 
                 // Hero Attendance Summary Card (M3 Expressive Compact Header)
                 item {
+                    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+                    val heroShape = ExpressiveShapes.largeIncreased
                     ElevatedCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = ExpressiveShapes.largeIncreased,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (isDark) Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, heroShape) else Modifier),
+                        shape = heroShape,
                         colors = androidx.compose.material3.CardDefaults.elevatedCardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                         )
@@ -217,14 +222,20 @@ fun DashboardScreen(
                                 verticalAlignment = Alignment.Top
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "OVERALL ATTENDANCE",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        letterSpacing = 1.sp
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(
+                                            text = "OVERALL ATTENDANCE",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            letterSpacing = 1.sp
+                                        )
+                                        AttendanceHealthBadge(health = overall.health)
+                                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
                                     Text(
                                         text = overall.percentage.displayValue,
                                         style = MaterialTheme.typography.displaySmall,
@@ -239,7 +250,7 @@ fun DashboardScreen(
                                     )
                                 }
 
-                                // Compact Gauge
+                                // Compact Gauge — Percentage centered with NO badge overlap
                                 Box(
                                     modifier = Modifier.size(68.dp),
                                     contentAlignment = Alignment.Center
@@ -255,9 +266,9 @@ fun DashboardScreen(
                                     )
 
                                     val strokeColor = when (overall.health) {
-                                        AttendanceHealth.HEALTHY -> AttendanceColors.HealthyLight
-                                        AttendanceHealth.BORDERLINE -> AttendanceColors.BorderlineLight
-                                        AttendanceHealth.CRITICAL -> AttendanceColors.CriticalLight
+                                        AttendanceHealth.HEALTHY -> if (isDark) AttendanceColors.HealthyDark else AttendanceColors.HealthyLight
+                                        AttendanceHealth.BORDERLINE -> if (isDark) AttendanceColors.BorderlineDark else AttendanceColors.BorderlineLight
+                                        AttendanceHealth.CRITICAL -> if (isDark) AttendanceColors.CriticalDark else AttendanceColors.CriticalLight
                                         AttendanceHealth.UNRECORDED -> MaterialTheme.colorScheme.outlineVariant
                                     }
 
@@ -270,19 +281,25 @@ fun DashboardScreen(
                                         strokeCap = StrokeCap.Round
                                     )
 
-                                    AttendanceHealthBadge(health = overall.health)
+                                    Text(
+                                        text = overall.percentage.displayValue,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
                                 }
                             }
 
                             Spacer(modifier = Modifier.height(14.dp))
 
                             // Contextual Advice from BunkAdvisor
+                            val isDark = isSystemInDarkTheme()
                             val advice = BunkAdvisor.getAdvice(overall.totalPresent, overall.totalClasses)
                             Text(
                                 text = advice.headline,
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
-                                color = if (advice.isSafe) MaterialTheme.colorScheme.onSurface else AttendanceColors.CriticalLight
+                                color = if (advice.isSafe) MaterialTheme.colorScheme.onSurface else if (isDark) AttendanceColors.CriticalDark else AttendanceColors.CriticalLight
                             )
                             Text(
                                 text = advice.detail,

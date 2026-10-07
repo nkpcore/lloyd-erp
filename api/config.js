@@ -1,63 +1,14 @@
 /**
  * Lloyd ERP — Fleet Governance Configuration API (Vercel Serverless / Cloud)
- * Supports Vercel KV / Upstash Redis with zero external npm dependencies.
- * ZERO HARDCODED VERSIONS: Computes latest version dynamically from live fleet telemetry.
+ * Uses api/lib/db.js for instant non-hanging persistence with Redis and memory/disk fallbacks.
  */
 
-const fs = require('fs');
-const path = require('path');
-
-const DEFAULT_CONFIG = {
-    min_version_code: 1,
-    latest_version_name: null,
-    download_url: '',
-    banned_students: [],
-    banned_devices: [],
-    broadcast_notice: null,
-    maintenance_mode: false,
-    maintenance_message: 'Lloyd ERP service is currently undergoing routine maintenance.'
-};
+const db = require('./lib/db');
 
 function setCors(res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
-}
-
-function getKvCredentials() {
-    let url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-    let token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-    if ((!url || !token) && (process.env.REDIS_URL || process.env.KV_URL)) {
-        try {
-            const raw = process.env.REDIS_URL || process.env.KV_URL;
-            const parsed = new URL(raw);
-            url = `https://${parsed.hostname}`;
-            token = decodeURIComponent(parsed.password || parsed.username || '');
-        } catch (_) {}
-    }
-    return { url, token };
-}
-
-async function callKv(command, ...args) {
-    const { url, token } = getKvCredentials();
-    if (!url || !token) return null;
-
-    try {
-        const resp = await fetch(url.replace(/\/+$/, ''), {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify([command, ...args])
-        });
-        if (!resp.ok) return null;
-        const data = await resp.json();
-        return data.result;
-    } catch (e) {
-        console.warn('[KV] Error executing KV command:', e.message);
-        return null;
-    }
 }
 
 let cachedGhRelease = null;
@@ -81,7 +32,10 @@ async function getLiveGitHubRelease() {
             headers['Authorization'] = `Bearer ${token}`;
         }
 
-        const resp = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, { headers });
+        const resp = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
+            headers,
+            signal: AbortSignal.timeout(1500)
+        });
         if (!resp.ok) return null;
 
         const release = await resp.json();
@@ -94,90 +48,9 @@ async function getLiveGitHubRelease() {
         };
         lastGhCheckTime = now;
         return cachedGhRelease;
-    } catch (e) {
+    } catch (_) {
         return null;
     }
-}
-
-async function getLiveFleetVersion() {
-    try {
-        // Check KV telemetry records
-        const kvValues = await callKv('HVALS', 'lloyd_fleet_telemetry');
-        if (Array.isArray(kvValues) && kvValues.length > 0) {
-            const records = kvValues.map(v => {
-                try { return typeof v === 'string' ? JSON.parse(v) : v; } catch (e) { return null; }
-            }).filter(Boolean);
-
-            const sorted = records
-                .map(r => ({ name: (r.app_version || '').trim(), code: parseInt(r.version_code) || 0 }))
-                .filter(v => v.name || v.code > 0)
-                .sort((a, b) => b.code - a.code);
-
-            if (sorted.length > 0) return sorted[0].name || null;
-        }
-
-        // Check local disk fallback
-        const localPath = path.join(process.cwd(), 'fleet_telemetry.json');
-        if (fs.existsSync(localPath)) {
-            const raw = fs.readFileSync(localPath, 'utf8');
-            const data = JSON.parse(raw);
-            const list = Array.isArray(data) ? data : Object.values(data);
-            const sorted = list
-                .map(r => ({ name: (r.app_version || '').trim(), code: parseInt(r.version_code) || 0 }))
-                .filter(v => v.name || v.code > 0)
-                .sort((a, b) => b.code - a.code);
-
-            if (sorted.length > 0) return sorted[0].name || null;
-        }
-    } catch (e) {}
-
-    return null;
-}
-
-async function getConfig() {
-    let cfg = null;
-    // 1. Try Vercel KV / Upstash Redis
-    const kvData = await callKv('GET', 'lloyd_fleet_config');
-    if (kvData) {
-        try {
-            cfg = typeof kvData === 'string' ? JSON.parse(kvData) : kvData;
-        } catch (e) {}
-    }
-
-    // 2. Try local fallback file
-    if (!cfg) {
-        try {
-            const localPath = path.join(process.cwd(), 'fleet_config.json');
-            if (fs.existsSync(localPath)) {
-                const raw = fs.readFileSync(localPath, 'utf8');
-                cfg = JSON.parse(raw);
-            }
-        } catch (e) {}
-    }
-
-    const merged = { ...DEFAULT_CONFIG, ...(cfg || {}) };
-
-    // Dynamically populate latest_version_name and download_url from live GitHub release or telemetry if not explicitly set
-    const ghRelease = await getLiveGitHubRelease();
-    if (!merged.latest_version_name) {
-        merged.latest_version_name = (ghRelease && ghRelease.version) || await getLiveFleetVersion();
-    }
-    if (!merged.download_url && ghRelease && ghRelease.download_url) {
-        merged.download_url = ghRelease.download_url;
-    }
-
-    return merged;
-}
-
-async function saveConfig(newConfig) {
-    // 1. Save to KV if connected
-    await callKv('SET', 'lloyd_fleet_config', JSON.stringify(newConfig));
-
-    // 2. Best-effort local file save
-    try {
-        const localPath = path.join(process.cwd(), 'fleet_config.json');
-        fs.writeFileSync(localPath, JSON.stringify(newConfig, null, 2), 'utf8');
-    } catch (e) {}
 }
 
 module.exports = async function handler(req, res) {
@@ -190,7 +63,21 @@ module.exports = async function handler(req, res) {
 
     try {
         if (req.method === 'GET') {
-            const config = await getConfig();
+            const config = await db.getConfig();
+            
+            // If latest_version_name is not set, try github or telemetry records
+            if (!config.latest_version_name) {
+                const gh = await getLiveGitHubRelease();
+                if (gh && gh.version) {
+                    config.latest_version_name = gh.version;
+                } else {
+                    const telemetry = await db.getTelemetryRecords();
+                    if (telemetry.length > 0 && telemetry[0].app_version) {
+                        config.latest_version_name = telemetry[0].app_version;
+                    }
+                }
+            }
+
             res.status(200).json(config);
             return;
         }
@@ -198,11 +85,11 @@ module.exports = async function handler(req, res) {
         if (req.method === 'POST') {
             let body = req.body;
             if (typeof body === 'string') {
-                try { body = JSON.parse(body); } catch (e) {}
+                try { body = JSON.parse(body); } catch (_) {}
             }
             body = body || {};
 
-            const current = await getConfig();
+            const current = await db.getConfig();
             const updated = {
                 ...current,
                 ...body,
@@ -214,7 +101,7 @@ module.exports = async function handler(req, res) {
                 maintenance_mode: typeof body.maintenance_mode === 'boolean' ? body.maintenance_mode : current.maintenance_mode
             };
 
-            await saveConfig(updated);
+            await db.saveConfig(updated);
             res.status(200).json({ success: true, config: updated });
             return;
         }
@@ -222,6 +109,7 @@ module.exports = async function handler(req, res) {
         res.status(405).json({ error: 'Method not allowed' });
     } catch (err) {
         console.error('[API/CONFIG] Handler error:', err);
-        res.status(200).json(DEFAULT_CONFIG);
+        const fallback = await db.getConfig();
+        res.status(200).json(fallback);
     }
 };

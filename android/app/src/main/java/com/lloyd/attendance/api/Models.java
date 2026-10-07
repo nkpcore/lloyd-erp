@@ -48,6 +48,10 @@ public class Models {
         public Integer roleId;
         @SerializedName("school_id")
         public Integer schoolId;
+        @SerializedName(value = "photo_url", alternate = {"photo", "avatar", "profile_photo", "student_photo", "avatar_url", "image", "photo_path"})
+        public String photoUrl;
+        @SerializedName("roll_no")
+        public String rollNo;
         public UserProfile user;
     }
 
@@ -141,6 +145,7 @@ public class Models {
     }
 
     public static class UserProfile {
+        @SerializedName(value = "id", alternate = {"profile_id", "user_id"})
         public int id;
         public String name;
         public String username;
@@ -150,8 +155,54 @@ public class Models {
         public String course;
         public String semester;
         public String section;
-        @SerializedName(value = "photo_url", alternate = {"photo", "avatar_url", "profile_image", "avatar"})
+        @SerializedName(value = "photo_url", alternate = {"photo", "avatar_url", "profile_image", "avatar", "profile_photo", "student_photo", "photo_path", "image"})
         public String photo_url;
+    }
+
+    public static class DashboardData {
+        public DashboardContent dashboard;
+    }
+
+    public static class DashboardContent {
+        public UserProfile profile;
+    }
+
+    public static class ProfileMeData {
+        public String role;
+        public ProfileDetail profile;
+        public AcademicDetail academic;
+    }
+
+    public static class ProfileDetail {
+        public String name;
+        public String username;
+        public String email;
+        public String phone;
+        public String gender;
+        @SerializedName("blood_group")
+        public String bloodGroup;
+        public String dob;
+        @SerializedName(value = "photo_url", alternate = {"photo", "avatar_url", "image"})
+        public String photo_url;
+    }
+
+    public static class AcademicDetail {
+        @SerializedName("admission_no")
+        public String admissionNo;
+        @SerializedName("class_id")
+        public Integer classId;
+        @SerializedName("section_id")
+        public Integer sectionId;
+        @SerializedName("class_name")
+        public String className;
+        @SerializedName("section_name")
+        public String sectionName;
+        @SerializedName("semester_name")
+        public String semesterName;
+        @SerializedName("roll_no")
+        public String rollNo;
+        @SerializedName("registration_no")
+        public String registrationNo;
     }
 
     public static class MonthlyAttendanceData {
@@ -159,6 +210,8 @@ public class Models {
         public int studentId;
         @SerializedName("student_name")
         public String studentName;
+        @SerializedName(value = "photo_url", alternate = {"photo", "avatar", "profile_photo", "student_photo", "avatar_url", "image", "photo_path"})
+        public String photoUrl;
         public List<MonthItem> months;
     }
 

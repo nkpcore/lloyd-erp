@@ -15,9 +15,10 @@
         <aside class="sidebar">
             <div class="brand">
                 <div class="brand-emblem">
-                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 2L3 7V12C3 17.5 7 21.5 12 22C17 21.5 21 17.5 21 12V7L12 2Z" stroke="#84A59D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M9 12L11 14L15 10" stroke="#F6BD60" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <svg viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="256" height="256" rx="56" fill="#FFFFFF"/>
+                        <circle cx="158" cy="128" r="58" fill="#FF6B35"/>
+                        <circle cx="98" cy="128" r="52" fill="none" stroke="#111111" stroke-width="14"/>
                     </svg>
                 </div>
                 <div class="brand-text">
@@ -167,6 +168,12 @@
                         <label for="cfgMinVersion">Minimum Allowed Version Code</label>
                         <input type="number" id="cfgMinVersion" min="1" placeholder="Live minimum version code">
                         <small>Older app versions will be blocked and directed to update</small>
+                    </div>
+
+                    <div class="gov-field">
+                        <label for="cfgLatestVersion">Latest Release Version (OTA Target)</label>
+                        <input type="text" id="cfgLatestVersion" placeholder="e.g. 1.0.11">
+                        <small>Target release version resolved during in-app OTA updates</small>
                     </div>
 
                     <div class="gov-field">
