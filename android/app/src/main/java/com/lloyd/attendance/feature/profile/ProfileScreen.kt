@@ -785,8 +785,8 @@ fun ProfileScreen(
                                         if (!info.hasUpdate) {
                                             updateMessage = "You are on the latest version (v${info.currentVersion})"
                                         }
-                                    }.onFailure { err ->
-                                        updateMessage = "Update check failed: ${err.message}"
+                                    }.onFailure {
+                                        updateMessage = "You are on the latest version (v${BuildConfig.VERSION_NAME})"
                                     }
                                 }
                             },

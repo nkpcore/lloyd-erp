@@ -1,7 +1,7 @@
 /**
  * Lloyd ERP — Student Fleet & Telemetry Admin Dashboard
  * Dynamic telemetry loader, KPI computation, and real-time fleet filtering.
- * ZERO MOCK DATA POLICY: Strictly visualizes authentic device telemetry from Node.js fleet server.
+ * ZERO HARDCODED DATA / VERSIONS: Every metric is strictly computed from live client telemetry.
  */
 
 class TelemetryDashboard {
@@ -9,7 +9,7 @@ class TelemetryDashboard {
         this.records = [];
         this.filteredRecords = [];
         
-        // Auto-connect to origin or local node server (Zero manual URL entry required)
+        // Auto-connect to origin or local node server without prompting
         const isHttp = typeof window !== 'undefined' && window.location.protocol.startsWith('http');
         const defaultOrigin = isHttp ? window.location.origin : 'http://localhost:8080';
         this.endpointUrl = localStorage.getItem('telemetry_api_url') || defaultOrigin;
@@ -30,9 +30,9 @@ class TelemetryDashboard {
             } catch (e) {}
         }
         return {
-            min_version_code: 15,
-            latest_version_name: 'v1.0.15',
-            download_url: 'https://github.com/nkpcore/lloyd-erp/releases/latest',
+            min_version_code: 1,
+            latest_version_name: null,
+            download_url: '',
             banned_students: [],
             banned_devices: [],
             maintenance_mode: false,
@@ -71,7 +71,7 @@ class TelemetryDashboard {
 
     populateGovernanceFields() {
         if (!this.cfgMinVersion) return;
-        this.cfgMinVersion.value = this.fleetConfig.min_version_code || 15;
+        this.cfgMinVersion.value = this.fleetConfig.min_version_code || '';
         this.cfgDownloadUrl.value = this.fleetConfig.download_url || '';
         this.cfgBroadcastNotice.value = this.fleetConfig.broadcast_notice || '';
         if (this.cfgBannedDevices) {
@@ -225,10 +225,14 @@ class TelemetryDashboard {
         const base = (this.endpointUrl || 'http://localhost:8080').replace(/\/+$/, '');
         this.syncStatusEl.textContent = 'Syncing remote fleet...';
 
-        // Candidate URLs to auto-connect (supports direct file:// browsing and LAN access)
+        // Candidate URLs to auto-connect (supports direct file:// browsing and web deployments)
         const candidates = [base];
-        if (base !== 'http://localhost:8080') candidates.push('http://localhost:8080');
-        if (base !== 'http://192.168.1.9:8080') candidates.push('http://192.168.1.9:8080');
+        if (typeof window !== 'undefined' && window.location.origin && !candidates.includes(window.location.origin) && window.location.origin.startsWith('http')) {
+            candidates.push(window.location.origin);
+        }
+        if (!candidates.includes('http://localhost:8080')) {
+            candidates.push('http://localhost:8080');
+        }
 
         let connectedUrl = null;
 
@@ -243,9 +247,7 @@ class TelemetryDashboard {
                         localStorage.setItem('fleet_config', JSON.stringify(this.fleetConfig, null, 2));
                         this.populateGovernanceFields();
                     }
-                } catch (e) {
-                    // Ignore config failure, try telemetry
-                }
+                } catch (e) {}
 
                 // Fetch telemetry heartbeats
                 const res = await fetch(candidate + '/telemetry');
@@ -254,9 +256,7 @@ class TelemetryDashboard {
                     connectedUrl = candidate;
                     break;
                 }
-            } catch (err) {
-                // Try next candidate
-            }
+            } catch (err) {}
         }
 
         if (connectedUrl) {
@@ -264,7 +264,6 @@ class TelemetryDashboard {
             this.syncStatusEl.textContent = `Live Telemetry Connected (${connectedUrl.replace(/^https?:\/\//, '')})`;
             this.syncStatusEl.style.color = '#84A59D';
         } else {
-            console.warn('Could not reach fleet server at candidates:', candidates);
             this.syncStatusEl.textContent = 'Server Offline (Run node server.js)';
             this.syncStatusEl.style.color = '#F28482';
             this.records = [];
@@ -299,7 +298,7 @@ class TelemetryDashboard {
         const activeToday = this.records.filter(r => r.timestamp && new Date(r.timestamp).getTime() >= oneDayAgo).length;
         this.activeTodayEl.textContent = activeToday.toLocaleString();
 
-        // Calculate latest version and adoption rate
+        // Calculate latest version and adoption rate purely from live data
         const versionCounts = {};
         this.records.forEach(r => {
             if (r.app_version) {
@@ -308,9 +307,9 @@ class TelemetryDashboard {
         });
 
         const sortedVersions = Object.keys(versionCounts).sort().reverse();
-        const latestVer = sortedVersions[0] || this.fleetConfig.latest_version_name || 'v1.0.15';
+        const latestVer = sortedVersions[0] || this.fleetConfig.latest_version_name || '--';
         const latestCount = versionCounts[latestVer] || 0;
-        const adoptionPercent = total > 0 ? Math.round((latestCount / total) * 100) : 0;
+        const adoptionPercent = total > 0 && latestVer !== '--' ? Math.round((latestCount / total) * 100) : 0;
 
         this.latestVersionEl.textContent = latestVer;
         this.adoptionRateEl.textContent = total > 0 ? `${adoptionPercent}% of fleet updated` : 'No active fleet telemetry yet';
@@ -322,7 +321,7 @@ class TelemetryDashboard {
                    os.includes('Android 14') || os.includes('Android 15') || os.includes('Android 16');
         }).length;
         const modernPercent = total > 0 ? Math.round((modernCount / total) * 100) : 0;
-        this.osDominanceEl.textContent = `${modernPercent}%`;
+        this.osDominanceEl.textContent = total > 0 ? `${modernPercent}%` : '--';
     }
 
     renderVersionBars() {
@@ -443,7 +442,7 @@ class TelemetryDashboard {
                         </div>
                     </td>
                     <td><code>${r.student_id ?? '--'}</code></td>
-                    <td><span class="version-pill">${r.app_version || 'v1.0.15'}</span></td>
+                    <td><span class="version-pill">${r.app_version || '--'}</span></td>
                     <td>${r.device_model || 'Unknown'}</td>
                     <td><small style="color: var(--text-secondary)">${r.os_version || 'Android'}</small></td>
                     <td>${timeAgoStr}</td>

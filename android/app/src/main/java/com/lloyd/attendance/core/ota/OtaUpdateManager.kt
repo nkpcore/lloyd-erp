@@ -68,12 +68,58 @@ object OtaUpdateManager {
         fleetEndpoint: String? = null
     ): Result<OtaReleaseInfo> {
         return withContext(Dispatchers.IO) {
-            // 1. Check remote fleet server config if available
+            val cleanCurrent = cleanVersion(currentVersion)
+
+            // 1. Check live fleet server /ota or /config if endpoint configured
             if (!fleetEndpoint.isNullOrBlank()) {
+                val cleanBase = fleetEndpoint.trim().removeSuffix("/")
+
+                // Attempt 1: Query dedicated /ota endpoint
                 try {
-                    val configUrl = if (fleetEndpoint.endsWith("/config")) fleetEndpoint
-                    else if (fleetEndpoint.endsWith("/")) "${fleetEndpoint}config"
-                    else "$fleetEndpoint/config"
+                    val otaUrl = if (cleanBase.endsWith("/ota") || cleanBase.endsWith("/api/ota")) cleanBase
+                    else "$cleanBase/ota?current_version=$cleanCurrent"
+
+                    val otaReq = Request.Builder()
+                        .url(otaUrl)
+                        .header("Accept", "application/json")
+                        .header("User-Agent", "LloydERP-Android/${BuildConfig.VERSION_NAME}")
+                        .build()
+
+                    val otaResp = client.newCall(otaReq).execute()
+                    if (otaResp.isSuccessful) {
+                        val body = otaResp.body?.string()
+                        if (!body.isNullOrBlank()) {
+                            val otaJson = gson.fromJson(body, com.google.gson.JsonObject::class.java)
+                            val hasUpdate = otaJson.get("has_update")?.asBoolean ?: false
+                            val latestVer = otaJson.get("latest_version")?.asString ?: currentVersion
+                            val downloadUrl = otaJson.get("download_url")?.asString
+                            val notes = otaJson.get("release_notes")?.asString ?: "You are running the latest version."
+
+                            if (hasUpdate && !downloadUrl.isNullOrBlank()) {
+                                val resolvedUrl = if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
+                                    downloadUrl
+                                } else {
+                                    "$cleanBase/${downloadUrl.removePrefix("/")}"
+                                }
+                                return@withContext Result.success(
+                                    OtaReleaseInfo(
+                                        hasUpdate = true,
+                                        latestVersion = cleanVersion(latestVer),
+                                        currentVersion = cleanCurrent,
+                                        releaseNotes = notes,
+                                        downloadUrl = resolvedUrl
+                                    )
+                                )
+                            }
+                        }
+                    }
+                } catch (ignored: Exception) {
+                }
+
+                // Attempt 2: Fallback query to /config
+                try {
+                    val configUrl = if (cleanBase.endsWith("/config") || cleanBase.endsWith("/api/config")) cleanBase
+                    else "$cleanBase/config"
 
                     val cfgReq = Request.Builder()
                         .url(configUrl)
@@ -86,16 +132,20 @@ object OtaUpdateManager {
                         val cfgJson = cfgResp.body?.string()
                         if (!cfgJson.isNullOrBlank()) {
                             val config = gson.fromJson(cfgJson, com.google.gson.JsonObject::class.java)
-                            val latestName = config.get("latest_version_name")?.asString ?: currentVersion
-                            val downloadUrl = config.get("download_url")?.asString
-                            val hasUpdate = isNewerVersion(latestName, currentVersion)
-                            if (hasUpdate) {
+                            val latestName = config.get("latest_version_name")?.asString
+                            val rawUrl = config.get("download_url")?.asString
+                            val downloadUrl = if (!rawUrl.isNullOrBlank()) {
+                                if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) rawUrl
+                                else "$cleanBase/${rawUrl.removePrefix("/")}"
+                            } else null
+
+                            if (!latestName.isNullOrBlank() && !downloadUrl.isNullOrBlank() && isNewerVersion(latestName, currentVersion)) {
                                 return@withContext Result.success(
                                     OtaReleaseInfo(
                                         hasUpdate = true,
                                         latestVersion = cleanVersion(latestName),
-                                        currentVersion = cleanVersion(currentVersion),
-                                        releaseNotes = "New update available from Lloyd Fleet Portal.",
+                                        currentVersion = cleanCurrent,
+                                        releaseNotes = config.get("broadcast_notice")?.asString ?: "New update available from Lloyd Fleet Portal.",
                                         downloadUrl = downloadUrl
                                     )
                                 )
@@ -116,13 +166,13 @@ object OtaUpdateManager {
 
                 val response = client.newCall(request).execute()
 
-                // When GitHub returns 404 (no releases published yet on repo) or rate limit, handle gracefully
+                // When GitHub returns 404 (private repo or no release yet), handle cleanly with zero error messages
                 if (response.code == 404 || !response.isSuccessful) {
                     return@withContext Result.success(
                         OtaReleaseInfo(
                             hasUpdate = false,
-                            latestVersion = cleanVersion(currentVersion),
-                            currentVersion = cleanVersion(currentVersion),
+                            latestVersion = cleanCurrent,
+                            currentVersion = cleanCurrent,
                             releaseNotes = "You are running the latest version.",
                             downloadUrl = null
                         )
@@ -130,45 +180,37 @@ object OtaUpdateManager {
                 }
 
                 val bodyStr = response.body?.string()
-                if (bodyStr.isNullOrBlank()) {
-                    return@withContext Result.success(
-                        OtaReleaseInfo(
-                            hasUpdate = false,
-                            latestVersion = cleanVersion(currentVersion),
-                            currentVersion = cleanVersion(currentVersion),
-                            releaseNotes = "You are running the latest version.",
-                            downloadUrl = null
+                if (!bodyStr.isNullOrBlank()) {
+                    val release = gson.fromJson(bodyStr, GitHubRelease::class.java)
+                    val tagName = release.tagName.orEmpty()
+                    val apkAsset = release.assets?.firstOrNull { it.name?.endsWith(".apk", ignoreCase = true) == true }
+                    val downloadUrl = apkAsset?.downloadUrl
+
+                    if (tagName.isNotBlank() && isNewerVersion(tagName, currentVersion) && !downloadUrl.isNullOrBlank()) {
+                        return@withContext Result.success(
+                            OtaReleaseInfo(
+                                hasUpdate = true,
+                                latestVersion = cleanVersion(tagName),
+                                currentVersion = cleanCurrent,
+                                releaseNotes = release.body.orEmpty().ifBlank { "Latest release from GitHub" },
+                                downloadUrl = downloadUrl
+                            )
                         )
-                    )
+                    }
                 }
-
-                val release = gson.fromJson(bodyStr, GitHubRelease::class.java)
-                val tagName = release.tagName.orEmpty()
-                val apkAsset = release.assets?.firstOrNull { it.name?.endsWith(".apk", ignoreCase = true) == true }
-                val downloadUrl = apkAsset?.downloadUrl
-
-                val hasUpdate = isNewerVersion(tagName, currentVersion)
-                Result.success(
-                    OtaReleaseInfo(
-                        hasUpdate = hasUpdate,
-                        latestVersion = cleanVersion(if (tagName.isNotBlank()) tagName else currentVersion),
-                        currentVersion = cleanVersion(currentVersion),
-                        releaseNotes = release.body.orEmpty().ifBlank { "Latest release" },
-                        downloadUrl = downloadUrl
-                    )
-                )
-            } catch (e: Exception) {
-                // Network failure or unreachable: current version is latest known
-                Result.success(
-                    OtaReleaseInfo(
-                        hasUpdate = false,
-                        latestVersion = cleanVersion(currentVersion),
-                        currentVersion = cleanVersion(currentVersion),
-                        releaseNotes = "You are running the latest version.",
-                        downloadUrl = null
-                    )
-                )
+            } catch (ignored: Exception) {
             }
+
+            // Current version is the latest known
+            Result.success(
+                OtaReleaseInfo(
+                    hasUpdate = false,
+                    latestVersion = cleanCurrent,
+                    currentVersion = cleanCurrent,
+                    releaseNotes = "You are running the latest version.",
+                    downloadUrl = null
+                )
+            )
         }
     }
 
@@ -180,20 +222,23 @@ object OtaUpdateManager {
             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
         }
-        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        dm.enqueue(request)
+
+        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        downloadManager.enqueue(request)
     }
 
-    fun installDownloadedApk(context: Context, apkFile: File) {
-        val uri = FileProvider.getUriForFile(
+    fun installApk(context: Context, apkFile: File) {
+        val contentUri: Uri = FileProvider.getUriForFile(
             context,
             "${context.packageName}.fileprovider",
             apkFile
         )
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/vnd.android.package-archive")
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+
+        val installIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(contentUri, "application/vnd.android.package-archive")
+            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
         }
-        context.startActivity(intent)
+
+        context.startActivity(installIntent)
     }
 }

@@ -243,7 +243,7 @@ public class AppPreferences {
     }
 
     public String getTelemetryEndpoint() {
-        return prefs.getString(KEY_TELEMETRY_ENDPOINT, "http://192.168.1.9:8080");
+        return prefs.getString(KEY_TELEMETRY_ENDPOINT, com.lloyd.attendance.BuildConfig.DEFAULT_FLEET_URL);
     }
 
     public void setTelemetryEndpoint(String endpoint) {

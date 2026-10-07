@@ -1,15 +1,7 @@
 /**
  * Lloyd ERP — Zero-Dependency Fleet Telemetry & Admin Governance Server
  * Pure Node.js Standard Library (http, fs, path, url)
- *
- * Capabilities:
- * 1. Serves Web Admin Dashboard (web/admin/) at / and /admin/
- * 2. GET /config: Serves dynamic fleet governance configuration (min versions, bans, maintenance)
- * 3. POST /config: Atomically saves updated fleet config to fleet_config.json
- * 4. GET /telemetry: Returns live fleet heartbeat records
- * 5. POST /telemetry: Ingests client heartbeats from Android devices into fleet_telemetry.json
- * 6. POST /ban: 1-click UUID ban/unban endpoint
- * 7. Full CORS support for multi-device local network and cloud access
+ * ZERO HARDCODED VERSIONS: Computes latest release and version adoption dynamically from live telemetry.
  */
 
 const http = require('http');
@@ -24,9 +16,9 @@ const CONFIG_FILE = path.join(ROOT_DIR, 'fleet_config.json');
 const TELEMETRY_FILE = path.join(ROOT_DIR, 'fleet_telemetry.json');
 
 const DEFAULT_CONFIG = {
-    min_version_code: 15,
-    latest_version_name: 'v1.0.15',
-    download_url: 'https://github.com/nkpcore/lloyd-erp/releases/latest',
+    min_version_code: 1,
+    latest_version_name: null,
+    download_url: '',
     banned_students: [],
     banned_devices: [],
     broadcast_notice: null,
@@ -34,7 +26,24 @@ const DEFAULT_CONFIG = {
     maintenance_message: 'Lloyd ERP service is currently undergoing routine maintenance.'
 };
 
-// Initialize configuration file if absent
+function cleanVersion(v) {
+    return (v || '').trim().replace(/^[vV]/, '').trim();
+}
+
+function isNewerVersion(remote, current) {
+    const rParts = cleanVersion(remote).split('.').map(n => parseInt(n) || 0);
+    const cParts = cleanVersion(current).split('.').map(n => parseInt(n) || 0);
+    const maxLen = Math.max(rParts.length, cParts.length);
+    for (let i = 0; i < maxLen; i++) {
+        const r = rParts[i] || 0;
+        const c = cParts[i] || 0;
+        if (r > c) return true;
+        if (r < c) return false;
+    }
+    return false;
+}
+
+// Read configuration file
 function getFleetConfig() {
     try {
         if (fs.existsSync(CONFIG_FILE)) {
@@ -44,7 +53,6 @@ function getFleetConfig() {
     } catch (err) {
         console.error('[CONFIG] Error reading config file, falling back to default:', err.message);
     }
-    saveFleetConfig(DEFAULT_CONFIG);
     return DEFAULT_CONFIG;
 }
 
@@ -70,6 +78,15 @@ function getTelemetryRecords() {
         console.error('[TELEMETRY] Error reading telemetry file:', err.message);
     }
     return [];
+}
+
+function getLiveFleetVersion(records) {
+    if (!Array.isArray(records) || records.length === 0) return null;
+    const sorted = records
+        .map(r => ({ name: (r.app_version || '').trim(), code: parseInt(r.version_code) || 0 }))
+        .filter(v => v.name || v.code > 0)
+        .sort((a, b) => b.code - a.code);
+    return sorted.length > 0 ? sorted[0].name : null;
 }
 
 function upsertTelemetryRecord(record) {
@@ -122,7 +139,7 @@ function parseJsonBody(req) {
         let body = '';
         req.on('data', chunk => {
             body += chunk.toString();
-            if (body.length > 1e6) { // 1MB limit
+            if (body.length > 1e6) {
                 req.destroy();
                 reject(new Error('Payload too large'));
             }
@@ -175,13 +192,65 @@ const server = http.createServer(async (req, res) => {
 
     console.log(`[${new Date().toISOString()}] ${req.method} ${pathname}`);
 
+let cachedGhRelease = null;
+let lastGhCheckTime = 0;
+
+async function getLiveGitHubRelease() {
+    const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+    const repo = process.env.GITHUB_REPOSITORY || 'nkpcore/lloyd-erp';
+    const now = Date.now();
+
+    if (cachedGhRelease && (now - lastGhCheckTime < 60000)) {
+        return cachedGhRelease;
+    }
+
+    try {
+        const headers = {
+            'User-Agent': 'LloydERP-Local-Server',
+            'Accept': 'application/vnd.github.v3+json'
+        };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const resp = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, { headers });
+        if (!resp.ok) return null;
+
+        const release = await resp.json();
+        const apkAsset = (release.assets || []).find(a => (a.name || '').toLowerCase().endsWith('.apk'));
+
+        cachedGhRelease = {
+            version: cleanVersion(release.tag_name || release.name || ''),
+            notes: release.body || release.name || 'New release available from GitHub.',
+            assetId: apkAsset ? apkAsset.id : null,
+            assetUrl: apkAsset ? apkAsset.url : null,
+            browserDownloadUrl: apkAsset ? apkAsset.browser_download_url : null
+        };
+        lastGhCheckTime = now;
+        return cachedGhRelease;
+    } catch (e) {
+        return null;
+    }
+}
+
     // --- API ROUTES ---
 
     // GET /config or GET /api/config
     if (req.method === 'GET' && (pathname === '/config' || pathname === '/api/config')) {
         const config = getFleetConfig();
+        const records = getTelemetryRecords();
+        const ghRelease = await getLiveGitHubRelease();
+        const dynamicLatest = (ghRelease && ghRelease.version) || config.latest_version_name || getLiveFleetVersion(records);
+        const downloadUrl = (ghRelease && ghRelease.assetUrl) ? `/ota/download` : (config.download_url || '');
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(config, null, 2));
+        res.end(JSON.stringify({
+            ...config,
+            latest_version_name: dynamicLatest,
+            download_url: downloadUrl,
+            live_active_devices: records.length,
+            release_source: ghRelease ? 'github_release' : 'fleet_telemetry'
+        }, null, 2));
         return;
     }
 
@@ -193,7 +262,9 @@ const server = http.createServer(async (req, res) => {
             const updated = {
                 ...current,
                 ...body,
-                min_version_code: parseInt(body.min_version_code) || current.min_version_code,
+                min_version_code: body.min_version_code !== undefined ? parseInt(body.min_version_code) : current.min_version_code,
+                latest_version_name: body.latest_version_name !== undefined ? (body.latest_version_name || null) : current.latest_version_name,
+                download_url: body.download_url !== undefined ? body.download_url : current.download_url,
                 banned_devices: Array.isArray(body.banned_devices) ? [...new Set(body.banned_devices)] : current.banned_devices,
                 banned_students: Array.isArray(body.banned_students) ? [...new Set(body.banned_students)] : current.banned_students,
                 maintenance_mode: typeof body.maintenance_mode === 'boolean' ? body.maintenance_mode : current.maintenance_mode
@@ -205,6 +276,69 @@ const server = http.createServer(async (req, res) => {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: err.message }));
         }
+        return;
+    }
+
+    // GET /ota/download (Direct zero-auth APK proxy from GitHub Release asset or configured URL)
+    if (req.method === 'GET' && (pathname === '/ota/download' || pathname === '/api/ota/download' || parsedUrl.searchParams.get('download') === 'latest' || parsedUrl.searchParams.get('download') === 'true')) {
+        const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+        const ghRelease = await getLiveGitHubRelease();
+        if (ghRelease && ghRelease.assetUrl && token) {
+            try {
+                const assetResp = await fetch(ghRelease.assetUrl, {
+                    headers: {
+                        'User-Agent': 'LloydERP-Local-Server',
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/octet-stream'
+                    },
+                    redirect: 'manual'
+                });
+                const loc = assetResp.headers.get('location');
+                if (loc) {
+                    res.writeHead(302, { 'Location': loc });
+                    res.end();
+                    return;
+                }
+            } catch (e) {}
+        }
+        const config = getFleetConfig();
+        if (config.download_url) {
+            res.writeHead(302, { 'Location': config.download_url });
+            res.end();
+            return;
+        }
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Release APK asset not available yet');
+        return;
+    }
+
+    // GET /ota or GET /api/ota (Dynamic Live In-App OTA Update Check)
+    if (req.method === 'GET' && (pathname === '/ota' || pathname === '/api/ota')) {
+        const config = getFleetConfig();
+        const records = getTelemetryRecords();
+        const ghRelease = await getLiveGitHubRelease();
+        const clientVer = (parsedUrl.searchParams.get('current_version') || '').trim();
+        const latestVer = (ghRelease && ghRelease.version) || config.latest_version_name || getLiveFleetVersion(records) || clientVer;
+
+        let dlUrl = config.download_url || '';
+        let notes = config.broadcast_notice || 'New update available from Lloyd Fleet Portal.';
+
+        if (ghRelease && ghRelease.assetUrl) {
+            const host = req.headers['host'] || 'localhost:8080';
+            dlUrl = `http://${host}/ota/download`;
+            notes = ghRelease.notes;
+        }
+
+        const hasUpdate = Boolean(latestVer && clientVer && isNewerVersion(latestVer, clientVer) && dlUrl);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            has_update: hasUpdate,
+            latest_version: cleanVersion(latestVer),
+            current_version: cleanVersion(clientVer),
+            download_url: hasUpdate ? dlUrl : null,
+            release_notes: hasUpdate ? notes : 'You are running the latest version.',
+            source: ghRelease ? 'github_release' : 'fleet_telemetry'
+        }, null, 2));
         return;
     }
 
@@ -223,7 +357,7 @@ const server = http.createServer(async (req, res) => {
             const payload = await parseJsonBody(req);
             if (payload && payload.device_id) {
                 upsertTelemetryRecord(payload);
-                console.log(`[TELEMETRY] Heartbeat received from device: ${payload.device_id} (Student ID: ${payload.student_id})`);
+                console.log(`[TELEMETRY] Live device heartbeat received: ${payload.device_id} (Student ID: ${payload.student_id})`);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true, timestamp: new Date().toISOString() }));
                 return;
@@ -249,58 +383,58 @@ const server = http.createServer(async (req, res) => {
                 res.end(JSON.stringify({ error: 'device_id required' }));
                 return;
             }
+
             const config = getFleetConfig();
-            const set = new Set(config.banned_devices || []);
-            if (body.banned === false) {
-                set.delete(deviceId);
+            const bans = new Set(config.banned_devices || []);
+            let isBanned = false;
+
+            if (bans.has(deviceId)) {
+                bans.delete(deviceId);
+                isBanned = false;
             } else {
-                set.add(deviceId);
+                bans.add(deviceId);
+                isBanned = true;
             }
-            config.banned_devices = Array.from(set);
+
+            config.banned_devices = Array.from(bans);
             saveFleetConfig(config);
+
+            console.log(`[BAN] Device ${deviceId} ban toggled: ${isBanned}`);
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: true, banned_devices: config.banned_devices }));
+            res.end(JSON.stringify({ success: true, device_id: deviceId, is_banned: isBanned, total_banned: config.banned_devices.length }));
+            return;
         } catch (err) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: err.message }));
+            return;
         }
+    }
+
+    // --- STATIC FILES (Web Admin) ---
+    if (pathname === '/' || pathname === '/admin' || pathname === '/admin/') {
+        serveStaticFile(path.join(ADMIN_DIR, 'index.html'), res);
         return;
     }
 
-    // --- STATIC FILES FOR WEB ADMIN ---
-    if (req.method === 'GET') {
-        let relativePath = parsedUrl.pathname;
-        if (relativePath === '/' || relativePath === '/admin' || relativePath === '/admin/') {
-            relativePath = '/index.html';
-        } else if (relativePath.startsWith('/admin/')) {
-            relativePath = relativePath.substring('/admin'.length);
-        }
+    const safePath = path.normalize(pathname).replace(/^(\.\.[\/\\])+/, '');
+    const targetPath = path.join(ADMIN_DIR, safePath);
 
-        const safePath = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, '');
-        const targetPath = path.join(ADMIN_DIR, safePath);
-
-        // Security check: ensure path stays within ADMIN_DIR
-        if (!targetPath.startsWith(ADMIN_DIR)) {
-            res.writeHead(403, { 'Content-Type': 'text/plain' });
-            res.end('403 Forbidden');
-            return;
-        }
-
+    if (targetPath.startsWith(ADMIN_DIR)) {
         serveStaticFile(targetPath, res);
         return;
     }
 
-    // Fallback
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     res.end('404 Not Found');
 });
 
-// Start server
+// Restart or start server
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`=======================================================`);
     console.log(` Lloyd ERP Fleet Telemetry & Governance Server Started `);
     console.log(` Web Admin Dashboard: http://localhost:${PORT}/        `);
     console.log(` Config Endpoint:     http://localhost:${PORT}/config `);
+    console.log(` OTA Check Endpoint:  http://localhost:${PORT}/ota    `);
     console.log(` Telemetry Endpoint:  http://localhost:${PORT}/telemetry `);
     console.log(`=======================================================`);
 });

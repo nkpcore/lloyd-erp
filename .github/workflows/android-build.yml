@@ -47,6 +47,15 @@ jobs:
           cd android
           ./gradlew lintDebug --no-daemon --stacktrace
 
+      - name: Setup Signing Keystore for Runner
+        run: |
+          mkdir -p ~/.android
+          mkdir -p ~/.config/.android
+          keytool -genkeypair -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+            -keystore ~/.android/debug.keystore -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+          cp ~/.android/debug.keystore ~/.config/.android/debug.keystore || true
+
       - name: Build Release APK
         env:
           APP_VERSION_CODE: ${{ github.run_number }}
@@ -112,3 +121,16 @@ jobs:
             release-artifacts/LloydAttendance-v1.0.${{ github.run_number }}.apk.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Broadcast Release to Fleet Server
+        if: success() && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+        env:
+          FLEET_SERVER_URL: ${{ secrets.FLEET_SERVER_URL }}
+        run: |
+          if [ -n "$FLEET_SERVER_URL" ]; then
+            VERSION_TAG="v1.0.${{ github.run_number }}"
+            echo "Broadcasting $VERSION_TAG to fleet server $FLEET_SERVER_URL..."
+            curl -s -X POST "${FLEET_SERVER_URL%/}/config" \
+              -H "Content-Type: application/json" \
+              -d "{\"latest_version_name\":\"${VERSION_TAG}\",\"broadcast_notice\":\"New update ${VERSION_TAG} released.\"}" || true
+          fi

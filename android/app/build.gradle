@@ -13,11 +13,41 @@ android {
         minSdk 26
         targetSdk 36
 
-        def appVersionCode = Integer.parseInt(project.findProperty('appVersionCode') ?: System.getenv('APP_VERSION_CODE') ?: "1")
-        def appVersionName = project.findProperty('appVersionName') ?: System.getenv('APP_VERSION_NAME') ?: "1.0.0"
+        def getGitCommitCount = { ->
+            try {
+                def stdout = new ByteArrayOutputStream()
+                exec {
+                    commandLine 'git', 'rev-list', '--count', 'HEAD'
+                    standardOutput = stdout
+                }
+                return Integer.parseInt(stdout.toString().trim())
+            } catch (Exception e) {
+                return 1
+            }
+        }
+
+        def getGitVersionDesc = { ->
+            try {
+                def stdout = new ByteArrayOutputStream()
+                exec {
+                    commandLine 'git', 'describe', '--tags', '--always'
+                    standardOutput = stdout
+                }
+                def desc = stdout.toString().trim().replaceFirst("^v", "")
+                return desc.isEmpty() ? "1.0.0" : desc
+            } catch (Exception e) {
+                return "1.0.0"
+            }
+        }
+
+        def appVersionCode = Integer.parseInt(project.findProperty('appVersionCode') ?: System.getenv('APP_VERSION_CODE') ?: getGitCommitCount().toString())
+        def appVersionName = project.findProperty('appVersionName') ?: System.getenv('APP_VERSION_NAME') ?: getGitVersionDesc()
 
         versionCode appVersionCode
         versionName appVersionName
+
+        def defaultFleetUrl = project.findProperty('fleetUrl') ?: System.getenv('FLEET_URL') ?: ""
+        buildConfigField "String", "DEFAULT_FLEET_URL", "\"${defaultFleetUrl}\""
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -36,7 +66,48 @@ android {
                 keyAlias System.getenv("RELEASE_KEY_ALIAS")
                 keyPassword System.getenv("RELEASE_KEY_PASSWORD")
             } else {
-                initWith(signingConfigs.debug)
+                def userHome = System.getProperty("user.home")
+                def debugStore1 = file("${userHome}/.android/debug.keystore")
+                def debugStore2 = file("${userHome}/.config/.android/debug.keystore")
+                def fallbackStore = file("${project.buildDir}/signing/release-fallback.keystore")
+
+                File targetStore = null
+                if (debugStore1.exists()) {
+                    targetStore = debugStore1
+                } else if (debugStore2.exists()) {
+                    targetStore = debugStore2
+                } else {
+                    fallbackStore.parentFile?.mkdirs()
+                    if (!fallbackStore.exists()) {
+                        try {
+                            def cmd = [
+                                "keytool", "-genkeypair",
+                                "-alias", "androiddebugkey",
+                                "-keyalg", "RSA",
+                                "-keysize", "2048",
+                                "-validity", "10000",
+                                "-keystore", fallbackStore.absolutePath,
+                                "-storepass", "android",
+                                "-keypass", "android",
+                                "-dname", "CN=Android Debug,O=Android,C=US"
+                            ]
+                            Process proc = cmd.execute()
+                            proc.waitFor()
+                        } catch (Exception ignored) {}
+                    }
+                    if (fallbackStore.exists()) {
+                        targetStore = fallbackStore
+                    }
+                }
+
+                if (targetStore != null && targetStore.exists()) {
+                    storeFile targetStore
+                    storePassword "android"
+                    keyAlias "androiddebugkey"
+                    keyPassword "android"
+                } else {
+                    initWith(signingConfigs.debug)
+                }
             }
         }
     }
