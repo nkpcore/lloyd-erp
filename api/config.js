@@ -165,7 +165,6 @@ async function getConfig() {
     if (!merged.download_url && ghRelease && ghRelease.download_url) {
         merged.download_url = ghRelease.download_url;
     }
-    }
 
     return merged;
 }

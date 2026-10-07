@@ -42,3 +42,6 @@ discovery/
 ENV
 ENV*
 
+
+.vercel
+.env*
