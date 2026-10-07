@@ -1,61 +1,61 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Material Design 3 Tonal Surface Roles (Dark Theme) -->
-    <color name="md_theme_dark_surface">#0F172A</color>
-    <color name="md_theme_dark_onSurface">#F8FAFC</color>
-    <color name="md_theme_dark_onSurfaceVariant">#94A3B8</color>
-    <color name="md_theme_dark_surfaceContainerLowest">#0B0F19</color>
-    <color name="md_theme_dark_surfaceContainerLow">#141C2E</color>
-    <color name="md_theme_dark_surfaceContainer">#1B243B</color>
-    <color name="md_theme_dark_surfaceContainerHigh">#222E49</color>
-    <color name="md_theme_dark_surfaceContainerHighest">#2B3958</color>
+    <!-- Material Design 3 Tonal Surface Roles (Warm Dark Theme) -->
+    <color name="md_theme_dark_surface">#161B22</color>
+    <color name="md_theme_dark_onSurface">#F0F6FC</color>
+    <color name="md_theme_dark_onSurfaceVariant">#8B949E</color>
+    <color name="md_theme_dark_surfaceContainerLowest">#0D1117</color>
+    <color name="md_theme_dark_surfaceContainerLow">#161B22</color>
+    <color name="md_theme_dark_surfaceContainer">#21262D</color>
+    <color name="md_theme_dark_surfaceContainerHigh">#2C323B</color>
+    <color name="md_theme_dark_surfaceContainerHighest">#373E47</color>
 
-    <!-- Material Design 3 Brand Accents -->
-    <color name="md_theme_dark_primary">#818CF8</color>
-    <color name="md_theme_dark_onPrimary">#1E1B4B</color>
-    <color name="md_theme_dark_primaryContainer">#312E81</color>
-    <color name="md_theme_dark_onPrimaryContainer">#E0E7FF</color>
+    <!-- Warm Designer Brand Accents -->
+    <color name="md_theme_dark_primary">#9DC0B8</color>
+    <color name="md_theme_dark_onPrimary">#113832</color>
+    <color name="md_theme_dark_primaryContainer">#28544D</color>
+    <color name="md_theme_dark_onPrimaryContainer">#D4EAE5</color>
 
-    <color name="md_theme_dark_secondary">#38BDF8</color>
-    <color name="md_theme_dark_onSecondary">#082F49</color>
-    <color name="md_theme_dark_secondaryContainer">#0C4A6E</color>
-    <color name="md_theme_dark_onSecondaryContainer">#E0F2FE</color>
+    <color name="md_theme_dark_secondary">#F8C87A</color>
+    <color name="md_theme_dark_onSecondary">#422F00</color>
+    <color name="md_theme_dark_secondaryContainer">#5F4400</color>
+    <color name="md_theme_dark_onSecondaryContainer">#FFFFDF9E</color>
 
-    <color name="md_theme_dark_tertiary">#A78BFA</color>
-    <color name="md_theme_dark_onTertiary">#2E1065</color>
-    <color name="md_theme_dark_tertiaryContainer">#4C1D95</color>
-    <color name="md_theme_dark_onTertiaryContainer">#EDE9FE</color>
+    <color name="md_theme_dark_tertiary">#F5CAC3</color>
+    <color name="md_theme_dark_onTertiary">#4E2623</color>
+    <color name="md_theme_dark_tertiaryContainer">#693C38</color>
+    <color name="md_theme_dark_onTertiaryContainer">#FFDAD6</color>
 
     <!-- Material Design 3 Semantic Status Colors -->
-    <color name="status_safe">#10B981</color>
-    <color name="status_safe_bg">#132E27</color>
-    <color name="status_safe_text">#34D399</color>
+    <color name="status_safe">#84A59D</color>
+    <color name="status_safe_bg">#204840</color>
+    <color name="status_safe_text">#CBE8E1</color>
 
-    <color name="status_danger">#EF4444</color>
-    <color name="status_danger_bg">#36171A</color>
-    <color name="status_danger_text">#F87171</color>
+    <color name="status_danger">#F28482</color>
+    <color name="status_danger_bg">#631F1F</color>
+    <color name="status_danger_text">#FFD5D4</color>
 
-    <color name="status_warning">#F59E0B</color>
-    <color name="status_warning_bg">#342410</color>
-    <color name="status_warning_text">#FBBF24</color>
+    <color name="status_warning">#F6BD60</color>
+    <color name="status_warning_bg">#5E4300</color>
+    <color name="status_warning_text">#FFECC4</color>
 
     <!-- Outlines & Boundaries -->
-    <color name="md_theme_dark_outline">#475569</color>
-    <color name="md_theme_dark_outlineVariant">#334155</color>
+    <color name="md_theme_dark_outline">#484F58</color>
+    <color name="md_theme_dark_outlineVariant">#30363D</color>
 
-    <!-- Legacy / Compatibility Aliases -->
-    <color name="primary">#818CF8</color>
-    <color name="primary_dark">#4F46E5</color>
-    <color name="primary_light">#EEF2FF</color>
-    <color name="primary_gradient_start">#6366F1</color>
-    <color name="primary_gradient_end">#4338CA</color>
-    <color name="bg_dark">#0F172A</color>
-    <color name="card_dark">#1B243B</color>
-    <color name="card_dark_elevated">#222E49</color>
-    <color name="card_border">#334155</color>
-    <color name="text_primary">#F8FAFC</color>
-    <color name="text_secondary">#94A3B8</color>
-    <color name="text_muted">#64748B</color>
+    <!-- Compatibility & Gradient Aliases -->
+    <color name="primary">#84A59D</color>
+    <color name="primary_dark">#688981</color>
+    <color name="primary_light">#D4EAE5</color>
+    <color name="primary_gradient_start">#84A59D</color>
+    <color name="primary_gradient_end">#F6BD60</color>
+    <color name="bg_dark">#161B22</color>
+    <color name="card_dark">#21262D</color>
+    <color name="card_dark_elevated">#2C323B</color>
+    <color name="card_border">#30363D</color>
+    <color name="text_primary">#F0F6FC</color>
+    <color name="text_secondary">#8B949E</color>
+    <color name="text_muted">#6C757D</color>
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
     <color name="transparent">#00000000</color>
