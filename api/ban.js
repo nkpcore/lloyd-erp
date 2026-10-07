@@ -11,9 +11,22 @@ function setCors(res) {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
 }
 
+function getKvCredentials() {
+    let url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+    let token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+    if ((!url || !token) && (process.env.REDIS_URL || process.env.KV_URL)) {
+        try {
+            const raw = process.env.REDIS_URL || process.env.KV_URL;
+            const parsed = new URL(raw);
+            url = `https://${parsed.hostname}`;
+            token = decodeURIComponent(parsed.password || parsed.username || '');
+        } catch (_) {}
+    }
+    return { url, token };
+}
+
 async function callKv(command, ...args) {
-    const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-    const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+    const { url, token } = getKvCredentials();
     if (!url || !token) return null;
 
     try {
