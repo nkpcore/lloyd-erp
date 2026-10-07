@@ -1,6 +1,8 @@
 package com.lloyd.attendance.feature.logs
 
 import com.lloyd.attendance.api.Models
+import com.lloyd.attendance.core.domain.AttendanceCalculator
+import com.lloyd.attendance.core.domain.SubjectAttendance
 
 data class AttendanceLogsSummary(
     val totalMarked: Int,
@@ -55,5 +57,27 @@ object AttendanceLogsProcessor {
             totalAbsent = absent,
             attendancePercentage = percentage
         )
+    }
+
+    fun reconcileSubjectAttendance(logs: List<Models.StudentAttendanceItem?>): List<SubjectAttendance> {
+        val nonNull = logs.filterNotNull()
+        if (nonNull.isEmpty()) return emptyList()
+
+        val grouped = nonNull.groupBy { it.subjectName ?: "General Subject" }
+        return grouped.map { (name, items) ->
+            val present = items.count { it.status.equals("present", ignoreCase = true) }
+            val total = items.size
+            val firstItem = items.firstOrNull()
+            val subCode = firstItem?.subjectId?.toString().orEmpty()
+            val teacher = firstItem?.getFacultyDisplayName() ?: firstItem?.createdByName
+            SubjectAttendance(
+                subjectCode = subCode,
+                subjectName = name,
+                presentCount = present,
+                totalClasses = total,
+                teacherName = teacher,
+                thresholds = AttendanceCalculator.calculateAllThresholds(present, total)
+            )
+        }.sortedBy { it.percentage.numericValue ?: 100.0 }
     }
 }

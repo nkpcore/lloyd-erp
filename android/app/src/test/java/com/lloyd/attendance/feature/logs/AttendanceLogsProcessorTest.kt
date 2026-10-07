@@ -108,4 +108,30 @@ class AttendanceLogsProcessorTest {
         assertEquals(0, summary.totalAbsent)
         assertEquals(0.0, summary.attendancePercentage, 0.001)
     }
+
+    @Test
+    fun testReconcileSubjectAttendance_matchesMonthlyTotalsAndExtractsFaculty() {
+        val logItem1 = Models.StudentAttendanceItem().apply {
+            subjectName = "Operating Systems"
+            createdByName = "Dr. Sharma"
+            status = "Present"
+            attendanceDate = "2026-10-01"
+        }
+        val logItem2 = Models.StudentAttendanceItem().apply {
+            subjectName = "Operating Systems"
+            createdByName = "Dr. Sharma"
+            status = "Absent"
+            attendanceDate = "2026-10-02"
+        }
+        val logs = listOf(logItem1, logItem2)
+
+        val reconciled = AttendanceLogsProcessor.reconcileSubjectAttendance(logs)
+        assertEquals(1, reconciled.size)
+        val os = reconciled.first()
+        assertEquals("Operating Systems", os.subjectName)
+        assertEquals("Dr. Sharma", os.teacherName)
+        assertEquals(1, os.presentCount)
+        assertEquals(2, os.totalClasses)
+        assertEquals(50.0, os.percentage.numericValue ?: 0.0, 0.01)
+    }
 }
