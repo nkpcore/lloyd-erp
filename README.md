@@ -1,80 +1,96 @@
-# Lloyd ERP Attendance Pro Max 🎓⚡
+# Lloyd ERP — Attendance Pro Max 🎓⚡
 
-A modern, high-performance attendance tracker, Apple Dynamic Island-styled notification engine, and Android Home Screen widget for Lloyd College students (`erp.lloydcollege.in`).
+A modern, high-performance Android client and companion web admin portal built for students at Lloyd College (`erp.lloydcollege.in`). Completely modernized with **Kotlin**, **Jetpack Compose**, **Material 3 Expressive**, and an in-app **OTA GitHub Releases Updater**.
 
 ![Android](https://img.shields.io/badge/Platform-Android-3DDC84?style=flat&logo=android&logoColor=white)
-![UI/UX](https://img.shields.io/badge/Design-Swiss%20Minimalism-6366F1?style=flat)
-![Security](https://img.shields.io/badge/Auth-EncryptedSharedPreferences-10B981?style=flat)
+![UI/UX](https://img.shields.io/badge/Design-Material%203%20Expressive-F6BD60?style=flat)
+![Language](https://img.shields.io/badge/Language-Kotlin%20%2B%20Compose-7F52FF?style=flat&logo=kotlin)
+![Security](https://img.shields.io/badge/Auth-Hardware%20Keystore%20Vault-10B981?style=flat)
+
+---
+
+## 🎨 Material 3 Expressive Design System
+
+The application features a warm designer aesthetic with `dynamicColor = false` to guarantee consistent brand identity across all Android 12+ and Android 16 devices:
+
+- 🍯 **Honey Bronze** (`#F6BD60`) — Primary accent, hero badges, interactive toggles.
+- 🌾 **Linen** (`#F7EDE2`) — Crisp surface background, cards, text contrast.
+- 🌸 **Cotton Rose** (`#F5CAC3`) — Warning indicators, secondary accents.
+- 🌿 **Muted Teal** (`#84A59D`) — Safe attendance badges ($>75\%$), success toasts.
+- 🪸 **Light Coral** (`#F28482`) — Critical shortage alerts, danger indicators.
 
 ---
 
 ## ✨ Key Features
 
-### 1. 📱 Native Android Home Screen Widget
-- **Live Attendance Percentage & Status**: Real-time attendance display with color-coded safety indicators (`≥ 75% SAFE` vs `< 75% SHORTAGE`).
-- **Dynamic Bunk Buffer Calculator**: Instantly computes how many upcoming lectures you can safely bunk without falling below 75%, or how many consecutive classes you must attend to recover.
-- **One-Tap Background Sync**: Interactive refresh button directly on the widget to update attendance on-demand without opening the app.
+### 1. 🧭 Streamlined 3-Tab Compose Navigation
+- **Attendance Tab**: Live summary gauge, dynamic bunk buffer cards, goal simulator, and detailed subject attendance list.
+- **Daily Logs Tab**: Comprehensive chronological lecture log with multi-criteria filtering (Status: All/Present/Absent; Month chips; Subject filters).
+- **Profile Tab**: Authenticated student credentials, Hardware Keystore vault status, student academic report export, live in-app OTA update card, and developer credits.
 
-### 2. 🔔 Apple Dynamic Island / Heads-Up Attendance Alerts
-- **Real-Time Notification Banner**: Instant notification whenever a teacher marks your attendance.
-- **Detailed Context**: Shows the faculty member's name, subject name, lecture period, and whether you were marked **PRESENT ✅** or **ABSENT ❌**.
-- **Live Margin Update**: Updates your overall attendance percentage immediately on the banner.
+### 2. 🔍 Subject & Faculty Deep-Dive
+- **Hero Progress Gauge**: Circular progress with dynamic color coding based on safe/danger thresholds.
+- **Bunk Advisor**: Real-time projection telling you exactly how many upcoming classes can be safely bunked or must be attended.
+- **Interactive What-If Simulator**: Live projection slider for planned attended and missed lectures.
+- **Faculty Ledger**: Teacher initials avatar, faculty name, and reverse-chronological lecture ledger for that subject.
 
-### 3. 📅 All Classes Log (Multi-Criteria Filter & Chronological Grouping)
-- **Zero Mock Data**: Fetches 100% real semester class logs directly from `/api/attendance/student`.
-- **Multi-Criteria Filtering**:
-  - **Status Filter**: `All`, `Present`, `Absent` with dynamic counts.
-  - **Month Filter**: Seamlessly filter between semesters and months (`Oct 2026`, `Sep 2026`, `Aug 2026`).
-  - **Subject Filter**: Filter lectures by course name chips.
-- **Chronological Date Grouping**: Lectures are cleanly structured under date header cards (`📅 Thursday, Oct 01, 2026 • 5 Lectures (0P / 5A)`).
-- **Lecture Cards**: Display lecture period, faculty member, marked timestamp, and color-coded status badges.
+### 3. 🚀 In-App GitHub Releases OTA Updater
+- Automated background check querying `https://api.github.com/repos/nkpcore/lloyd-erp/releases/latest`.
+- Compares semantic versioning between installed runtime and GitHub releases.
+- Automated APK download and clean installation Intent via AndroidX `FileProvider` (`com.lloyd.attendance.fileprovider`).
 
-### 4. 📚 Subject-Wise Attendance Breakdown
-- Complete subject catalog with attended, missed, and total lectures.
-- Visual horizontal progress bars indicating safety margin.
-- Subject-specific bunk and attendance requirements.
+### 4. 📊 Student Fleet Telemetry & Web Admin Dashboard
+- **Telemetry Reporter**: Dispatches anonymous device metadata, app version, OS API runtime, and timestamp to administrative endpoints.
+- **Web Admin Dashboard** (`web/admin/`):
+  - Real-time fleet KPI metrics (Total Users, Active Today, Version Adoption, Modern OS Share).
+  - Version adoption bar distribution charts.
+  - Searchable and filterable student installation table.
 
-### 5. 🎯 Bunk & Goal Simulator
-- Interactive delta slider (`-10` missed to `+15` attended).
-- Real-time percentage projection and safety advice before you decide to attend or miss a lecture.
-
-### 6. ⚡ Fast & Persistent Authentication
-- **Permanent Local Persistence**: Credentials and session tokens are securely encrypted using AndroidX `EncryptedSharedPreferences` backed by the Android Keystore.
-- **Zero-Friction Re-auth**: Transparent, silent token refresh and auto-relogin so the session never expires.
-- **Optimized Networking**: Connection pooling with keep-alive across HTTP/TLS requests.
+### 5. 🛡️ Strict Zero Hardcoding & Security Policy
+- **100% Real Live Data**: All student attendance, subject catalogs, lecture logs, and credentials strictly originate from authenticated ERP endpoints (`/api/auth/login`, `/api/student/me/monthly-attendance`, `/api/attendance/student`).
+- **Hardware Keystore Vault**: Encrypted credentials stored via AES-256-GCM.
+- **BOLA Protection**: `student_id` is locked to the authenticated user ID and cannot be arbitrarily overwritten.
+- **Clean Academic Exports**: Exported student reports (PDF / Text / CSV) are official academic documents free of watermarks or author injections.
 
 ---
 
-## 🛠️ Tech Stack & Architecture
+## 🛠️ Architecture & Tech Stack
 
-- **Platform**: Android (Java 17 / SDK 34 / Android 14+ / Android 16 ready)
-- **Architecture**: Clean MVC with repository pattern and OkHttp connection pooling
-- **Security**: AES-256 GCM encrypted shared preferences (`androidx.security:security-crypto`)
-- **Background Sync**: Android Jetpack `WorkManager` with network constraints
-- **UI Design Intelligence**: Swiss minimalist glassmorphism (`#0B1120` deep dark slate, `#1E293B` elevated cards, `#10B981` emerald, `#EF4444` rose)
-- **Web Client**: Included responsive PWA (`web/index.html`)
+- **Platform**: Android (Target SDK 36 / Min SDK 26 / Android 14+ / Android 16 ready)
+- **UI Framework**: 100% Jetpack Compose with Material 3 Expressive
+- **State Management**: AndroidX `ViewModel`, `StateFlow`, Kotlin Coroutines
+- **Networking**: OkHttp 4.12 with connection pooling and Gzip compression
+- **Security**: AndroidX `security-crypto` (MasterKey Keystore)
+- **Background Sync**: Jetpack `WorkManager`
+- **Companion Web Portal**: Vanilla HTML5, CSS3 Tokens, and ES6+ in `web/admin/`
 
 ---
 
-## 🚀 Building & Installation
+## 🚀 Building & Testing
 
 ### Prerequisites
-- Android SDK 34+
+- Android SDK 34+ (Build-Tools 36.0.0)
 - Java JDK 17+
 - Gradle 8.10+
 
-### Build APK
+### Run Unit Tests
+```bash
+cd android
+./gradlew testDebugUnitTest
+```
+
+### Build Debug APK
 ```bash
 cd android
 ./gradlew assembleDebug
 ```
-
-### Install via ADB
-```bash
-adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-```
+The output APK is generated at:
+`android/app/build/outputs/apk/debug/app-debug.apk`
 
 ---
 
-## 📄 License
-MIT License. Developed for Lloyd College students.
+## 👨‍💻 Author & Attribution
+
+**Crafted by Nikhil Pandey**  
+Repository: [nkpcore/lloyd-erp](https://github.com/nkpcore/lloyd-erp)  
+License: MIT
