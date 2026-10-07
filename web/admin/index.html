@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lloyd ERP — Student Fleet & Telemetry Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-emblem">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L3 7V12C3 17.5 7 21.5 12 22C17 21.5 21 17.5 21 12V7L12 2Z" stroke="#84A59D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M9 12L11 14L15 10" stroke="#F6BD60" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <h1>Lloyd ERP</h1>
+                    <span>Admin Fleet Portal</span>
+                </div>
+            </div>
+
+            <nav class="nav-menu">
+                <a href="#overview" class="nav-item active">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                    <span>Overview</span>
+                </a>
+                <a href="#users" class="nav-item">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    <span>Student Fleet</span>
+                </a>
+                <a href="#releases" class="nav-item">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/><polyline points="16 16 12 12 8 16"/></svg>
+                    <span>OTA Releases</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="credit-pill">
+                    <span>Crafted by</span>
+                    <strong>Nikhil Pandey</strong>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <header class="top-nav">
+                <div class="page-title">
+                    <h2>Student Fleet Telemetry</h2>
+                    <p>Live active client distribution, version adoption, and device insights</p>
+                </div>
+                <div class="top-actions">
+                    <div class="sync-indicator">
+                        <span class="live-dot"></span>
+                        <span id="syncStatus">Live Telemetry Active</span>
+                    </div>
+                    <button class="btn btn-secondary" id="refreshBtn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                        Refresh Data
+                    </button>
+                </div>
+            </header>
+
+            <!-- KPI Metric Cards -->
+            <section class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-label">TOTAL REGISTERED STUDENTS</div>
+                    <div class="kpi-value" id="totalUsers">—</div>
+                    <div class="kpi-subtext" id="totalUsersSub">Unique student devices tracked</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">ACTIVE TODAY</div>
+                    <div class="kpi-value highlight-teal" id="activeToday">—</div>
+                    <div class="kpi-subtext">Students synced within 24 hours</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">LATEST APP RELEASE</div>
+                    <div class="kpi-value highlight-bronze" id="latestVersion">—</div>
+                    <div class="kpi-subtext" id="adoptionRate">Calculating adoption...</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">ANDROID 14 / 15 / 16 SHARE</div>
+                    <div class="kpi-value" id="osDominance">—</div>
+                    <div class="kpi-subtext">Modern runtime compatibility</div>
+                </div>
+            </section>
+
+            <!-- Charts & Analytics Section -->
+            <section class="analytics-row">
+                <div class="card chart-card">
+                    <div class="card-header">
+                        <h3>App Version Adoption Distribution</h3>
+                        <span class="badge">OTA Adoption</span>
+                    </div>
+                    <div class="version-bars" id="versionBars">
+                        <!-- Populated dynamically via JS -->
+                    </div>
+                </div>
+
+                <div class="card ota-card">
+                    <div class="card-header">
+                        <h3>In-App OTA Release Status</h3>
+                        <span class="badge badge-success">GitHub OTA Synced</span>
+                    </div>
+                    <div class="ota-details">
+                        <div class="ota-item">
+                            <span class="label">Repository:</span>
+                            <span class="val"><a href="https://github.com/nkpcore/lloyd-erp" target="_blank">nkpcore/lloyd-erp</a></span>
+                        </div>
+                        <div class="ota-item">
+                            <span class="label">Target SDK:</span>
+                            <span class="val">Android 16 (API 36)</span>
+                        </div>
+                        <div class="ota-item">
+                            <span class="label">Security Baseline:</span>
+                            <span class="val">Hardware Keystore • BOLA Locked</span>
+                        </div>
+                        <div class="ota-item">
+                            <span class="label">UI Engine:</span>
+                            <span class="val">Jetpack Compose M3 Expressive</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Live Student Fleet Table -->
+            <section class="card table-card" id="usersSection">
+                <div class="table-header">
+                    <div class="table-title">
+                        <h3>Active Student Installations</h3>
+                        <span class="counter" id="tableCount">(0 records)</span>
+                    </div>
+                    <div class="table-controls">
+                        <div class="search-box">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input type="text" id="searchInput" placeholder="Search by student, ID, or device...">
+                        </div>
+                        <select id="versionFilter" class="select-filter">
+                            <option value="ALL">All Versions</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="data-table" id="studentTable">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Student ID</th>
+                                <th>App Version</th>
+                                <th>Device Model</th>
+                                <th>OS Runtime</th>
+                                <th>Last Active</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <tr>
+                                <td colspan="7" class="loading-cell">Loading telemetry stream...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
