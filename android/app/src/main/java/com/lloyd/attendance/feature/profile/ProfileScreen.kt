@@ -17,13 +17,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -39,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,9 +49,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.lloyd.attendance.BuildConfig
 import com.lloyd.attendance.api.Models
 import com.lloyd.attendance.core.designsystem.components.StatusBadge
 import com.lloyd.attendance.core.designsystem.theme.AttendanceColors
+import com.lloyd.attendance.core.ota.OtaReleaseInfo
+import com.lloyd.attendance.core.ota.OtaUpdateManager
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,6 +69,10 @@ fun ProfileScreen(
 ) {
     val scrollState = rememberScrollState()
     var showLogoutDialog by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+    var isCheckingUpdate by remember { mutableStateOf(false) }
+    var updateInfo by remember { mutableStateOf<OtaReleaseInfo?>(null) }
+    var updateMessage by remember { mutableStateOf<String?>(null) }
 
     if (showLogoutDialog) {
         AlertDialog(
@@ -186,7 +197,7 @@ fun ProfileScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp)
+                        .padding(16.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -195,48 +206,130 @@ fun ProfileScreen(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = Icons.Default.Security,
+                                imageVector = Icons.Default.Code,
                                 contentDescription = null,
-                                tint = AttendanceColors.HealthyLight,
-                                modifier = Modifier.size(24.dp)
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                text = "Security Hardening",
+                                text = "Crafted by Nikhil Pandey",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        StatusBadge(
+                            text = "v${BuildConfig.VERSION_NAME}",
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Open Source Lloyd ERP Companion • Material 3 Expressive",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // In-App OTA Update Checker Card
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.SystemUpdate,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "Software Updates",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                         }
 
-                        StatusBadge(
-                            text = "SECURE",
-                            containerColor = AttendanceColors.HealthyContainerLight,
-                            contentColor = AttendanceColors.OnHealthyContainerLight
-                        )
+                        if (updateInfo?.hasUpdate == true) {
+                            StatusBadge(
+                                text = "UPDATE AVAILABLE",
+                                containerColor = AttendanceColors.BorderlineContainerLight,
+                                contentColor = AttendanceColors.OnBorderlineContainerLight
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    SecurityCheckItem(
-                        title = "Hardware Keystore Encryption",
-                        subtitle = "AES-256-GCM hardware-backed master key active"
+                    Text(
+                        text = when {
+                            updateInfo?.hasUpdate == true -> "New version v${updateInfo?.latestVersion} is available to install!"
+                            updateMessage != null -> updateMessage!!
+                            else -> "Running version v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    SecurityCheckItem(
-                        title = "Zero Plaintext Password Storage",
-                        subtitle = "Password permanently purged; session uses ephemeral JWT"
-                    )
-                    SecurityCheckItem(
-                        title = "BOLA Identity Verification",
-                        subtitle = "Strict student_id validation active on all ERP endpoints"
-                    )
-                    SecurityCheckItem(
-                        title = "Telemetry Sanitization",
-                        subtitle = "Raw logcat PII stripping enforced via R8 ProGuard"
-                    )
-                    SecurityCheckItem(
-                        title = "IPC Protection & Anti-DoS Throttling",
-                        subtitle = "Widget broadcast signature-protected with 15-second debounce"
-                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    val context = LocalContext.current
+                    if (updateInfo?.hasUpdate == true && updateInfo?.downloadUrl != null) {
+                        Button(
+                            onClick = {
+                                OtaUpdateManager.downloadAndInstallApk(context, updateInfo!!.downloadUrl!!)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Download & Install v${updateInfo?.latestVersion}")
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = {
+                                isCheckingUpdate = true
+                                updateMessage = null
+                                coroutineScope.launch {
+                                    val result = OtaUpdateManager.checkForUpdates(BuildConfig.VERSION_NAME)
+                                    isCheckingUpdate = false
+                                    result.onSuccess { info ->
+                                        updateInfo = info
+                                        if (!info.hasUpdate) {
+                                            updateMessage = "You are on the latest version (v${info.currentVersion})"
+                                        }
+                                    }.onFailure { err ->
+                                        updateMessage = "Update check failed: ${err.message}"
+                                    }
+                                }
+                            },
+                            enabled = !isCheckingUpdate,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            if (isCheckingUpdate) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Checking for updates...")
+                            } else {
+                                Text("Check for Updates")
+                            }
+                        }
+                    }
                 }
             }
 
@@ -246,7 +339,7 @@ fun ProfileScreen(
                 onClick = {
                     val report = buildString {
                         appendLine("Attendance Report — Lloyd College ERP")
-                        appendLine("Student: ${userProfile?.name ?: "Student"}")
+                        if (!userProfile?.name.isNullOrBlank()) appendLine("Student: ${userProfile?.name}")
                         if (!userProfile?.admission_no.isNullOrBlank()) appendLine("Admission No: ${userProfile?.admission_no}")
                         if (!userProfile?.course.isNullOrBlank()) appendLine("Course: ${userProfile?.course}")
                         if (!userProfile?.section.isNullOrBlank()) appendLine("Section: ${userProfile?.section}")
@@ -260,12 +353,12 @@ fun ProfileScreen(
                             }
                         }
                         appendLine()
-                        appendLine("Generated by Lloyd ERP Student Companion")
+                        appendLine("Official Student Attendance Summary")
                     }
 
                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
-                        putExtra(Intent.EXTRA_SUBJECT, "Lloyd ERP Attendance Report - ${userProfile?.name ?: "Student"}")
+                        putExtra(Intent.EXTRA_SUBJECT, "Lloyd ERP Attendance Report")
                         putExtra(Intent.EXTRA_TEXT, report)
                     }
                     context.startActivity(Intent.createChooser(shareIntent, "Share Attendance Report"))
