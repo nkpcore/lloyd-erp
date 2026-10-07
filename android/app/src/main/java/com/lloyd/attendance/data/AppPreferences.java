@@ -23,6 +23,7 @@ public class AppPreferences {
     private static final String KEY_INITIALIZED_ATTENDANCE_HISTORY = "initialized_attendance_history";
     private static final String KEY_NOTIFICATION_ENABLED = "notification_enabled";
     private static final String KEY_SELECTED_SECTION = "selected_section";
+    private static final String KEY_TELEMETRY_ENDPOINT = "telemetry_endpoint";
 
     private static volatile AppPreferences instance;
     private final SharedPreferences prefs;
@@ -239,5 +240,13 @@ public class AppPreferences {
 
     public String getMonthlyAttendanceJson() {
         return getMonthlyData();
+    }
+
+    public String getTelemetryEndpoint() {
+        return prefs.getString(KEY_TELEMETRY_ENDPOINT, null);
+    }
+
+    public void setTelemetryEndpoint(String endpoint) {
+        prefs.edit().putString(KEY_TELEMETRY_ENDPOINT, endpoint).apply();
     }
 }

@@ -77,10 +77,27 @@ class TelemetryDashboard {
         this.searchInput = document.getElementById('searchInput');
         this.versionFilter = document.getElementById('versionFilter');
         this.refreshBtn = document.getElementById('refreshBtn');
+        this.configBtn = document.getElementById('configBtn');
         this.syncStatusEl = document.getElementById('syncStatus');
     }
 
     bindEvents() {
+        if (this.configBtn) {
+            this.configBtn.addEventListener('click', () => {
+                const current = localStorage.getItem('telemetry_api_url') || '';
+                const entered = prompt('Enter Telemetry Backend API URL (leave blank for local simulation):', current);
+                if (entered !== null) {
+                    if (entered.trim()) {
+                        localStorage.setItem('telemetry_api_url', entered.trim());
+                    } else {
+                        localStorage.removeItem('telemetry_api_url');
+                    }
+                    this.endpointUrl = localStorage.getItem('telemetry_api_url') || '';
+                    this.loadTelemetry();
+                }
+            });
+        }
+
         this.refreshBtn.addEventListener('click', () => {
             this.refreshBtn.classList.add('loading');
             this.loadTelemetry().finally(() => {

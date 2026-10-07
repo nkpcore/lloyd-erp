@@ -46,9 +46,11 @@ import com.lloyd.attendance.feature.subject.SubjectDetailScreen
 import com.lloyd.attendance.feature.subject.SubjectDetailViewModel
 import com.lloyd.attendance.widget.AttendanceSyncWorker
 import com.lloyd.attendance.widget.AttendanceWidgetProvider
+import androidx.lifecycle.lifecycleScope
+import com.lloyd.attendance.core.telemetry.TelemetryManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.automirrored.filled.EventNote
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Person
 
 enum class MainTab(val title: String, val icon: ImageVector) {
     DASHBOARD("Attendance", Icons.Default.BarChart),
@@ -97,6 +99,19 @@ class MainComposeActivity : ComponentActivity() {
 
         checkNotificationPermission()
         AttendanceSyncWorker.schedulePeriodicSync(this)
+
+        // Asynchronously report client telemetry if configured
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                TelemetryManager.sendTelemetry(
+                    context = applicationContext,
+                    endpointUrl = prefs.telemetryEndpoint,
+                    studentId = prefs.getStudentId(),
+                    studentName = prefs.userProfile?.name
+                )
+            } catch (ignored: Exception) {
+            }
+        }
 
         enableEdgeToEdge()
         setContent {

@@ -166,12 +166,12 @@ fun ProfileScreen(
                         Spacer(modifier = Modifier.width(14.dp))
                         Column {
                             Text(
-                                text = userProfile?.name ?: "Lloyd Student",
+                                text = userProfile?.name?.takeIf { it.isNotBlank() } ?: "--",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Student ID: ${if (studentId > 0) studentId else "Authenticated"}",
+                                text = "Student ID: ${if (studentId > 0) studentId else "--"}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -181,11 +181,11 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     val rollOrAdmission = userProfile?.admission_no?.takeIf { it.isNotBlank() }
-                        ?: userProfile?.username?.takeIf { it.isNotBlank() } ?: "N/A"
+                        ?: userProfile?.username?.takeIf { it.isNotBlank() } ?: "--"
                     ProfileField("Roll / Enrollment", rollOrAdmission)
-                    ProfileField("Program / Course", userProfile?.course ?: "B.Tech Computer Science")
-                    ProfileField("Semester", userProfile?.semester ?: "Current")
-                    ProfileField("Assigned Section", userProfile?.section ?: "Automatic")
+                    ProfileField("Program / Course", userProfile?.course?.takeIf { it.isNotBlank() } ?: "--")
+                    ProfileField("Semester", userProfile?.semester?.takeIf { it.isNotBlank() } ?: "--")
+                    ProfileField("Assigned Section", userProfile?.section?.takeIf { it.isNotBlank() } ?: "--")
                 }
             }
 
