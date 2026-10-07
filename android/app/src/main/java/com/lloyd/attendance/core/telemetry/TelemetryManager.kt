@@ -89,9 +89,16 @@ object TelemetryManager {
                     deviceModel = deviceModel
                 )
 
+                val cleanEndpoint = endpointUrl.trim().removeSuffix("/")
+                val targetUrl = if (cleanEndpoint.endsWith("/telemetry") || cleanEndpoint.endsWith("/api/telemetry")) {
+                    cleanEndpoint
+                } else {
+                    "$cleanEndpoint/telemetry"
+                }
+
                 val body = gson.toJson(payload).toRequestBody(jsonMediaType)
                 val request = Request.Builder()
-                    .url(endpointUrl)
+                    .url(targetUrl)
                     .post(body)
                     .build()
 

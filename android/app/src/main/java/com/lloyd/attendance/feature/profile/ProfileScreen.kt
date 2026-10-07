@@ -775,7 +775,10 @@ fun ProfileScreen(
                                 isCheckingUpdate = true
                                 updateMessage = null
                                 coroutineScope.launch {
-                                    val result = OtaUpdateManager.checkForUpdates(BuildConfig.VERSION_NAME)
+                                    val result = OtaUpdateManager.checkForUpdates(
+                                        currentVersion = BuildConfig.VERSION_NAME,
+                                        fleetEndpoint = prefs.telemetryEndpoint
+                                    )
                                     isCheckingUpdate = false
                                     result.onSuccess { info ->
                                         updateInfo = info

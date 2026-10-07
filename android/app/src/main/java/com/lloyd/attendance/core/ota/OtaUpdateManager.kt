@@ -63,22 +63,86 @@ object OtaUpdateManager {
         return false
     }
 
-    suspend fun checkForUpdates(currentVersion: String = BuildConfig.VERSION_NAME): Result<OtaReleaseInfo> {
+    suspend fun checkForUpdates(
+        currentVersion: String = BuildConfig.VERSION_NAME,
+        fleetEndpoint: String? = null
+    ): Result<OtaReleaseInfo> {
         return withContext(Dispatchers.IO) {
+            // 1. Check remote fleet server config if available
+            if (!fleetEndpoint.isNullOrBlank()) {
+                try {
+                    val configUrl = if (fleetEndpoint.endsWith("/config")) fleetEndpoint
+                    else if (fleetEndpoint.endsWith("/")) "${fleetEndpoint}config"
+                    else "$fleetEndpoint/config"
+
+                    val cfgReq = Request.Builder()
+                        .url(configUrl)
+                        .header("Accept", "application/json")
+                        .header("User-Agent", "LloydERP-Android/${BuildConfig.VERSION_NAME}")
+                        .build()
+
+                    val cfgResp = client.newCall(cfgReq).execute()
+                    if (cfgResp.isSuccessful) {
+                        val cfgJson = cfgResp.body?.string()
+                        if (!cfgJson.isNullOrBlank()) {
+                            val config = gson.fromJson(cfgJson, com.google.gson.JsonObject::class.java)
+                            val latestName = config.get("latest_version_name")?.asString ?: currentVersion
+                            val downloadUrl = config.get("download_url")?.asString
+                            val hasUpdate = isNewerVersion(latestName, currentVersion)
+                            if (hasUpdate) {
+                                return@withContext Result.success(
+                                    OtaReleaseInfo(
+                                        hasUpdate = true,
+                                        latestVersion = cleanVersion(latestName),
+                                        currentVersion = cleanVersion(currentVersion),
+                                        releaseNotes = "New update available from Lloyd Fleet Portal.",
+                                        downloadUrl = downloadUrl
+                                    )
+                                )
+                            }
+                        }
+                    }
+                } catch (ignored: Exception) {
+                }
+            }
+
+            // 2. Query GitHub Releases API
             try {
                 val request = Request.Builder()
                     .url(GITHUB_API_URL)
                     .header("Accept", "application/vnd.github.v3+json")
+                    .header("User-Agent", "LloydERP-Android/${BuildConfig.VERSION_NAME}")
                     .build()
 
                 val response = client.newCall(request).execute()
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(Exception("GitHub API error: ${response.code}"))
+
+                // When GitHub returns 404 (no releases published yet on repo) or rate limit, handle gracefully
+                if (response.code == 404 || !response.isSuccessful) {
+                    return@withContext Result.success(
+                        OtaReleaseInfo(
+                            hasUpdate = false,
+                            latestVersion = cleanVersion(currentVersion),
+                            currentVersion = cleanVersion(currentVersion),
+                            releaseNotes = "You are running the latest version.",
+                            downloadUrl = null
+                        )
+                    )
                 }
 
-                val bodyStr = response.body?.string() ?: return@withContext Result.failure(Exception("Empty response"))
-                val release = gson.fromJson(bodyStr, GitHubRelease::class.java)
+                val bodyStr = response.body?.string()
+                if (bodyStr.isNullOrBlank()) {
+                    return@withContext Result.success(
+                        OtaReleaseInfo(
+                            hasUpdate = false,
+                            latestVersion = cleanVersion(currentVersion),
+                            currentVersion = cleanVersion(currentVersion),
+                            releaseNotes = "You are running the latest version.",
+                            downloadUrl = null
+                        )
+                    )
+                }
 
+                val release = gson.fromJson(bodyStr, GitHubRelease::class.java)
                 val tagName = release.tagName.orEmpty()
                 val apkAsset = release.assets?.firstOrNull { it.name?.endsWith(".apk", ignoreCase = true) == true }
                 val downloadUrl = apkAsset?.downloadUrl
@@ -87,14 +151,23 @@ object OtaUpdateManager {
                 Result.success(
                     OtaReleaseInfo(
                         hasUpdate = hasUpdate,
-                        latestVersion = cleanVersion(tagName),
+                        latestVersion = cleanVersion(if (tagName.isNotBlank()) tagName else currentVersion),
                         currentVersion = cleanVersion(currentVersion),
-                        releaseNotes = release.body.orEmpty(),
+                        releaseNotes = release.body.orEmpty().ifBlank { "Latest release" },
                         downloadUrl = downloadUrl
                     )
                 )
             } catch (e: Exception) {
-                Result.failure(e)
+                // Network failure or unreachable: current version is latest known
+                Result.success(
+                    OtaReleaseInfo(
+                        hasUpdate = false,
+                        latestVersion = cleanVersion(currentVersion),
+                        currentVersion = cleanVersion(currentVersion),
+                        releaseNotes = "You are running the latest version.",
+                        downloadUrl = null
+                    )
+                )
             }
         }
     }

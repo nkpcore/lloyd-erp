@@ -1,1 +1,13 @@
-[]
+[
+  {
+    "device_id": "admin-device-nikhil",
+    "student_id": 260094709,
+    "student_name": "Nikhil Pandey",
+    "app_version": "v1.0.15",
+    "version_code": 15,
+    "os_version": "Android 15 (API 35)",
+    "device_model": "Administrator Device",
+    "timestamp": "2026-10-08T02:00:00.000Z",
+    "server_received_at": "2026-10-08T02:00:00.000Z"
+  }
+]

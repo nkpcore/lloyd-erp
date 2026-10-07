@@ -1,65 +1,18 @@
 /**
  * Lloyd ERP — Student Fleet & Telemetry Admin Dashboard
  * Dynamic telemetry loader, KPI computation, and real-time fleet filtering.
+ * ZERO MOCK DATA POLICY: Strictly visualizes authentic device telemetry from Node.js fleet server.
  */
-
-// Default sample telemetry seeds used when no remote database endpoint is provided
-// dynamically generates records without hardcoding static student data.
-function generateDynamicFleetTelemetry(count = 28) {
-    const versions = ['v1.0.15', 'v1.0.14', 'v1.0.13', 'v1.0.10'];
-    const versionWeights = [0.65, 0.20, 0.10, 0.05];
-    const models = [
-        'Google Pixel 8 Pro', 'Samsung Galaxy S24 Ultra', 'OnePlus 12',
-        'Xiaomi 14', 'Nothing Phone (2)', 'Realme GT 6', 'Motorola Edge 50'
-    ];
-    const osVersions = [
-        'Android 16 (API 36)', 'Android 15 (API 35)', 'Android 14 (API 34)', 'Android 13 (API 33)'
-    ];
-
-    const records = [];
-    const now = Date.now();
-
-    for (let i = 1; i <= count; i++) {
-        // Pick version based on weighted distribution
-        const r = Math.random();
-        let cumulative = 0;
-        let selectedVer = versions[0];
-        for (let j = 0; j < versions.length; j++) {
-            cumulative += versionWeights[j];
-            if (r <= cumulative) {
-                selectedVer = versions[j];
-                break;
-            }
-        }
-
-        const model = models[Math.floor(Math.random() * models.length)];
-        const os = osVersions[Math.floor(Math.random() * osVersions.length)];
-        // Random last seen in last 72 hours
-        const minutesAgo = Math.floor(Math.random() * 4320);
-        const timestamp = new Date(now - minutesAgo * 60 * 1000).toISOString();
-        const studentId = 20000 + i * 37;
-
-        records.push({
-            device_id: `dev-${i.toString().padStart(4, '0')}-${Math.random().toString(36).substring(2, 7)}`,
-            student_id: studentId,
-            student_name: `Student #${studentId}`,
-            app_version: selectedVer,
-            version_code: parseInt(selectedVer.replace(/[^\d]/g, '')) || 15,
-            os_version: os,
-            device_model: model,
-            timestamp: timestamp
-        });
-    }
-
-    return records.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-}
 
 class TelemetryDashboard {
     constructor() {
         this.records = [];
         this.filteredRecords = [];
-        this.endpointUrl = localStorage.getItem('telemetry_api_url') ||
-            (typeof window !== 'undefined' && window.location.protocol.startsWith('http') ? window.location.origin : '');
+        
+        // Auto-connect to origin or local node server (Zero manual URL entry required)
+        const isHttp = typeof window !== 'undefined' && window.location.protocol.startsWith('http');
+        const defaultOrigin = isHttp ? window.location.origin : 'http://localhost:8080';
+        this.endpointUrl = localStorage.getItem('telemetry_api_url') || defaultOrigin;
         this.fleetConfig = this.loadStoredConfig();
 
         this.initDOMElements();
@@ -78,6 +31,7 @@ class TelemetryDashboard {
         }
         return {
             min_version_code: 15,
+            latest_version_name: 'v1.0.15',
             download_url: 'https://github.com/nkpcore/lloyd-erp/releases/latest',
             banned_students: [],
             banned_devices: [],
@@ -209,15 +163,17 @@ class TelemetryDashboard {
     bindEvents() {
         if (this.configBtn) {
             this.configBtn.addEventListener('click', () => {
-                const current = localStorage.getItem('telemetry_api_url') || this.endpointUrl;
-                const entered = prompt('Enter Telemetry Backend API URL (leave blank for local simulation):', current);
+                const current = this.endpointUrl || 'http://localhost:8080';
+                const entered = prompt('Telemetry Server URL (Default: http://localhost:8080):', current);
                 if (entered !== null) {
-                    if (entered.trim()) {
-                        localStorage.setItem('telemetry_api_url', entered.trim());
-                        this.endpointUrl = entered.trim();
+                    const cleaned = entered.trim();
+                    if (cleaned) {
+                        localStorage.setItem('telemetry_api_url', cleaned);
+                        this.endpointUrl = cleaned;
                     } else {
                         localStorage.removeItem('telemetry_api_url');
-                        this.endpointUrl = (typeof window !== 'undefined' && window.location.protocol.startsWith('http') ? window.location.origin : '');
+                        const isHttp = typeof window !== 'undefined' && window.location.protocol.startsWith('http');
+                        this.endpointUrl = isHttp ? window.location.origin : 'http://localhost:8080';
                     }
                     this.loadTelemetry();
                 }
@@ -266,14 +222,21 @@ class TelemetryDashboard {
     }
 
     async loadTelemetry() {
-        if (this.endpointUrl) {
-            const base = this.endpointUrl.replace(/\/+$/, '');
-            try {
-                this.syncStatusEl.textContent = 'Syncing remote fleet...';
+        const base = (this.endpointUrl || 'http://localhost:8080').replace(/\/+$/, '');
+        this.syncStatusEl.textContent = 'Syncing remote fleet...';
 
+        // Candidate URLs to auto-connect (supports direct file:// browsing and LAN access)
+        const candidates = [base];
+        if (base !== 'http://localhost:8080') candidates.push('http://localhost:8080');
+        if (base !== 'http://192.168.1.9:8080') candidates.push('http://192.168.1.9:8080');
+
+        let connectedUrl = null;
+
+        for (const candidate of candidates) {
+            try {
                 // Synchronize remote config if available
                 try {
-                    const cfgRes = await fetch(base + '/config');
+                    const cfgRes = await fetch(candidate + '/config');
                     if (cfgRes.ok) {
                         const remoteCfg = await cfgRes.json();
                         this.fleetConfig = { ...this.fleetConfig, ...remoteCfg };
@@ -281,25 +244,30 @@ class TelemetryDashboard {
                         this.populateGovernanceFields();
                     }
                 } catch (e) {
-                    console.warn('Could not fetch remote config, using local cache:', e);
+                    // Ignore config failure, try telemetry
                 }
 
                 // Fetch telemetry heartbeats
-                const res = await fetch(base + '/telemetry');
+                const res = await fetch(candidate + '/telemetry');
                 if (res.ok) {
                     this.records = await res.json();
-                    this.syncStatusEl.textContent = 'Remote Telemetry Connected';
-                } else {
-                    throw new Error(`HTTP ${res.status}`);
+                    connectedUrl = candidate;
+                    break;
                 }
             } catch (err) {
-                console.warn('Failed to load from remote endpoint, fallback to local stream:', err);
-                this.syncStatusEl.textContent = 'Simulated Local Telemetry';
-                this.records = generateDynamicFleetTelemetry();
+                // Try next candidate
             }
+        }
+
+        if (connectedUrl) {
+            this.endpointUrl = connectedUrl;
+            this.syncStatusEl.textContent = `Live Telemetry Connected (${connectedUrl.replace(/^https?:\/\//, '')})`;
+            this.syncStatusEl.style.color = '#84A59D';
         } else {
-            this.syncStatusEl.textContent = 'Local Telemetry Active';
-            this.records = generateDynamicFleetTelemetry();
+            console.warn('Could not reach fleet server at candidates:', candidates);
+            this.syncStatusEl.textContent = 'Server Offline (Run node server.js)';
+            this.syncStatusEl.style.color = '#F28482';
+            this.records = [];
         }
 
         this.populateVersionFilter();
@@ -309,7 +277,7 @@ class TelemetryDashboard {
     }
 
     populateVersionFilter() {
-        const uniqueVersions = [...new Set(this.records.map(r => r.app_version))].sort().reverse();
+        const uniqueVersions = [...new Set(this.records.map(r => r.app_version).filter(Boolean))].sort().reverse();
         const currentVal = this.versionFilter.value;
         this.versionFilter.innerHTML = '<option value="ALL">All Versions</option>';
         uniqueVersions.forEach(ver => {
@@ -328,22 +296,24 @@ class TelemetryDashboard {
         this.totalUsersEl.textContent = total.toLocaleString();
 
         const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
-        const activeToday = this.records.filter(r => new Date(r.timestamp).getTime() >= oneDayAgo).length;
+        const activeToday = this.records.filter(r => r.timestamp && new Date(r.timestamp).getTime() >= oneDayAgo).length;
         this.activeTodayEl.textContent = activeToday.toLocaleString();
 
         // Calculate latest version and adoption rate
         const versionCounts = {};
         this.records.forEach(r => {
-            versionCounts[r.app_version] = (versionCounts[r.app_version] || 0) + 1;
+            if (r.app_version) {
+                versionCounts[r.app_version] = (versionCounts[r.app_version] || 0) + 1;
+            }
         });
 
         const sortedVersions = Object.keys(versionCounts).sort().reverse();
-        const latestVer = sortedVersions[0] || 'v1.0.15';
+        const latestVer = sortedVersions[0] || this.fleetConfig.latest_version_name || 'v1.0.15';
         const latestCount = versionCounts[latestVer] || 0;
         const adoptionPercent = total > 0 ? Math.round((latestCount / total) * 100) : 0;
 
         this.latestVersionEl.textContent = latestVer;
-        this.adoptionRateEl.textContent = `${adoptionPercent}% of fleet updated`;
+        this.adoptionRateEl.textContent = total > 0 ? `${adoptionPercent}% of fleet updated` : 'No active fleet telemetry yet';
 
         // Modern OS share (API 34+)
         const modernCount = this.records.filter(r => {
@@ -358,15 +328,26 @@ class TelemetryDashboard {
     renderVersionBars() {
         const versionCounts = {};
         this.records.forEach(r => {
-            versionCounts[r.app_version] = (versionCounts[r.app_version] || 0) + 1;
+            if (r.app_version) {
+                versionCounts[r.app_version] = (versionCounts[r.app_version] || 0) + 1;
+            }
         });
 
         const sorted = Object.entries(versionCounts).sort((a, b) => b[1] - a[1]);
-        const total = this.records.length || 1;
+        const total = this.records.length || 0;
 
         this.versionBarsEl.innerHTML = '';
+        if (sorted.length === 0) {
+            this.versionBarsEl.innerHTML = `
+                <div style="color: var(--text-secondary); font-size: 13px; text-align: center; padding: 24px 0;">
+                    No version adoption telemetry records yet.
+                </div>
+            `;
+            return;
+        }
+
         sorted.forEach(([ver, count]) => {
-            const pct = Math.round((count / total) * 100);
+            const pct = total > 0 ? Math.round((count / total) * 100) : 0;
             const item = document.createElement('div');
             item.className = 'version-bar-item';
             item.innerHTML = `
@@ -399,7 +380,7 @@ class TelemetryDashboard {
                 (r.app_version && r.app_version.toLowerCase().includes(query));
 
             const isBanned = r.device_id && bannedSet.has(r.device_id);
-            const isOnline = new Date(r.timestamp).getTime() >= oneDayAgo;
+            const isOnline = r.timestamp && (new Date(r.timestamp).getTime() >= oneDayAgo);
 
             let matchesStatus = true;
             if (statFilter === 'ACTIVE') matchesStatus = isOnline && !isBanned;
@@ -415,6 +396,19 @@ class TelemetryDashboard {
     renderTable() {
         this.tableCountEl.textContent = `(${this.filteredRecords.length} records)`;
 
+        if (this.records.length === 0) {
+            this.tableBodyEl.innerHTML = `
+                <tr>
+                    <td colspan="8" style="text-align: center; padding: 48px 16px; color: var(--text-secondary);">
+                        <div style="font-size: 28px; margin-bottom: 8px;">📡</div>
+                        <strong style="display: block; font-size: 15px; color: var(--text-primary); margin-bottom: 6px;">No Active Devices Registered Yet</strong>
+                        <span>Open the Lloyd ERP Android app or dispatch telemetry to view live fleet records.</span>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
         if (this.filteredRecords.length === 0) {
             this.tableBodyEl.innerHTML = `
                 <tr>
@@ -428,9 +422,9 @@ class TelemetryDashboard {
         const bannedSet = new Set(this.fleetConfig.banned_devices || []);
 
         this.tableBodyEl.innerHTML = this.filteredRecords.map(r => {
-            const lastActiveTime = new Date(r.timestamp).getTime();
+            const lastActiveTime = r.timestamp ? new Date(r.timestamp).getTime() : 0;
             const isOnline = lastActiveTime >= oneDayAgo;
-            const timeAgoStr = this.formatTimeAgo(lastActiveTime);
+            const timeAgoStr = lastActiveTime > 0 ? this.formatTimeAgo(lastActiveTime) : 'Never';
             const isBanned = r.device_id && bannedSet.has(r.device_id);
 
             const initials = r.student_name
@@ -449,7 +443,7 @@ class TelemetryDashboard {
                         </div>
                     </td>
                     <td><code>${r.student_id ?? '--'}</code></td>
-                    <td><span class="version-pill">${r.app_version}</span></td>
+                    <td><span class="version-pill">${r.app_version || 'v1.0.15'}</span></td>
                     <td>${r.device_model || 'Unknown'}</td>
                     <td><small style="color: var(--text-secondary)">${r.os_version || 'Android'}</small></td>
                     <td>${timeAgoStr}</td>

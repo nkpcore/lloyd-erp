@@ -243,7 +243,7 @@ public class AppPreferences {
     }
 
     public String getTelemetryEndpoint() {
-        return prefs.getString(KEY_TELEMETRY_ENDPOINT, null);
+        return prefs.getString(KEY_TELEMETRY_ENDPOINT, "http://192.168.1.9:8080");
     }
 
     public void setTelemetryEndpoint(String endpoint) {
