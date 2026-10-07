@@ -33,3 +33,7 @@ inspect_*.py
 scan_*.py
 find_*.py
 print_*.py
+*.zip
+.agents/
+skills-lock.json
+discovery/

@@ -9,16 +9,19 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.EventNote
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Person
@@ -37,6 +40,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -69,6 +73,7 @@ fun AttendanceLogsScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = {
@@ -135,11 +140,18 @@ fun AttendanceLogsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        // Material 3 Expressive Search Bar
                         OutlinedTextField(
                             value = uiState.searchQuery,
                             onValueChange = { viewModel.setSearchQuery(it) },
                             modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("Search by teacher, subject, or date...") },
+                            placeholder = {
+                                Text(
+                                    text = "Search by teacher, subject, or date...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.Search,
@@ -152,16 +164,23 @@ fun AttendanceLogsScreen(
                                     IconButton(onClick = { viewModel.setSearchQuery("") }) {
                                         Icon(
                                             imageVector = Icons.Default.Clear,
-                                            contentDescription = "Clear search"
+                                            contentDescription = "Clear search",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
                             },
                             singleLine = true,
-                            shape = RoundedCornerShape(14.dp)
+                            shape = CircleShape,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                focusedBorderColor = Color.Transparent,
+                                unfocusedBorderColor = Color.Transparent
+                            )
                         )
 
-                        // Status Filter Chips
+                        // Status Filter Chips with M3 selection indicators
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -170,29 +189,71 @@ fun AttendanceLogsScreen(
                                 selected = uiState.statusFilter == LogStatusFilter.ALL,
                                 onClick = { viewModel.setStatusFilter(LogStatusFilter.ALL) },
                                 label = { Text("All (${uiState.allLogs.size})") },
-                                colors = FilterChipDefaults.filterChipColors()
+                                leadingIcon = if (uiState.statusFilter == LogStatusFilter.ALL) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                        )
+                                    }
+                                } else null,
+                                shape = CircleShape,
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
                             )
                             FilterChip(
                                 selected = uiState.statusFilter == LogStatusFilter.PRESENT,
                                 onClick = { viewModel.setStatusFilter(LogStatusFilter.PRESENT) },
                                 label = { Text("Present (${uiState.totalPresent})") },
-                                colors = FilterChipDefaults.filterChipColors()
+                                leadingIcon = if (uiState.statusFilter == LogStatusFilter.PRESENT) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                        )
+                                    }
+                                } else null,
+                                shape = CircleShape,
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
                             )
                             FilterChip(
                                 selected = uiState.statusFilter == LogStatusFilter.ABSENT,
                                 onClick = { viewModel.setStatusFilter(LogStatusFilter.ABSENT) },
                                 label = { Text("Absent (${uiState.totalAbsent})") },
-                                colors = FilterChipDefaults.filterChipColors()
+                                leadingIcon = if (uiState.statusFilter == LogStatusFilter.ABSENT) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                        )
+                                    }
+                                } else null,
+                                shape = CircleShape,
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
                             )
                         }
                     }
                 }
 
-                // Summary Stats Card
+                // Summary Stats Card (Elevated M3 Surface)
                 item {
                     ElevatedCard(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(20.dp),
+                        colors = androidx.compose.material3.CardDefaults.elevatedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        )
                     ) {
                         Row(
                             modifier = Modifier
@@ -274,7 +335,12 @@ fun AttendanceLogsScreen(
                             )
                         }
 
-                        items(itemsForDay, key = { it.id }) { item ->
+                        itemsIndexed(
+                            items = itemsForDay,
+                            key = { index, item ->
+                                if (item.id > 0) "day_${dateStr}_log_${item.id}_$index" else "day_${dateStr}_${item.attendanceDate}_${item.classLecture}_$index"
+                            }
+                        ) { _, item ->
                             PerTeacherAttendanceCard(item = item)
                         }
                     }
@@ -390,7 +456,7 @@ private fun PerTeacherAttendanceCard(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = CircleShape,
                     color = statusBg
                 ) {
                     Row(

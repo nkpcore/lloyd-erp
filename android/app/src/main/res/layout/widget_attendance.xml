@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/bg_widget"
     android:padding="16dp">
 
-    <!-- Top Bar: Logo/Title and Refresh Button -->
+    <!-- Top Bar: Logo/Title, Timestamp and Refresh Button -->
     <LinearLayout
         android:id="@+id/widget_top_bar"
         android:layout_width="match_parent"
@@ -18,7 +19,8 @@
             android:layout_width="18dp"
             android:layout_height="18dp"
             android:src="@drawable/ic_school"
-            android:tint="#A8C7FA" />
+            android:tint="#F6BD60"
+            tools:ignore="UseAppTint" />
 
         <TextView
             android:id="@+id/tv_widget_student_name"
@@ -29,8 +31,8 @@
             android:text="LLOYD ERP"
             android:textColor="#E3E2E6"
             android:textSize="12sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.05"
+            android:fontFamily="sans-serif-medium"
+            android:letterSpacing="0.04"
             android:singleLine="true"
             android:ellipsize="end" />
 
@@ -40,7 +42,7 @@
             android:layout_height="wrap_content"
             android:layout_marginEnd="8dp"
             android:text="Just now"
-            android:textColor="#939094"
+            android:textColor="#8E9099"
             android:textSize="10sp" />
 
         <ImageButton
@@ -51,7 +53,8 @@
             android:src="@drawable/ic_refresh"
             android:tint="#E3E2E6"
             android:padding="6dp"
-            android:scaleType="fitCenter" />
+            android:scaleType="fitCenter"
+            tools:ignore="UseAppTint" />
     </LinearLayout>
 
     <!-- Main Content: Percentage & Attendance Stats -->
@@ -60,7 +63,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_below="@id/widget_top_bar"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="12dp"
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
@@ -70,7 +73,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="--%"
-            android:textColor="#6DD58C"
+            android:textColor="#F6BD60"
             android:textSize="34sp"
             android:fontFamily="sans-serif-medium"
             android:textStyle="bold" />
@@ -92,9 +95,9 @@
                 android:paddingTop="3dp"
                 android:paddingBottom="3dp"
                 android:text="LOADING"
-                android:textColor="#6DD58C"
+                android:textColor="#F6BD60"
                 android:textSize="10sp"
-                android:textStyle="bold"
+                android:fontFamily="sans-serif-medium"
                 android:letterSpacing="0.04" />
 
             <TextView
@@ -114,7 +117,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="10dp"
         android:background="@drawable/bg_widget_pill"
         android:orientation="horizontal"
         android:gravity="center_vertical"
@@ -127,7 +130,9 @@
             android:id="@+id/iv_widget_bunk_icon"
             android:layout_width="16dp"
             android:layout_height="16dp"
-            android:src="@drawable/ic_check" />
+            android:src="@drawable/ic_check"
+            android:tint="#84A59D"
+            tools:ignore="UseAppTint" />
 
         <TextView
             android:id="@+id/tv_widget_bunk"
@@ -137,6 +142,7 @@
             android:text="Connecting to Lloyd ERP..."
             android:textColor="#E3E2E6"
             android:textSize="11sp"
+            android:fontFamily="sans-serif"
             android:singleLine="true"
             android:ellipsize="end" />
     </LinearLayout>

@@ -50,8 +50,19 @@ public class ErpApiClient {
     }
 
     public static class ErpException extends Exception {
+        private final boolean isAuthExpired;
+
         public ErpException(String message) {
+            this(message, false);
+        }
+
+        public ErpException(String message, boolean isAuthExpired) {
             super(message);
+            this.isAuthExpired = isAuthExpired;
+        }
+
+        public boolean isAuthExpired() {
+            return isAuthExpired;
         }
     }
 
@@ -141,7 +152,7 @@ public class ErpApiClient {
             return prefs.getAccessToken();
         }
 
-        throw new ErpException("Please sign in to your Lloyd ERP account.");
+        throw new ErpException("Please sign in to your Lloyd ERP account.", true);
     }
 
     private synchronized void handleUnauthorized() throws Exception {
@@ -149,7 +160,7 @@ public class ErpApiClient {
         if (refreshToken()) {
             return;
         }
-        throw new ErpException("Session expired. Please sign in again.");
+        throw new ErpException("Session expired. Please sign in again.", true);
     }
 
     public Models.MonthlyAttendanceData getMonthlyAttendance() throws Exception {
@@ -264,7 +275,7 @@ public class ErpApiClient {
 
         do {
             String url = BASE_URL + "/attendance/student?student_id=" + targetStudentId +
-                    "&page=" + page + "&page_size=100&sort_by=attendance_date&sort_dir=desc";
+                    "&page=" + page + "&page_size=100&sort=desc";
 
             Request request = new Request.Builder()
                     .url(url)
@@ -318,6 +329,57 @@ public class ErpApiClient {
         Models.CalculatedStats stats = Models.CalculatedStats.fromMonths(studentName, monthly != null ? monthly.months : null);
         prefs.saveCachedStats(stats);
         return stats;
+    }
+
+    public Models.UserProfile getProfile() throws Exception {
+        String token = ensureValidToken();
+
+        Request request = new Request.Builder()
+                .url(BASE_URL + "/profile/me")
+                .get()
+                .header("Authorization", "Bearer " + token)
+                .header("Accept", "application/json")
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (response.code() == 401) {
+                handleUnauthorized();
+                return getProfile();
+            }
+
+            if (!response.isSuccessful()) {
+                throw new ErpException("Server error (" + response.code() + ") loading profile.");
+            }
+
+            String resStr = response.body() != null ? response.body().string() : "";
+            Type type = new TypeToken<Models.ApiResponse<Models.UserProfile>>() {}.getType();
+            Models.ApiResponse<Models.UserProfile> apiRes = null;
+            try {
+                apiRes = gson.fromJson(resStr, type);
+            } catch (Exception ignored) {
+            }
+
+            Models.UserProfile profile = (apiRes != null && apiRes.data != null) ? apiRes.data : null;
+            if (profile == null) {
+                try {
+                    profile = gson.fromJson(resStr, Models.UserProfile.class);
+                } catch (Exception ignored) {
+                }
+            }
+
+            if (profile != null) {
+                prefs.saveUserProfile(profile);
+                if (profile.id > 0) {
+                    prefs.saveStudentId(profile.id);
+                }
+                if (profile.section != null && !profile.section.trim().isEmpty()) {
+                    prefs.saveSelectedSection(profile.section.trim());
+                }
+                return profile;
+            } else {
+                throw new ErpException("Unable to parse user profile response");
+            }
+        }
     }
 
     public Models.CalculatedStats fetchAndCalculateStats() throws Exception {

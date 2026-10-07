@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/notification_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -8,7 +9,7 @@
     android:padding="14dp"
     android:gravity="center_vertical">
 
-    <!-- Left Status Circle (Dynamic Island Icon) -->
+    <!-- Left Status Circle / Pill Icon -->
     <FrameLayout
         android:id="@+id/notif_icon_container"
         android:layout_width="40dp"
@@ -17,11 +18,12 @@
 
         <ImageView
             android:id="@+id/notif_status_icon"
-            android:layout_width="22dp"
-            android:layout_height="22dp"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
             android:layout_gravity="center"
             android:src="@drawable/ic_check"
-            android:tint="#10B981" />
+            android:tint="#84A59D"
+            tools:ignore="UseAppTint" />
     </FrameLayout>
 
     <!-- Center Info -->
@@ -43,16 +45,16 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="MARKED PRESENT"
-                android:textColor="#34D399"
+                android:textColor="#84A59D"
                 android:textSize="10sp"
-                android:textStyle="bold"
+                android:fontFamily="sans-serif-medium"
                 android:letterSpacing="0.06" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text=" • "
-                android:textColor="#64748B"
+                android:textColor="#8E9099"
                 android:textSize="10sp" />
 
             <TextView
@@ -60,7 +62,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Just now"
-                android:textColor="#64748B"
+                android:textColor="#8E9099"
                 android:textSize="10sp" />
         </LinearLayout>
 
@@ -69,8 +71,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:textColor="#F8FAFC"
+            android:textColor="#E3E2E6"
             android:textSize="14sp"
+            android:fontFamily="sans-serif-medium"
             android:textStyle="bold"
             android:singleLine="true"
             android:ellipsize="end" />
@@ -80,8 +83,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="1dp"
-            android:textColor="#94A3B8"
+            android:textColor="#C4C7C5"
             android:textSize="11sp"
+            android:fontFamily="sans-serif"
             android:singleLine="true"
             android:ellipsize="end" />
     </LinearLayout>
@@ -95,8 +99,8 @@
         android:gravity="center"
         android:paddingStart="10dp"
         android:paddingEnd="10dp"
-        android:paddingTop="5dp"
-        android:paddingBottom="5dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
         android:layout_marginStart="8dp">
 
         <TextView
@@ -104,8 +108,9 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="85.4%"
-            android:textColor="#10B981"
+            android:textColor="#F6BD60"
             android:textSize="13sp"
+            android:fontFamily="sans-serif-medium"
             android:textStyle="bold" />
 
         <TextView
@@ -113,9 +118,9 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="OVERALL"
-            android:textColor="#94A3B8"
+            android:textColor="#8E9099"
             android:textSize="8sp"
-            android:textStyle="bold"
+            android:fontFamily="sans-serif-medium"
             android:letterSpacing="0.04" />
     </LinearLayout>
 

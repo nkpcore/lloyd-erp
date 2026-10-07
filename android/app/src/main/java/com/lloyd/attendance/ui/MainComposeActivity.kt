@@ -5,22 +5,40 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.EventNote
+import androidx.compose.material.icons.automirrored.outlined.EventNote
 import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Calculate
-import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,11 +52,15 @@ import androidx.core.content.ContextCompat
 import androidx.work.WorkManager
 import com.lloyd.attendance.core.designsystem.theme.LloydTheme
 import com.lloyd.attendance.core.domain.SubjectAttendance
+import com.lloyd.attendance.core.security.BiometricAuthManager
+import com.lloyd.attendance.core.security.BiometricCredentialVault
 import com.lloyd.attendance.data.AppPreferences
 import com.lloyd.attendance.feature.dashboard.DashboardScreen
 import com.lloyd.attendance.feature.dashboard.DashboardViewModel
+import com.lloyd.attendance.feature.lock.AppLockScreen
 import com.lloyd.attendance.feature.logs.AttendanceLogsScreen
 import com.lloyd.attendance.feature.logs.AttendanceLogsViewModel
+import com.lloyd.attendance.feature.onboarding.WelcomeOnboardingSheet
 import com.lloyd.attendance.feature.profile.ProfileScreen
 import com.lloyd.attendance.feature.simulation.SimulationScreen
 import com.lloyd.attendance.feature.simulation.SimulationViewModel
@@ -50,21 +72,42 @@ import androidx.lifecycle.lifecycleScope
 import com.lloyd.attendance.core.telemetry.TelemetryManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import androidx.compose.material.icons.automirrored.filled.EventNote
+import kotlinx.coroutines.withContext
+import android.widget.Toast
 
-enum class MainTab(val title: String, val icon: ImageVector) {
-    DASHBOARD("Attendance", Icons.Default.BarChart),
-    LOGS("Daily Logs", Icons.AutoMirrored.Filled.EventNote),
-    PROFILE("Profile", Icons.Default.Person)
+enum class MainTab(
+    val title: String,
+    val activeIcon: ImageVector,
+    val inactiveIcon: ImageVector
+) {
+    DASHBOARD("Attendance", Icons.Filled.BarChart, Icons.Outlined.BarChart),
+    LOGS("Daily Logs", Icons.AutoMirrored.Filled.EventNote, Icons.AutoMirrored.Outlined.EventNote),
+    PROFILE("Profile", Icons.Filled.Person, Icons.Outlined.Person)
 }
 
-class MainComposeActivity : ComponentActivity() {
+class MainComposeActivity : FragmentActivity() {
 
     private lateinit var prefs: AppPreferences
     private val dashboardViewModel: DashboardViewModel by viewModels()
     private val logsViewModel: AttendanceLogsViewModel by viewModels()
     private val subjectDetailViewModel: SubjectDetailViewModel by viewModels()
     private val simulationViewModel: SimulationViewModel by viewModels()
+
+    private var isScreenOff = false
+    private var isAuthenticating = false
+    private var isAppLocked by mutableStateOf(false)
+
+    private val screenOffReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                val vault = BiometricCredentialVault.getInstance(this@MainComposeActivity)
+                if (prefs.isLoggedIn && vault.isAppLockEnabled() && BiometricAuthManager.isBiometricReady(this@MainComposeActivity)) {
+                    isScreenOff = true
+                    isAppLocked = true
+                }
+            }
+        }
+    }
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -84,6 +127,7 @@ class MainComposeActivity : ComponentActivity() {
         }
     }
 
+    @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = AppPreferences.getInstance(this)
@@ -100,51 +144,222 @@ class MainComposeActivity : ComponentActivity() {
         checkNotificationPermission()
         AttendanceSyncWorker.schedulePeriodicSync(this)
 
-        // Asynchronously report client telemetry if configured
+        val screenFilter = IntentFilter(Intent.ACTION_SCREEN_OFF)
+        registerReceiver(screenOffReceiver, screenFilter)
+
+        var accessDecision by mutableStateOf<com.lloyd.attendance.core.access.AccessDecision?>(null)
+
+        // Asynchronously check access & report client telemetry
         lifecycleScope.launch(Dispatchers.IO) {
+            val studentId = prefs.getStudentId()
+            val deviceId = TelemetryManager.getOrCreateDeviceId(applicationContext)
+
+            val decision = com.lloyd.attendance.core.access.AccessControlManager.checkAccess(
+                context = applicationContext,
+                endpointUrl = prefs.telemetryEndpoint,
+                studentId = studentId,
+                deviceId = deviceId
+            )
+            withContext(Dispatchers.Main) {
+                accessDecision = decision
+                if (decision is com.lloyd.attendance.core.access.AccessDecision.Authorized) {
+                    decision.broadcastNotice?.let { dashboardViewModel.setBroadcastNotice(it) }
+                }
+            }
+
             try {
                 TelemetryManager.sendTelemetry(
                     context = applicationContext,
                     endpointUrl = prefs.telemetryEndpoint,
-                    studentId = prefs.getStudentId(),
+                    studentId = studentId,
                     studentName = prefs.userProfile?.name
                 )
             } catch (ignored: Exception) {
+            }
+
+            // Also observe attendance snapshot to ensure real student name is reported once loaded
+            val repository = com.lloyd.attendance.core.data.AttendanceRepository.getInstance(applicationContext)
+            repository.snapshot.collect { snapshot ->
+                val resolvedName = snapshot.overall.studentName
+                if (resolvedName.isNotBlank() && resolvedName != prefs.userProfile?.name) {
+                    try {
+                        TelemetryManager.sendTelemetry(
+                            context = applicationContext,
+                            endpointUrl = prefs.telemetryEndpoint,
+                            studentId = snapshot.overall.studentId,
+                            studentName = resolvedName
+                        )
+                    } catch (ignored: Exception) {
+                    }
+                }
+            }
+        }
+
+        // Wire auto-logout on session expiration
+        val repository = com.lloyd.attendance.core.data.AttendanceRepository.getInstance(applicationContext)
+        lifecycleScope.launch {
+            repository.sessionExpiredEvents.collect {
+                withContext(Dispatchers.Main) {
+                    handleAutoLogout("Session expired. Please sign in again.")
+                }
             }
         }
 
         enableEdgeToEdge()
         setContent {
             LloydTheme {
-                MainAppShell(
-                    prefs = prefs,
-                    dashboardViewModel = dashboardViewModel,
-                    logsViewModel = logsViewModel,
-                    subjectDetailViewModel = subjectDetailViewModel,
-                    simulationViewModel = simulationViewModel,
-                    onLogout = {
-                        try {
-                            WorkManager.getInstance(this).cancelAllWork()
-                        } catch (ignored: Exception) {
+                if (isAppLocked) {
+                    AppLockScreen(
+                        studentName = prefs.userProfile?.name,
+                        admissionNumber = prefs.username.ifBlank { if (prefs.studentId > 0) prefs.studentId.toString() else null },
+                        onUnlockClick = {
+                            promptAppLockAuthentication()
+                        },
+                        onSignOutClick = {
+                            handleAutoLogout("Signed out")
                         }
+                    )
+                } else {
+                    val currentDecision = accessDecision
 
-                        prefs.logout()
-
-                        try {
-                            AttendanceWidgetProvider.updateAllWidgets(this, null, false, "Signed out")
-                        } catch (ignored: Exception) {
-                        }
-
-                        val intent = Intent(this, LoginActivity::class.java).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                        }
-                        startActivity(intent)
-                        finishAffinity()
+                    if (currentDecision is com.lloyd.attendance.core.access.AccessDecision.Revoked) {
+                        androidx.compose.material3.AlertDialog(
+                            onDismissRequest = {},
+                            title = { androidx.compose.material3.Text("Access Restricted") },
+                            text = { androidx.compose.material3.Text(currentDecision.reason) },
+                            confirmButton = {
+                                androidx.compose.material3.Button(
+                                    onClick = {
+                                        handleAutoLogout(currentDecision.reason)
+                                    }
+                                ) {
+                                    androidx.compose.material3.Text("Sign Out")
+                                }
+                            }
+                        )
+                    } else if (currentDecision is com.lloyd.attendance.core.access.AccessDecision.OutdatedVersion) {
+                        androidx.compose.material3.AlertDialog(
+                            onDismissRequest = {},
+                            title = { androidx.compose.material3.Text("Update Required") },
+                            text = {
+                                androidx.compose.material3.Text(
+                                    "Your version of Lloyd ERP is no longer supported (minimum required: v${currentDecision.minVersionCode}). Please update to continue."
+                                )
+                            },
+                            confirmButton = {
+                                androidx.compose.material3.Button(
+                                    onClick = {
+                                        val url = currentDecision.downloadUrl
+                                            ?: "https://github.com/nkpcore/lloyd-erp/releases/latest"
+                                        com.lloyd.attendance.core.ota.OtaUpdateManager.downloadAndInstallApk(
+                                            this@MainComposeActivity,
+                                            url
+                                        )
+                                    }
+                                ) {
+                                    androidx.compose.material3.Text("Update via OTA")
+                                }
+                            }
+                        )
                     }
-                )
+
+                    MainAppShell(
+                        prefs = prefs,
+                        dashboardViewModel = dashboardViewModel,
+                        logsViewModel = logsViewModel,
+                        subjectDetailViewModel = subjectDetailViewModel,
+                        simulationViewModel = simulationViewModel,
+                        onLogout = {
+                            handleAutoLogout("Signed out")
+                        }
+                    )
+
+                    var showOnboarding by remember { mutableStateOf(!prefs.isOnboardingCompleted) }
+                    if (showOnboarding) {
+                        WelcomeOnboardingSheet(
+                            onDismiss = {
+                                prefs.isOnboardingCompleted = true
+                                showOnboarding = false
+                            },
+                            onGetStarted = {
+                                prefs.isOnboardingCompleted = true
+                                showOnboarding = false
+                                checkNotificationPermission()
+                            }
+                        )
+                    }
+                }
             }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        if (isScreenOff && isAppLocked && !isAuthenticating) {
+            promptAppLockAuthentication()
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        try {
+            unregisterReceiver(screenOffReceiver)
+        } catch (ignored: Exception) {
+        }
+    }
+
+    private fun promptAppLockAuthentication() {
+        if (isAuthenticating) return
+        isAuthenticating = true
+        BiometricAuthManager.authenticate(
+            activity = this,
+            title = "Unlock Lloyd ERP",
+            subtitle = "Confirm fingerprint to access attendance records",
+            negativeButtonText = null, // Fallback to PIN / pattern / device password
+            onSuccess = {
+                isAuthenticating = false
+                isScreenOff = false
+                isAppLocked = false
+            },
+            onError = { _ ->
+                isAuthenticating = false
+                // Kept locked; user can tap "Unlock with Biometrics" anytime
+            },
+            onCancel = {
+                isAuthenticating = false
+                // Kept locked
+            }
+        )
+    }
+
+    private fun handleAutoLogout(reason: String = "Session expired. Please sign in again.") {
+        try {
+            WorkManager.getInstance(this).cancelAllWork()
+        } catch (ignored: Exception) {
+        }
+
+        prefs.logout()
+
+        try {
+            AttendanceWidgetProvider.updateAllWidgets(this, null, false, "Session expired")
+        } catch (ignored: Exception) {
+        }
+
+        Toast.makeText(this, reason, Toast.LENGTH_LONG).show()
+
+        val intent = Intent(this, LoginActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("AUTH_ERROR", reason)
+        }
+        startActivity(intent)
+        finishAffinity()
+    }
+}
+
+sealed interface ScreenDestination {
+    data object Main : ScreenDestination
+    data class SubjectDetail(val subject: SubjectAttendance) : ScreenDestination
+    data object OverallSimulation : ScreenDestination
 }
 
 @Composable
@@ -157,72 +372,131 @@ fun MainAppShell(
     onLogout: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(MainTab.DASHBOARD) }
-    var selectedSubjectForDetail by remember { mutableStateOf<SubjectAttendance?>(null) }
-    var showOverallSimulation by remember { mutableStateOf(false) }
+    var destination by remember { mutableStateOf<ScreenDestination>(ScreenDestination.Main) }
 
-    if (selectedSubjectForDetail != null) {
-        SubjectDetailScreen(
-            subject = selectedSubjectForDetail!!,
-            onBack = { selectedSubjectForDetail = null },
-            viewModel = subjectDetailViewModel
-        )
-    } else if (showOverallSimulation) {
-        SimulationScreen(
-            viewModel = simulationViewModel,
-            onNavigateBack = { showOverallSimulation = false }
-        )
-    } else {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            bottomBar = {
-                NavigationBar {
-                    MainTab.entries.forEach { tab ->
-                        NavigationBarItem(
-                            selected = selectedTab == tab,
-                            onClick = { selectedTab = tab },
-                            icon = { Icon(imageVector = tab.icon, contentDescription = tab.title) },
-                            label = { Text(tab.title) }
-                        )
-                    }
-                }
+    BackHandler(enabled = destination != ScreenDestination.Main) {
+        destination = ScreenDestination.Main
+    }
+
+    val m3Decelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f)
+    val m3Accelerate = CubicBezierEasing(0.3f, 0.0f, 0.8f, 0.15f)
+
+    AnimatedContent(
+        targetState = destination,
+        transitionSpec = {
+            if (targetState is ScreenDestination.Main) {
+                // Backward transition: Shared Z-Axis Zoom Out
+                (fadeIn(animationSpec = tween(280, easing = m3Decelerate)) +
+                 scaleIn(initialScale = 1.08f, animationSpec = tween(320, easing = m3Decelerate))) togetherWith
+                (fadeOut(animationSpec = tween(200, easing = m3Accelerate)) +
+                 scaleOut(targetScale = 0.90f, animationSpec = tween(240, easing = m3Accelerate)))
+            } else {
+                // Forward transition: Shared Z-Axis Zoom In
+                (fadeIn(animationSpec = tween(280, easing = m3Decelerate)) +
+                 scaleIn(initialScale = 0.90f, animationSpec = tween(320, easing = m3Decelerate))) togetherWith
+                (fadeOut(animationSpec = tween(200, easing = m3Accelerate)) +
+                 scaleOut(targetScale = 1.08f, animationSpec = tween(240, easing = m3Accelerate)))
             }
-        ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                when (selectedTab) {
-                    MainTab.DASHBOARD -> {
-                        DashboardScreen(
-                            viewModel = dashboardViewModel,
-                            onNavigateToSubjectDetail = { subject: SubjectAttendance ->
-                                selectedSubjectForDetail = subject
-                            },
-                            onNavigateToOverallSimulation = { p: Int, t: Int ->
-                                simulationViewModel.initialize(
-                                    subjectName = "Overall Attendance",
-                                    present = p,
-                                    total = t
+        },
+        label = "screen_nav_transition"
+    ) { currentDestination ->
+        when (currentDestination) {
+            is ScreenDestination.SubjectDetail -> {
+                SubjectDetailScreen(
+                    subject = currentDestination.subject,
+                    onBack = { destination = ScreenDestination.Main },
+                    viewModel = subjectDetailViewModel
+                )
+            }
+
+            is ScreenDestination.OverallSimulation -> {
+                SimulationScreen(
+                    viewModel = simulationViewModel,
+                    onNavigateBack = { destination = ScreenDestination.Main }
+                )
+            }
+
+            is ScreenDestination.Main -> {
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                    bottomBar = {
+                        NavigationBar(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer
+                        ) {
+                            MainTab.entries.forEach { tab ->
+                                val selected = selectedTab == tab
+                                NavigationBarItem(
+                                    selected = selected,
+                                    onClick = { selectedTab = tab },
+                                    icon = {
+                                        Icon(
+                                            imageVector = if (selected) tab.activeIcon else tab.inactiveIcon,
+                                            contentDescription = tab.title
+                                        )
+                                    },
+                                    label = { Text(tab.title) },
+                                    colors = NavigationBarItemDefaults.colors(
+                                        indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 )
-                                showOverallSimulation = true
                             }
-                        )
+                        }
                     }
+                ) { innerPadding ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                    ) {
+                        AnimatedContent(
+                            targetState = selectedTab,
+                            transitionSpec = {
+                                (fadeIn(animationSpec = tween(240, easing = m3Decelerate)) +
+                                 scaleIn(initialScale = 0.96f, animationSpec = tween(240, easing = m3Decelerate))) togetherWith
+                                (fadeOut(animationSpec = tween(160, easing = m3Accelerate)) +
+                                 scaleOut(targetScale = 0.96f, animationSpec = tween(160, easing = m3Accelerate)))
+                            },
+                            label = "tab_animation"
+                        ) { currentTab ->
+                            when (currentTab) {
+                                MainTab.DASHBOARD -> {
+                                    DashboardScreen(
+                                        viewModel = dashboardViewModel,
+                                        onNavigateToSubjectDetail = { subject: SubjectAttendance ->
+                                            destination = ScreenDestination.SubjectDetail(subject)
+                                        },
+                                        onNavigateToOverallSimulation = { p: Int, t: Int ->
+                                            simulationViewModel.initialize(
+                                                subjectName = "Overall Attendance",
+                                                present = p,
+                                                total = t
+                                            )
+                                            destination = ScreenDestination.OverallSimulation
+                                        }
+                                    )
+                                }
 
-                    MainTab.LOGS -> {
-                        AttendanceLogsScreen(
-                            viewModel = logsViewModel
-                        )
-                    }
+                                MainTab.LOGS -> {
+                                    AttendanceLogsScreen(
+                                        viewModel = logsViewModel
+                                    )
+                                }
 
-                    MainTab.PROFILE -> {
-                        ProfileScreen(
-                            userProfile = prefs.userProfile,
-                            studentId = prefs.getStudentId(),
-                            stats = prefs.cachedStats,
-                            onLogout = onLogout
-                        )
+                                MainTab.PROFILE -> {
+                                    ProfileScreen(
+                                        userProfile = prefs.userProfile,
+                                        studentId = prefs.getStudentId(),
+                                        stats = prefs.cachedStats,
+                                        onLogout = onLogout
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

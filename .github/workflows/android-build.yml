@@ -42,10 +42,19 @@ jobs:
           cd android
           ./gradlew testDebugUnitTest --no-daemon --stacktrace
 
+      - name: Run Android Lint Quality Gate
+        run: |
+          cd android
+          ./gradlew lintDebug --no-daemon --stacktrace
+
       - name: Build Release APK
         env:
           APP_VERSION_CODE: ${{ github.run_number }}
           APP_VERSION_NAME: "1.0.${{ github.run_number }}"
+          RELEASE_KEYSTORE_PATH: ${{ secrets.RELEASE_KEYSTORE_PATH }}
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           cd android
           ./gradlew assembleRelease -PappVersionCode=${{ github.run_number }} -PappVersionName="1.0.${{ github.run_number }}" --no-daemon --stacktrace

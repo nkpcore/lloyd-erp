@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -30,6 +31,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -221,10 +223,10 @@ fun LoginScreen(
                                 onLoginClick(username.trim(), password)
                             },
                             enabled = !isLoading && username.isNotBlank() && password.isNotBlank(),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = CircleShape,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(50.dp)
+                                .height(52.dp)
                         ) {
                             if (isLoading) {
                                 CircularProgressIndicator(
@@ -241,24 +243,32 @@ fun LoginScreen(
                             }
                         }
 
-                        // Biometric Quick-Login
+                        // Biometric Quick-Login (M3 Expressive Tonal Button)
                         if (isBiometricAvailable && onBiometricClick != null) {
                             Spacer(modifier = Modifier.height(12.dp))
-                            OutlinedButton(
+                            FilledTonalButton(
                                 onClick = onBiometricClick,
                                 enabled = !isLoading,
-                                shape = RoundedCornerShape(12.dp),
+                                shape = CircleShape,
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                ),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(48.dp)
+                                    .height(52.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Fingerprint,
                                     contentDescription = "Biometric Login",
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(22.dp)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Quick Sign In with Biometrics")
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "Unlock with Fingerprint",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 15.sp
+                                )
                             }
                         }
                     }

@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -62,6 +64,7 @@ import com.lloyd.attendance.api.Models
 import com.lloyd.attendance.core.designsystem.components.AttendanceHealthBadge
 import com.lloyd.attendance.core.designsystem.components.StatusBadge
 import com.lloyd.attendance.core.designsystem.theme.AttendanceColors
+import com.lloyd.attendance.core.designsystem.theme.ExpressiveShapes
 import com.lloyd.attendance.core.domain.AttendanceHealth
 import com.lloyd.attendance.core.domain.AttendancePercentage
 import com.lloyd.attendance.core.domain.BunkAdvisor
@@ -90,6 +93,7 @@ fun SubjectDetailScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = {
@@ -239,7 +243,13 @@ fun SubjectDetailScreen(
                     }
                 }
             } else {
-                items(uiState.logsForSubject, key = { it.attendanceDate.orEmpty() + it.createdByName.orEmpty() + it.status.orEmpty() }) { logItem ->
+                itemsIndexed(
+                    items = uiState.logsForSubject,
+                    key = { index, item ->
+                        if (item.id > 0) "log_${item.id}_$index"
+                        else "log_${item.attendanceDate.orEmpty()}_${item.classLecture.orEmpty()}_$index"
+                    }
+                ) { _, logItem ->
                     LectureLogItemCard(logItem = logItem)
                 }
             }
@@ -255,7 +265,10 @@ private fun SubjectHeroCard(
 ) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp)
+        shape = ExpressiveShapes.largeIncreased,
+        colors = androidx.compose.material3.CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
         Column(
             modifier = Modifier
@@ -338,7 +351,7 @@ private fun SubjectHeroCard(
 
             // Contextual Bunk Advisor Rule Pill
             Surface(
-                shape = RoundedCornerShape(12.dp),
+                shape = MaterialTheme.shapes.medium,
                 color = if (advice.isSafe) {
                     MaterialTheme.colorScheme.secondaryContainer
                 } else {
@@ -442,7 +455,10 @@ private fun SubjectSimulatorCard(
 ) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp)
+        shape = ExpressiveShapes.largeIncreased,
+        colors = androidx.compose.material3.CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
         Column(
             modifier = Modifier
@@ -485,7 +501,7 @@ private fun SubjectSimulatorCard(
 
             // Simulation Result Bar
             Surface(
-                shape = RoundedCornerShape(12.dp),
+                shape = MaterialTheme.shapes.medium,
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -644,7 +660,7 @@ private fun LectureLogItemCard(logItem: Models.StudentAttendanceItem) {
 
     OutlinedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp)
+        shape = MaterialTheme.shapes.medium
     ) {
         Row(
             modifier = Modifier
@@ -670,19 +686,11 @@ private fun LectureLogItemCard(logItem: Models.StudentAttendanceItem) {
                 }
             }
 
-            Box(
-                modifier = Modifier
-                    .background(statusBg, RoundedCornerShape(8.dp))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (isPresent) "Present" else "Absent",
-                    color = statusColor,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            StatusBadge(
+                text = if (isPresent) "Present" else "Absent",
+                containerColor = statusBg,
+                contentColor = statusColor
+            )
         }
     }
 }

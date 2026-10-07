@@ -150,6 +150,8 @@ public class Models {
         public String course;
         public String semester;
         public String section;
+        @SerializedName(value = "photo_url", alternate = {"photo", "avatar_url", "profile_image", "avatar"})
+        public String photo_url;
     }
 
     public static class MonthlyAttendanceData {

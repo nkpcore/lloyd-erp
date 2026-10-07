@@ -28,6 +28,7 @@ object TelemetryManager {
     private val gson = Gson()
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
+    @JvmStatic
     fun getOrCreateDeviceId(context: Context): String {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         var deviceId = prefs.getString(KEY_DEVICE_UUID, null)

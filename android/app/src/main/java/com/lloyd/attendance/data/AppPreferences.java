@@ -249,4 +249,14 @@ public class AppPreferences {
     public void setTelemetryEndpoint(String endpoint) {
         prefs.edit().putString(KEY_TELEMETRY_ENDPOINT, endpoint).apply();
     }
+
+    private static final String KEY_ONBOARDING_COMPLETED = "onboarding_completed";
+
+    public boolean isOnboardingCompleted() {
+        return prefs.getBoolean(KEY_ONBOARDING_COMPLETED, false);
+    }
+
+    public void setOnboardingCompleted(boolean completed) {
+        prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETED, completed).apply();
+    }
 }

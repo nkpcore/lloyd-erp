@@ -39,7 +39,7 @@ fun OfflineBanner(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(MaterialTheme.shapes.small)
             .background(MaterialTheme.colorScheme.tertiaryContainer)
             .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {

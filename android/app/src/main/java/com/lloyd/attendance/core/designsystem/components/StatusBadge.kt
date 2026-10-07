@@ -17,8 +17,10 @@ import androidx.compose.ui.unit.sp
 import com.lloyd.attendance.core.designsystem.theme.AttendanceColors
 import com.lloyd.attendance.core.domain.AttendanceHealth
 
+import androidx.compose.foundation.shape.CircleShape
+
 /**
- * Material 3 Status Badge with semantic tonal container styling.
+ * Material 3 Status Badge with semantic tonal container styling and pill shape.
  */
 @Composable
 fun AttendanceHealthBadge(
@@ -52,14 +54,13 @@ fun AttendanceHealthBadge(
 
     Box(
         modifier = modifier
-            .background(bgColor, RoundedCornerShape(8.dp))
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .background(bgColor, CircleShape)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = customText ?: defaultText,
             color = textColor,
-            fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
             style = MaterialTheme.typography.labelSmall
         )
@@ -75,16 +76,16 @@ fun StatusBadge(
 ) {
     Box(
         modifier = modifier
-            .background(containerColor, RoundedCornerShape(8.dp))
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .background(containerColor, CircleShape)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
             color = contentColor,
-            fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
             style = MaterialTheme.typography.labelSmall
         )
     }
 }
+

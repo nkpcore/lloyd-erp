@@ -62,8 +62,8 @@ fun AttendanceCardSkeleton(
     ElevatedCard(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp)),
-        shape = RoundedCornerShape(16.dp)
+            .clip(MaterialTheme.shapes.large),
+        shape = MaterialTheme.shapes.large
     ) {
         Column(
             modifier = Modifier
@@ -79,7 +79,7 @@ fun AttendanceCardSkeleton(
                         modifier = Modifier
                             .fillMaxWidth(0.65f)
                             .height(20.dp)
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(MaterialTheme.shapes.extraSmall)
                             .shimmerEffect()
                     )
                     Spacer(modifier = Modifier.height(6.dp))
@@ -87,7 +87,7 @@ fun AttendanceCardSkeleton(
                         modifier = Modifier
                             .fillMaxWidth(0.4f)
                             .height(14.dp)
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(MaterialTheme.shapes.extraSmall)
                             .shimmerEffect()
                     )
                 }
@@ -97,7 +97,7 @@ fun AttendanceCardSkeleton(
                 Box(
                     modifier = Modifier
                         .size(56.dp)
-                        .clip(RoundedCornerShape(28.dp))
+                        .clip(androidx.compose.foundation.shape.CircleShape)
                         .shimmerEffect()
                 )
             }
@@ -108,7 +108,7 @@ fun AttendanceCardSkeleton(
                 modifier = Modifier
                     .fillMaxWidth(0.5f)
                     .height(14.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(MaterialTheme.shapes.extraSmall)
                     .shimmerEffect()
             )
         }

@@ -5,12 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
-import com.lloyd.attendance.api.ErpApiClient
 import com.lloyd.attendance.api.Models
-import com.lloyd.attendance.data.AppPreferences
-import kotlinx.coroutines.Dispatchers
+import com.lloyd.attendance.core.data.AttendanceRepository
+import com.lloyd.attendance.core.data.DataSourceState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,7 +20,7 @@ enum class LogStatusFilter {
 }
 
 data class AttendanceLogsUiState(
-    val isLoading: Boolean = true,
+    val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
     val isOffline: Boolean = false,
     val errorMessage: String? = null,
@@ -40,35 +37,27 @@ data class AttendanceLogsUiState(
 
 class AttendanceLogsViewModel @JvmOverloads constructor(
     application: Application,
-    private val prefs: AppPreferences = AppPreferences.getInstance(application),
-    private val apiClient: ErpApiClient = ErpApiClient(application),
-    private val gson: Gson = Gson()
+    private val repository: AttendanceRepository = AttendanceRepository.getInstance(application)
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(AttendanceLogsUiState())
     val uiState: StateFlow<AttendanceLogsUiState> = _uiState.asStateFlow()
 
     init {
-        loadCachedLogs()
-        refreshLogs(isPullToRefresh = false)
-    }
-
-    private fun loadCachedLogs() {
-        val cachedJson = prefs.attendanceLogsJson
-        if (!cachedJson.isNullOrBlank()) {
-            try {
-                val type = object : TypeToken<List<Models.StudentAttendanceItem>>() {}.type
-                val cachedList: List<Models.StudentAttendanceItem> = gson.fromJson(cachedJson, type) ?: emptyList()
-                if (cachedList.isNotEmpty()) {
-                    applyLogs(cachedList, isLoading = false, isOffline = true)
-                }
-            } catch (ignored: Exception) {
+        viewModelScope.launch {
+            repository.snapshot.collect { snapshot ->
+                val isOffline = snapshot.sourceState == DataSourceState.OFFLINE || snapshot.sourceState == DataSourceState.STALE
+                applyLogs(snapshot.records, isLoading = false, isOffline = isOffline)
             }
         }
     }
 
     fun refresh() {
-        refreshLogs(isPullToRefresh = true)
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isRefreshing = true)
+            repository.refresh(isForeground = true)
+            _uiState.value = _uiState.value.copy(isRefreshing = false)
+        }
     }
 
     fun setSearchQuery(query: String) {
@@ -81,37 +70,6 @@ class AttendanceLogsViewModel @JvmOverloads constructor(
         val current = _uiState.value
         val updated = current.copy(statusFilter = filter)
         _uiState.value = recomputeFilteredState(updated)
-    }
-
-    private fun refreshLogs(isPullToRefresh: Boolean) {
-        viewModelScope.launch(Dispatchers.IO) {
-            _uiState.value = _uiState.value.copy(
-                isRefreshing = isPullToRefresh,
-                isLoading = !isPullToRefresh && _uiState.value.allLogs.isEmpty(),
-                errorMessage = null
-            )
-
-            try {
-                val studentId = prefs.getStudentId()
-                val freshLogs = apiClient.getStudentAttendanceLogs(studentId)
-
-                if (!freshLogs.isNullOrEmpty()) {
-                    prefs.saveAttendanceLogsJson(gson.toJson(freshLogs))
-                }
-
-                applyLogs(freshLogs ?: emptyList(), isLoading = false, isOffline = false)
-            } catch (e: Exception) {
-                // If network failure, preserve offline logs and display message
-                val current = _uiState.value
-                val message = e.message ?: "Failed to refresh attendance logs"
-                _uiState.value = current.copy(
-                    isLoading = false,
-                    isRefreshing = false,
-                    isOffline = true,
-                    errorMessage = if (current.allLogs.isNotEmpty()) "Offline: Displaying cached logs" else message
-                )
-            }
-        }
     }
 
     private fun applyLogs(
@@ -153,13 +111,12 @@ class AttendanceLogsViewModel @JvmOverloads constructor(
 
 class AttendanceLogsViewModelFactory(
     private val application: Application,
-    private val prefs: AppPreferences = AppPreferences.getInstance(application),
-    private val apiClient: ErpApiClient = ErpApiClient(application)
+    private val repository: AttendanceRepository = AttendanceRepository.getInstance(application)
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(AttendanceLogsViewModel::class.java)) {
-            return AttendanceLogsViewModel(application, prefs, apiClient) as T
+            return AttendanceLogsViewModel(application, repository) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }

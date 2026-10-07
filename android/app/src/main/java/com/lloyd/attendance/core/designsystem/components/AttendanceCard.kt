@@ -40,11 +40,12 @@ fun AttendanceCard(
     onClick: () -> Unit = {}
 ) {
     ElevatedCard(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp)
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = androidx.compose.material3.CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
         Column(
             modifier = Modifier

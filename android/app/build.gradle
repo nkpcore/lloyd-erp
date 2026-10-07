@@ -27,12 +27,26 @@ android {
         buildConfig true
     }
 
+    signingConfigs {
+        release {
+            def keystorePath = System.getenv("RELEASE_KEYSTORE_PATH")
+            if (keystorePath && file(keystorePath).exists()) {
+                storeFile file(keystorePath)
+                storePassword System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword System.getenv("RELEASE_KEY_PASSWORD")
+            } else {
+                initWith(signingConfigs.debug)
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
         }
         debug {
             minifyEnabled false
@@ -71,6 +85,9 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.11.0'
     implementation 'androidx.work:work-runtime:2.9.1'
     implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+    implementation 'androidx.biometric:biometric:1.2.0-alpha05'
+    implementation 'androidx.fragment:fragment-ktx:1.8.5'
+    implementation 'io.coil-kt:coil-compose:2.7.0'
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0'

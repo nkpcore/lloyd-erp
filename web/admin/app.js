@@ -59,10 +59,31 @@ class TelemetryDashboard {
         this.records = [];
         this.filteredRecords = [];
         this.endpointUrl = localStorage.getItem('telemetry_api_url') || '';
+        this.fleetConfig = this.loadStoredConfig();
 
         this.initDOMElements();
+        this.initGovernanceElements();
         this.bindEvents();
+        this.populateGovernanceFields();
         this.loadTelemetry();
+    }
+
+    loadStoredConfig() {
+        const stored = localStorage.getItem('fleet_config');
+        if (stored) {
+            try {
+                return JSON.parse(stored);
+            } catch (e) {}
+        }
+        return {
+            min_version_code: 15,
+            download_url: 'https://github.com/nkpcore/lloyd-erp/releases/latest',
+            banned_students: [],
+            banned_devices: [],
+            maintenance_mode: false,
+            maintenance_message: 'Lloyd ERP service is currently undergoing routine maintenance.',
+            broadcast_notice: ''
+        };
     }
 
     initDOMElements() {
@@ -81,6 +102,107 @@ class TelemetryDashboard {
         this.syncStatusEl = document.getElementById('syncStatus');
     }
 
+    initGovernanceElements() {
+        this.cfgMinVersion = document.getElementById('cfgMinVersion');
+        this.cfgDownloadUrl = document.getElementById('cfgDownloadUrl');
+        this.cfgBroadcastNotice = document.getElementById('cfgBroadcastNotice');
+        this.cfgBannedDevices = document.getElementById('cfgBannedDevices');
+        this.cfgMaintenanceMode = document.getElementById('cfgMaintenanceMode');
+        this.saveConfigBtn = document.getElementById('saveConfigBtn');
+        this.downloadConfigBtn = document.getElementById('downloadConfigBtn');
+        this.copyConfigBtn = document.getElementById('copyConfigBtn');
+    }
+
+    populateGovernanceFields() {
+        if (!this.cfgMinVersion) return;
+        this.cfgMinVersion.value = this.fleetConfig.min_version_code || 15;
+        this.cfgDownloadUrl.value = this.fleetConfig.download_url || '';
+        this.cfgBroadcastNotice.value = this.fleetConfig.broadcast_notice || '';
+        if (this.cfgBannedDevices) {
+            this.cfgBannedDevices.value = (this.fleetConfig.banned_devices || []).join(', ');
+        }
+        this.cfgMaintenanceMode.checked = !!this.fleetConfig.maintenance_mode;
+    }
+
+    saveConfig() {
+        const minVer = parseInt(this.cfgMinVersion.value) || 1;
+        const dlUrl = (this.cfgDownloadUrl.value || '').trim();
+        const notice = (this.cfgBroadcastNotice.value || '').trim();
+        const bannedDevStr = (this.cfgBannedDevices ? this.cfgBannedDevices.value : '').trim();
+        const bannedDevList = bannedDevStr
+            ? bannedDevStr.split(',').map(s => s.trim()).filter(Boolean)
+            : [];
+        const isMaint = this.cfgMaintenanceMode.checked;
+
+        this.fleetConfig.min_version_code = minVer;
+        this.fleetConfig.download_url = dlUrl;
+        this.fleetConfig.broadcast_notice = notice || null;
+        this.fleetConfig.banned_devices = [...new Set(bannedDevList)];
+        this.fleetConfig.maintenance_mode = isMaint;
+
+        localStorage.setItem('fleet_config', JSON.stringify(this.fleetConfig, null, 2));
+
+        if (this.endpointUrl) {
+            fetch(this.endpointUrl + '/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.fleetConfig)
+            }).catch(err => console.warn('Could not sync remote config:', err));
+        }
+
+        if (this.saveConfigBtn) {
+            const originalText = this.saveConfigBtn.innerHTML;
+            this.saveConfigBtn.innerHTML = `✓ Saved & Deployed`;
+            this.saveConfigBtn.style.background = '#84A59D';
+            setTimeout(() => {
+                this.saveConfigBtn.innerHTML = originalText;
+                this.saveConfigBtn.style.background = '';
+            }, 2000);
+        }
+
+        this.renderTable();
+    }
+
+    downloadConfig() {
+        const json = JSON.stringify(this.fleetConfig, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'fleet_config.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    copyConfig() {
+        const json = JSON.stringify(this.fleetConfig, null, 2);
+        navigator.clipboard.writeText(json).then(() => {
+            if (this.copyConfigBtn) {
+                const originalText = this.copyConfigBtn.innerHTML;
+                this.copyConfigBtn.innerHTML = `✓ Copied!`;
+                setTimeout(() => {
+                    this.copyConfigBtn.innerHTML = originalText;
+                }, 1800);
+            }
+        });
+    }
+
+    toggleBan(deviceId) {
+        if (!deviceId) return;
+        const id = String(deviceId).trim();
+        const bans = new Set(this.fleetConfig.banned_devices || []);
+        if (bans.has(id)) {
+            bans.delete(id);
+        } else {
+            bans.add(id);
+        }
+        this.fleetConfig.banned_devices = Array.from(bans);
+        this.populateGovernanceFields();
+        this.saveConfig();
+    }
+
     bindEvents() {
         if (this.configBtn) {
             this.configBtn.addEventListener('click', () => {
@@ -96,6 +218,16 @@ class TelemetryDashboard {
                     this.loadTelemetry();
                 }
             });
+        }
+
+        if (this.saveConfigBtn) {
+            this.saveConfigBtn.addEventListener('click', () => this.saveConfig());
+        }
+        if (this.downloadConfigBtn) {
+            this.downloadConfigBtn.addEventListener('click', () => this.downloadConfig());
+        }
+        if (this.copyConfigBtn) {
+            this.copyConfigBtn.addEventListener('click', () => this.copyConfig());
         }
 
         this.refreshBtn.addEventListener('click', () => {
@@ -234,18 +366,20 @@ class TelemetryDashboard {
         if (this.filteredRecords.length === 0) {
             this.tableBodyEl.innerHTML = `
                 <tr>
-                    <td colspan="7" class="loading-cell">No student records match the search filter.</td>
+                    <td colspan="8" class="loading-cell">No student records match the search filter.</td>
                 </tr>
             `;
             return;
         }
 
         const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+        const bannedSet = new Set(this.fleetConfig.banned_devices || []);
 
         this.tableBodyEl.innerHTML = this.filteredRecords.map(r => {
             const lastActiveTime = new Date(r.timestamp).getTime();
             const isOnline = lastActiveTime >= oneDayAgo;
             const timeAgoStr = this.formatTimeAgo(lastActiveTime);
+            const isBanned = r.device_id && bannedSet.has(r.device_id);
 
             const initials = r.student_name
                 ? r.student_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
@@ -258,6 +392,7 @@ class TelemetryDashboard {
                             <div class="avatar-circle">${initials}</div>
                             <div>
                                 <strong>${r.student_name || 'Student'}</strong>
+                                <small style="display:block; color:var(--text-secondary); font-size:11px;">UUID: ${r.device_id || '--'}</small>
                             </div>
                         </div>
                     </td>
@@ -267,9 +402,16 @@ class TelemetryDashboard {
                     <td><small style="color: var(--text-secondary)">${r.os_version || 'Android'}</small></td>
                     <td>${timeAgoStr}</td>
                     <td>
-                        <span class="status-badge ${isOnline ? 'status-online' : 'status-offline'}">
-                            ● ${isOnline ? 'Active' : 'Idle'}
-                        </span>
+                        ${isBanned
+                            ? '<span class="status-badge status-revoked">● Revoked</span>'
+                            : `<span class="status-badge ${isOnline ? 'status-online' : 'status-offline'}">● ${isOnline ? 'Active' : 'Idle'}</span>`
+                        }
+                    </td>
+                    <td>
+                        ${isBanned
+                            ? `<button class="btn-action btn-restore" onclick="window.telemetryDashboard.toggleBan('${r.device_id}')">Restore Device</button>`
+                            : `<button class="btn-action btn-revoke" onclick="window.telemetryDashboard.toggleBan('${r.device_id}')">Revoke Device</button>`
+                        }
                     </td>
                 </tr>
             `;

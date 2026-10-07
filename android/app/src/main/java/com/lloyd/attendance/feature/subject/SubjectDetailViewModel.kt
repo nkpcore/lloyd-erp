@@ -20,23 +20,12 @@ data class SubjectDetailUiState(
 )
 
 class SubjectDetailViewModel(application: Application) : AndroidViewModel(application) {
-    private val prefs = AppPreferences(application)
-    private val gson = Gson()
+    private val repository = com.lloyd.attendance.core.data.AttendanceRepository.getInstance(application)
     private val _uiState = MutableStateFlow(SubjectDetailUiState())
     val uiState: StateFlow<SubjectDetailUiState> = _uiState.asStateFlow()
 
     fun loadSubject(subject: SubjectAttendance) {
-        val logsJson = prefs.getAttendanceLogs()
-        val allLogs: List<Models.StudentAttendanceItem> = if (!logsJson.isNullOrBlank()) {
-            try {
-                val type = object : TypeToken<List<Models.StudentAttendanceItem>>() {}.type
-                gson.fromJson<List<Models.StudentAttendanceItem>>(logsJson, type) ?: emptyList()
-            } catch (e: Exception) {
-                emptyList()
-            }
-        } else {
-            emptyList()
-        }
+        val allLogs = repository.snapshot.value.records
 
         val filtered = allLogs.filter {
             (it.subjectName ?: "").equals(subject.subjectName, ignoreCase = true) ||

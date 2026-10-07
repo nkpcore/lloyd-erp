@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import com.lloyd.attendance.core.designsystem.components.AttendanceHealthBadge
 import com.lloyd.attendance.core.designsystem.components.StatusBadge
 import com.lloyd.attendance.core.designsystem.theme.AttendanceColors
+import com.lloyd.attendance.core.designsystem.theme.ExpressiveShapes
 import com.lloyd.attendance.core.domain.AttendanceHealth
 import com.lloyd.attendance.core.domain.AttendancePercentage
 
@@ -109,7 +110,7 @@ fun SimulationScreen(
             // Subject Header Card
             OutlinedCard(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
+                shape = MaterialTheme.shapes.medium
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -139,7 +140,7 @@ fun SimulationScreen(
             if (uiState.baselineTotal == 0) {
                 OutlinedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = MaterialTheme.shapes.medium
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -162,7 +163,10 @@ fun SimulationScreen(
                 // Projected Percentage Hero Card
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp)
+                    shape = ExpressiveShapes.largeIncreased,
+                    colors = androidx.compose.material3.CardDefaults.elevatedCardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
                 ) {
                     Column(
                         modifier = Modifier
@@ -246,7 +250,10 @@ fun SimulationScreen(
                 // Interactive 'What-If' Simulation Controls
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = MaterialTheme.shapes.large,
+                    colors = androidx.compose.material3.CardDefaults.elevatedCardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
                 ) {
                     Column(
                         modifier = Modifier
@@ -352,7 +359,10 @@ fun SimulationScreen(
                 // Multi-Target Thresholds Card
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = MaterialTheme.shapes.large,
+                    colors = androidx.compose.material3.CardDefaults.elevatedCardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
                 ) {
                     Column(
                         modifier = Modifier

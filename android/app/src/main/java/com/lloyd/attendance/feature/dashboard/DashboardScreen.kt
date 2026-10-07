@@ -11,12 +11,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Calculate
@@ -51,6 +53,7 @@ import com.lloyd.attendance.core.designsystem.components.AttendanceHealthBadge
 import com.lloyd.attendance.core.designsystem.components.OfflineBanner
 import com.lloyd.attendance.core.designsystem.components.StatusBadge
 import com.lloyd.attendance.core.designsystem.theme.AttendanceColors
+import com.lloyd.attendance.core.designsystem.theme.ExpressiveShapes
 import com.lloyd.attendance.core.domain.AttendanceHealth
 import com.lloyd.attendance.core.domain.AttendancePercentage
 import com.lloyd.attendance.core.domain.BunkAdvisor
@@ -71,6 +74,7 @@ fun DashboardScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = {
@@ -162,16 +166,50 @@ fun DashboardScreen(
                     }
                 }
 
-                // Hero Attendance Summary Card
+                // Broadcast Notice from Admin
+                if (!uiState.broadcastNotice.isNullOrBlank()) {
+                    item {
+                        OutlinedCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.medium,
+                            colors = androidx.compose.material3.CardDefaults.outlinedCardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = androidx.compose.material.icons.Icons.Default.Share,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = uiState.broadcastNotice!!,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Hero Attendance Summary Card (M3 Expressive Compact Header)
                 item {
                     ElevatedCard(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp)
+                        shape = ExpressiveShapes.largeIncreased,
+                        colors = androidx.compose.material3.CardDefaults.elevatedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        )
                     ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(20.dp)
+                                .padding(16.dp)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -201,9 +239,9 @@ fun DashboardScreen(
                                     )
                                 }
 
-                                // Large Gauge
+                                // Compact Gauge
                                 Box(
-                                    modifier = Modifier.size(76.dp),
+                                    modifier = Modifier.size(68.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     val targetProgress = when (val p = overall.percentage) {
@@ -225,10 +263,10 @@ fun DashboardScreen(
 
                                     CircularProgressIndicator(
                                         progress = { animatedProgress },
-                                        modifier = Modifier.size(76.dp),
+                                        modifier = Modifier.size(68.dp),
                                         color = strokeColor,
                                         trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        strokeWidth = 7.dp,
+                                        strokeWidth = 6.dp,
                                         strokeCap = StrokeCap.Round
                                     )
 
@@ -300,7 +338,7 @@ fun DashboardScreen(
                     item {
                         OutlinedCard(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = MaterialTheme.shapes.medium
                         ) {
                             Column(
                                 modifier = Modifier
@@ -323,7 +361,13 @@ fun DashboardScreen(
                         }
                     }
                 } else {
-                    items(overall.subjects, key = { it.subjectCode.ifBlank { it.subjectName } }) { subject ->
+                    itemsIndexed(
+                        items = overall.subjects,
+                        key = { index, subject ->
+                            val code = subject.subjectCode.ifBlank { subject.subjectName }
+                            if (code.isNotBlank()) "${code}_$index" else "subj_$index"
+                        }
+                    ) { _, subject ->
                         AttendanceCard(
                             subject = subject,
                             onClick = { onNavigateToSubjectDetail(subject) }

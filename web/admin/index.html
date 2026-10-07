@@ -134,6 +134,68 @@
                 </div>
             </section>
 
+            <!-- Master Fleet Governance & Deprecation Control Panel -->
+            <section class="card governance-card" id="governanceSection">
+                <div class="card-header">
+                    <div class="governance-title">
+                        <div class="governance-icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="11" r="3"/></svg>
+                        </div>
+                        <div>
+                            <h3>Fleet Access Control & Version Deprecation</h3>
+                            <p>Enforce minimum app versions, manage unilateral bans, and push live announcements</p>
+                        </div>
+                    </div>
+                    <div class="governance-actions">
+                        <button class="btn btn-primary" id="saveConfigBtn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                            Save & Deploy
+                        </button>
+                        <button class="btn btn-secondary" id="downloadConfigBtn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Export JSON
+                        </button>
+                        <button class="btn btn-secondary" id="copyConfigBtn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            Copy JSON
+                        </button>
+                    </div>
+                </div>
+
+                <div class="governance-grid">
+                    <div class="gov-field">
+                        <label for="cfgMinVersion">Minimum Allowed Version Code</label>
+                        <input type="number" id="cfgMinVersion" min="1" value="15" placeholder="e.g. 15">
+                        <small>Older app versions will be blocked and directed to update</small>
+                    </div>
+
+                    <div class="gov-field">
+                        <label for="cfgDownloadUrl">OTA Update Download URL</label>
+                        <input type="text" id="cfgDownloadUrl" value="https://github.com/nkpcore/lloyd-erp/releases/latest" placeholder="APK download URL">
+                        <small>Direct APK or GitHub release download link</small>
+                    </div>
+
+                    <div class="gov-field gov-field-full">
+                        <label for="cfgBroadcastNotice">Compose Broadcast Announcement</label>
+                        <input type="text" id="cfgBroadcastNotice" value="" placeholder="e.g. ERP maintenance scheduled for Sunday 2 AM.">
+                        <small>Pushed instantly to student Compose Dashboard banner</small>
+                    </div>
+
+                    <div class="gov-field gov-field-full">
+                        <label for="cfgBannedDevices">Revoked Device UUIDs (Targeted Device Banlist)</label>
+                        <input type="text" id="cfgBannedDevices" value="" placeholder="Comma-separated device UUIDs, e.g. dev-0001-abcde, dev-0002-xyz">
+                        <small>Device-targeted revocation: only blocks this specific device installation; student is not blocked across other devices</small>
+                    </div>
+
+                    <div class="gov-field-row">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="cfgMaintenanceMode">
+                            <span>Enable Global Maintenance Mode (Block all students)</span>
+                        </label>
+                    </div>
+                </div>
+            </section>
+
             <!-- Live Student Fleet Table -->
             <section class="card table-card" id="usersSection">
                 <div class="table-header">
@@ -163,11 +225,12 @@
                                 <th>OS Runtime</th>
                                 <th>Last Active</th>
                                 <th>Status</th>
+                                <th>Access Control</th>
                             </tr>
                         </thead>
                         <tbody id="tableBody">
                             <tr>
-                                <td colspan="7" class="loading-cell">Loading telemetry stream...</td>
+                                <td colspan="8" class="loading-cell">Loading telemetry stream...</td>
                             </tr>
                         </tbody>
                     </table>

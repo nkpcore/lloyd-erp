@@ -13,6 +13,7 @@ import android.widget.RemoteViews;
 import com.lloyd.attendance.R;
 import com.lloyd.attendance.api.ErpApiClient;
 import com.lloyd.attendance.api.Models;
+import com.lloyd.attendance.core.data.AttendanceRepository;
 import com.lloyd.attendance.data.AppPreferences;
 import com.lloyd.attendance.ui.MainComposeActivity;
 import java.text.SimpleDateFormat;
@@ -98,8 +99,18 @@ public class AttendanceWidgetProvider extends AppWidgetProvider {
             }
 
             try {
-                ErpApiClient client = new ErpApiClient(appContext);
-                Models.CalculatedStats freshStats = client.fetchAndCalculateStats();
+                AttendanceRepository repository = AttendanceRepository.getInstance(appContext);
+                repository.refreshBlocking(false);
+
+                com.lloyd.attendance.core.data.AttendanceSnapshot snapshot = repository.getSnapshot().getValue();
+                if (snapshot.getError() instanceof com.lloyd.attendance.core.data.SyncError.AuthExpired) {
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        updateAllWidgets(appContext, null, false, "Session expired");
+                    });
+                    return;
+                }
+
+                Models.CalculatedStats freshStats = prefs.getCachedStats();
 
                 new Handler(Looper.getMainLooper()).post(() -> {
                     updateAllWidgets(appContext, freshStats, false, null);

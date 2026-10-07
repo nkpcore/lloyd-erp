@@ -646,6 +646,185 @@ body {
     color: var(--text-secondary);
 }
 
+/* Button System */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: var(--radius-md);
+    font-size: 0.86rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    border: none;
+    font-family: inherit;
+    text-decoration: none;
+}
+
+.btn-primary {
+    background: var(--brand-honey-bronze);
+    color: #121417;
+    box-shadow: 0 4px 14px rgba(246, 189, 96, 0.25);
+}
+
+.btn-primary:hover {
+    background: #f7ca7a;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(246, 189, 96, 0.35);
+}
+
+.btn-secondary {
+    background: var(--bg-surface-elevated);
+    color: var(--brand-linen);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+    background: rgba(247, 237, 226, 0.08);
+    border-color: rgba(246, 189, 96, 0.3);
+}
+
+/* Action buttons in Table */
+.btn-action {
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 0.76rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition);
+    border: none;
+    font-family: inherit;
+}
+
+.btn-revoke {
+    background: rgba(242, 132, 130, 0.15);
+    color: var(--brand-light-coral);
+    border: 1px solid rgba(242, 132, 130, 0.35);
+}
+
+.btn-revoke:hover {
+    background: var(--brand-light-coral);
+    color: #121417;
+}
+
+.btn-restore {
+    background: rgba(132, 165, 157, 0.15);
+    color: var(--brand-muted-teal);
+    border: 1px solid rgba(132, 165, 157, 0.35);
+}
+
+.btn-restore:hover {
+    background: var(--brand-muted-teal);
+    color: #121417;
+}
+
+.status-revoked {
+    background: rgba(242, 132, 130, 0.2);
+    color: var(--brand-light-coral);
+    border: 1px solid rgba(242, 132, 130, 0.4);
+}
+
+/* Master Governance Section */
+.governance-card {
+    margin-bottom: 28px;
+}
+
+.governance-title {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.governance-icon {
+    width: 40px;
+    height: 40px;
+    background: rgba(246, 189, 96, 0.12);
+    border: 1px solid rgba(246, 189, 96, 0.3);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--brand-honey-bronze);
+    flex-shrink: 0;
+}
+
+.governance-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.governance-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+    margin-top: 18px;
+}
+
+.gov-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.gov-field-full {
+    grid-column: 1 / -1;
+}
+
+.gov-field label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.gov-field input {
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    color: var(--brand-linen);
+    font-size: 0.9rem;
+    outline: none;
+    font-family: inherit;
+    transition: var(--transition);
+}
+
+.gov-field input:focus {
+    border-color: var(--brand-honey-bronze);
+    box-shadow: var(--shadow-glow);
+}
+
+.gov-field small {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+}
+
+.gov-field-row {
+    grid-column: 1 / -1;
+    padding-top: 6px;
+}
+
+.toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--brand-linen);
+}
+
+.toggle-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--brand-honey-bronze);
+    cursor: pointer;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .app-layout {

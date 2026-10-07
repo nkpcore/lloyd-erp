@@ -3,6 +3,8 @@
 # Keep data models serialized by Gson
 -keep class com.lloyd.attendance.api.Models$* { <fields>; }
 -keep class com.lloyd.attendance.core.domain.** { *; }
+-keep class com.lloyd.attendance.core.data.** { *; }
+-keep class com.lloyd.attendance.core.access.** { *; }
 -keep class com.lloyd.attendance.feature.logs.AttendanceLogsSummary { <fields>; }
 -keepclassmembers class * {
     @com.google.gson.annotations.SerializedName <fields>;

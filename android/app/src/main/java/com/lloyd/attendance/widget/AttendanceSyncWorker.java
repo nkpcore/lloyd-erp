@@ -11,6 +11,11 @@ import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 import com.lloyd.attendance.api.ErpApiClient;
 import com.lloyd.attendance.api.Models;
+import com.lloyd.attendance.core.access.AccessControlManager;
+import com.lloyd.attendance.core.access.AccessDecision;
+import com.lloyd.attendance.core.data.AttendanceRepository;
+import com.lloyd.attendance.core.data.AttendanceSnapshot;
+import com.lloyd.attendance.core.telemetry.TelemetryManager;
 import com.lloyd.attendance.data.AppPreferences;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -43,16 +48,47 @@ public class AttendanceSyncWorker extends Worker {
         }
 
         try {
-            ErpApiClient client = new ErpApiClient(context);
-            Models.CalculatedStats freshStats = client.fetchAndCalculateStats();
-            client.getWeeklyAttendance(); // Cache latest timetable routine
+            int studentId = prefs.getStudentId();
+            String deviceId = TelemetryManager.getOrCreateDeviceId(context);
 
-            // Update all widgets on home screen
+            // 1. Fleet revocation check
+            AccessDecision decision = AccessControlManager.checkAccessBlocking(
+                    context,
+                    prefs.getTelemetryEndpoint(),
+                    studentId,
+                    deviceId,
+                    com.lloyd.attendance.BuildConfig.VERSION_CODE
+            );
+
+            if (decision instanceof AccessDecision.Revoked) {
+                WorkManager.getInstance(context).cancelAllWork();
+                AttendanceWidgetProvider.updateAllWidgets(context, null, false, "Access Revoked");
+                return Result.failure();
+            }
+
+            // 2. Transactional refresh via single source of truth
+            AttendanceRepository repository = AttendanceRepository.getInstance(context);
+            repository.refreshBlocking(false);
+
+            AttendanceSnapshot snapshot = repository.getSnapshot().getValue();
+            if (snapshot.getError() instanceof com.lloyd.attendance.core.data.SyncError.AuthExpired) {
+                WorkManager.getInstance(context).cancelAllWork();
+                AttendanceWidgetProvider.updateAllWidgets(context, null, false, "Session expired");
+                return Result.failure();
+            }
+            Models.CalculatedStats freshStats = prefs.getCachedStats();
+
+            try {
+                ErpApiClient client = new ErpApiClient(context);
+                client.getWeeklyAttendance(); // Cache latest timetable routine
+            } catch (Exception ignored) {}
+
+            // 3. Update all widgets on home screen
             AttendanceWidgetProvider.updateAllWidgets(context, freshStats, false, null);
 
-            // Check if faculty has marked any new attendance records
+            // 4. Check if faculty has marked any new attendance records using reconciled logs
             if (prefs.isNotificationsEnabled()) {
-                checkForNewAttendanceMarks(context, client, prefs, freshStats);
+                checkForNewAttendanceMarks(context, prefs, snapshot.getRecords(), freshStats);
             }
 
             return Result.success();
@@ -67,12 +103,11 @@ public class AttendanceSyncWorker extends Worker {
      */
     private void checkForNewAttendanceMarks(
             Context context,
-            ErpApiClient client,
             AppPreferences prefs,
+            List<Models.StudentAttendanceItem> logs,
             Models.CalculatedStats freshStats
     ) {
         try {
-            List<Models.StudentAttendanceItem> logs = client.getStudentAttendanceLogs(0);
             if (logs == null || logs.isEmpty()) {
                 return;
             }
