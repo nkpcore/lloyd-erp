@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/config", "destination": "/api/config" },
+    { "source": "/api/config", "destination": "/api/config" },
+    { "source": "/telemetry", "destination": "/api/telemetry" },
+    { "source": "/api/telemetry", "destination": "/api/telemetry" },
+    { "source": "/ban", "destination": "/api/ban" },
+    { "source": "/", "destination": "/web/admin/index.html" },
+    { "source": "/admin", "destination": "/web/admin/index.html" },
+    { "source": "/admin/", "destination": "/web/admin/index.html" },
+    { "source": "/(.*)", "destination": "/web/admin/$1" }
+  ]
+}
