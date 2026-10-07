@@ -1,0 +1,10 @@
+{
+  "min_version_code": 15,
+  "latest_version_name": "v1.0.15",
+  "download_url": "https://github.com/nkpcore/lloyd-erp/releases/latest",
+  "banned_students": [],
+  "banned_devices": [],
+  "broadcast_notice": null,
+  "maintenance_mode": false,
+  "maintenance_message": "Lloyd ERP service is currently undergoing routine maintenance."
+}

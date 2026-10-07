@@ -64,6 +64,12 @@ public class AttendanceSyncWorker extends Worker {
                 WorkManager.getInstance(context).cancelAllWork();
                 AttendanceWidgetProvider.updateAllWidgets(context, null, false, "Access Revoked");
                 return Result.failure();
+            } else if (decision instanceof AccessDecision.Maintenance) {
+                AttendanceWidgetProvider.updateAllWidgets(context, null, false, "Under Maintenance");
+                return Result.retry();
+            } else if (decision instanceof AccessDecision.OutdatedVersion) {
+                AttendanceWidgetProvider.updateAllWidgets(context, null, false, "Update App");
+                return Result.failure();
             }
 
             // 2. Transactional refresh via single source of truth

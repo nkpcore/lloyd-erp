@@ -101,6 +101,20 @@ class LoginActivity : FragmentActivity() {
                         errorMessage = accessDecision.reason
                     }
                     return@launch
+                } else if (accessDecision is com.lloyd.attendance.core.access.AccessDecision.Maintenance) {
+                    prefs.saveTokens("", "")
+                    withContext(Dispatchers.Main) {
+                        isLoading = false
+                        errorMessage = accessDecision.message
+                    }
+                    return@launch
+                } else if (accessDecision is com.lloyd.attendance.core.access.AccessDecision.OutdatedVersion) {
+                    prefs.saveTokens("", "")
+                    withContext(Dispatchers.Main) {
+                        isLoading = false
+                        errorMessage = "App version is outdated (minimum required: v${accessDecision.minVersionCode}). Please update the app."
+                    }
+                    return@launch
                 }
 
                 withContext(Dispatchers.Main) {

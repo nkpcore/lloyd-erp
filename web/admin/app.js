@@ -58,7 +58,8 @@ class TelemetryDashboard {
     constructor() {
         this.records = [];
         this.filteredRecords = [];
-        this.endpointUrl = localStorage.getItem('telemetry_api_url') || '';
+        this.endpointUrl = localStorage.getItem('telemetry_api_url') ||
+            (typeof window !== 'undefined' && window.location.protocol.startsWith('http') ? window.location.origin : '');
         this.fleetConfig = this.loadStoredConfig();
 
         this.initDOMElements();
@@ -96,6 +97,7 @@ class TelemetryDashboard {
         this.tableBodyEl = document.getElementById('tableBody');
         this.tableCountEl = document.getElementById('tableCount');
         this.searchInput = document.getElementById('searchInput');
+        this.statusFilter = document.getElementById('statusFilter');
         this.versionFilter = document.getElementById('versionFilter');
         this.refreshBtn = document.getElementById('refreshBtn');
         this.configBtn = document.getElementById('configBtn');
@@ -143,7 +145,8 @@ class TelemetryDashboard {
         localStorage.setItem('fleet_config', JSON.stringify(this.fleetConfig, null, 2));
 
         if (this.endpointUrl) {
-            fetch(this.endpointUrl + '/config', {
+            const configUrl = this.endpointUrl.replace(/\/+$/, '') + '/config';
+            fetch(configUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(this.fleetConfig)
@@ -206,15 +209,16 @@ class TelemetryDashboard {
     bindEvents() {
         if (this.configBtn) {
             this.configBtn.addEventListener('click', () => {
-                const current = localStorage.getItem('telemetry_api_url') || '';
+                const current = localStorage.getItem('telemetry_api_url') || this.endpointUrl;
                 const entered = prompt('Enter Telemetry Backend API URL (leave blank for local simulation):', current);
                 if (entered !== null) {
                     if (entered.trim()) {
                         localStorage.setItem('telemetry_api_url', entered.trim());
+                        this.endpointUrl = entered.trim();
                     } else {
                         localStorage.removeItem('telemetry_api_url');
+                        this.endpointUrl = (typeof window !== 'undefined' && window.location.protocol.startsWith('http') ? window.location.origin : '');
                     }
-                    this.endpointUrl = localStorage.getItem('telemetry_api_url') || '';
                     this.loadTelemetry();
                 }
             });
@@ -238,14 +242,50 @@ class TelemetryDashboard {
         });
 
         this.searchInput.addEventListener('input', () => this.applyFilters());
+        if (this.statusFilter) {
+            this.statusFilter.addEventListener('change', () => this.applyFilters());
+        }
         this.versionFilter.addEventListener('change', () => this.applyFilters());
+
+        // Sidebar Navigation links
+        document.querySelectorAll('.nav-menu .nav-item').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                document.querySelectorAll('.nav-menu .nav-item').forEach(item => item.classList.remove('active'));
+                link.classList.add('active');
+                const target = link.getAttribute('href');
+                if (target === '#overview') {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                } else if (target === '#users') {
+                    document.getElementById('usersSection')?.scrollIntoView({ behavior: 'smooth' });
+                } else if (target === '#releases') {
+                    document.getElementById('governanceSection')?.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        });
     }
 
     async loadTelemetry() {
         if (this.endpointUrl) {
+            const base = this.endpointUrl.replace(/\/+$/, '');
             try {
-                this.syncStatusEl.textContent = 'Fetching remote telemetry...';
-                const res = await fetch(this.endpointUrl);
+                this.syncStatusEl.textContent = 'Syncing remote fleet...';
+
+                // Synchronize remote config if available
+                try {
+                    const cfgRes = await fetch(base + '/config');
+                    if (cfgRes.ok) {
+                        const remoteCfg = await cfgRes.json();
+                        this.fleetConfig = { ...this.fleetConfig, ...remoteCfg };
+                        localStorage.setItem('fleet_config', JSON.stringify(this.fleetConfig, null, 2));
+                        this.populateGovernanceFields();
+                    }
+                } catch (e) {
+                    console.warn('Could not fetch remote config, using local cache:', e);
+                }
+
+                // Fetch telemetry heartbeats
+                const res = await fetch(base + '/telemetry');
                 if (res.ok) {
                     this.records = await res.json();
                     this.syncStatusEl.textContent = 'Remote Telemetry Connected';
@@ -345,16 +385,28 @@ class TelemetryDashboard {
     applyFilters() {
         const query = (this.searchInput.value || '').trim().toLowerCase();
         const verFilter = this.versionFilter.value;
+        const statFilter = this.statusFilter ? this.statusFilter.value : 'ALL';
+        const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+        const bannedSet = new Set(this.fleetConfig.banned_devices || []);
 
         this.filteredRecords = this.records.filter(r => {
             const matchesVer = verFilter === 'ALL' || r.app_version === verFilter;
             const matchesQuery = !query ||
                 (r.student_name && r.student_name.toLowerCase().includes(query)) ||
                 (r.student_id && r.student_id.toString().includes(query)) ||
+                (r.device_id && r.device_id.toLowerCase().includes(query)) ||
                 (r.device_model && r.device_model.toLowerCase().includes(query)) ||
                 (r.app_version && r.app_version.toLowerCase().includes(query));
 
-            return matchesVer && matchesQuery;
+            const isBanned = r.device_id && bannedSet.has(r.device_id);
+            const isOnline = new Date(r.timestamp).getTime() >= oneDayAgo;
+
+            let matchesStatus = true;
+            if (statFilter === 'ACTIVE') matchesStatus = isOnline && !isBanned;
+            else if (statFilter === 'IDLE') matchesStatus = !isOnline && !isBanned;
+            else if (statFilter === 'REVOKED') matchesStatus = isBanned;
+
+            return matchesVer && matchesQuery && matchesStatus;
         });
 
         this.renderTable();

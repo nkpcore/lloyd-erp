@@ -57,6 +57,10 @@ import com.lloyd.attendance.core.security.BiometricCredentialVault
 import com.lloyd.attendance.data.AppPreferences
 import com.lloyd.attendance.feature.dashboard.DashboardScreen
 import com.lloyd.attendance.feature.dashboard.DashboardViewModel
+import com.lloyd.attendance.core.access.AccessControlManager
+import com.lloyd.attendance.core.access.AccessDecision
+import com.lloyd.attendance.feature.lock.AccessLockoutScreen
+import com.lloyd.attendance.core.ota.OtaUpdateManager
 import com.lloyd.attendance.feature.lock.AppLockScreen
 import com.lloyd.attendance.feature.logs.AttendanceLogsScreen
 import com.lloyd.attendance.feature.logs.AttendanceLogsViewModel
@@ -96,6 +100,54 @@ class MainComposeActivity : FragmentActivity() {
     private var isScreenOff = false
     private var isAuthenticating = false
     private var isAppLocked by mutableStateOf(false)
+    private var accessDecision by mutableStateOf<AccessDecision?>(null)
+
+    private fun performAccessCheck() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val studentId = prefs.getStudentId()
+            val deviceId = TelemetryManager.getOrCreateDeviceId(applicationContext)
+
+            val decision = AccessControlManager.checkAccess(
+                context = applicationContext,
+                endpointUrl = prefs.telemetryEndpoint,
+                studentId = studentId,
+                deviceId = deviceId
+            )
+            withContext(Dispatchers.Main) {
+                accessDecision = decision
+                if (decision is AccessDecision.Authorized) {
+                    decision.broadcastNotice?.let { dashboardViewModel.setBroadcastNotice(it) }
+                }
+            }
+
+            try {
+                TelemetryManager.sendTelemetry(
+                    context = applicationContext,
+                    endpointUrl = prefs.telemetryEndpoint,
+                    studentId = studentId,
+                    studentName = prefs.userProfile?.name
+                )
+            } catch (ignored: Exception) {
+            }
+
+            // Also observe attendance snapshot to ensure real student name is reported once loaded
+            val repository = com.lloyd.attendance.core.data.AttendanceRepository.getInstance(applicationContext)
+            repository.snapshot.collect { snapshot ->
+                val resolvedName = snapshot.overall.studentName
+                if (resolvedName.isNotBlank() && resolvedName != prefs.userProfile?.name) {
+                    try {
+                        TelemetryManager.sendTelemetry(
+                            context = applicationContext,
+                            endpointUrl = prefs.telemetryEndpoint,
+                            studentId = snapshot.overall.studentId,
+                            studentName = resolvedName
+                        )
+                    } catch (ignored: Exception) {
+                    }
+                }
+            }
+        }
+    }
 
     private val screenOffReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -147,53 +199,7 @@ class MainComposeActivity : FragmentActivity() {
         val screenFilter = IntentFilter(Intent.ACTION_SCREEN_OFF)
         registerReceiver(screenOffReceiver, screenFilter)
 
-        var accessDecision by mutableStateOf<com.lloyd.attendance.core.access.AccessDecision?>(null)
-
-        // Asynchronously check access & report client telemetry
-        lifecycleScope.launch(Dispatchers.IO) {
-            val studentId = prefs.getStudentId()
-            val deviceId = TelemetryManager.getOrCreateDeviceId(applicationContext)
-
-            val decision = com.lloyd.attendance.core.access.AccessControlManager.checkAccess(
-                context = applicationContext,
-                endpointUrl = prefs.telemetryEndpoint,
-                studentId = studentId,
-                deviceId = deviceId
-            )
-            withContext(Dispatchers.Main) {
-                accessDecision = decision
-                if (decision is com.lloyd.attendance.core.access.AccessDecision.Authorized) {
-                    decision.broadcastNotice?.let { dashboardViewModel.setBroadcastNotice(it) }
-                }
-            }
-
-            try {
-                TelemetryManager.sendTelemetry(
-                    context = applicationContext,
-                    endpointUrl = prefs.telemetryEndpoint,
-                    studentId = studentId,
-                    studentName = prefs.userProfile?.name
-                )
-            } catch (ignored: Exception) {
-            }
-
-            // Also observe attendance snapshot to ensure real student name is reported once loaded
-            val repository = com.lloyd.attendance.core.data.AttendanceRepository.getInstance(applicationContext)
-            repository.snapshot.collect { snapshot ->
-                val resolvedName = snapshot.overall.studentName
-                if (resolvedName.isNotBlank() && resolvedName != prefs.userProfile?.name) {
-                    try {
-                        TelemetryManager.sendTelemetry(
-                            context = applicationContext,
-                            endpointUrl = prefs.telemetryEndpoint,
-                            studentId = snapshot.overall.studentId,
-                            studentName = resolvedName
-                        )
-                    } catch (ignored: Exception) {
-                    }
-                }
-            }
-        }
+        performAccessCheck()
 
         // Wire auto-logout on session expiration
         val repository = com.lloyd.attendance.core.data.AttendanceRepository.getInstance(applicationContext)
@@ -219,50 +225,26 @@ class MainComposeActivity : FragmentActivity() {
                             handleAutoLogout("Signed out")
                         }
                     )
+                } else if (accessDecision != null && accessDecision !is AccessDecision.Authorized) {
+                    val decision = accessDecision!!
+                    val deviceId = remember { TelemetryManager.getOrCreateDeviceId(applicationContext) }
+                    AccessLockoutScreen(
+                        decision = decision,
+                        deviceId = deviceId,
+                        onRetry = {
+                            performAccessCheck()
+                        },
+                        onUpdate = { url ->
+                            OtaUpdateManager.downloadAndInstallApk(
+                                this@MainComposeActivity,
+                                url
+                            )
+                        },
+                        onSignOut = {
+                            handleAutoLogout("Signed out")
+                        }
+                    )
                 } else {
-                    val currentDecision = accessDecision
-
-                    if (currentDecision is com.lloyd.attendance.core.access.AccessDecision.Revoked) {
-                        androidx.compose.material3.AlertDialog(
-                            onDismissRequest = {},
-                            title = { androidx.compose.material3.Text("Access Restricted") },
-                            text = { androidx.compose.material3.Text(currentDecision.reason) },
-                            confirmButton = {
-                                androidx.compose.material3.Button(
-                                    onClick = {
-                                        handleAutoLogout(currentDecision.reason)
-                                    }
-                                ) {
-                                    androidx.compose.material3.Text("Sign Out")
-                                }
-                            }
-                        )
-                    } else if (currentDecision is com.lloyd.attendance.core.access.AccessDecision.OutdatedVersion) {
-                        androidx.compose.material3.AlertDialog(
-                            onDismissRequest = {},
-                            title = { androidx.compose.material3.Text("Update Required") },
-                            text = {
-                                androidx.compose.material3.Text(
-                                    "Your version of Lloyd ERP is no longer supported (minimum required: v${currentDecision.minVersionCode}). Please update to continue."
-                                )
-                            },
-                            confirmButton = {
-                                androidx.compose.material3.Button(
-                                    onClick = {
-                                        val url = currentDecision.downloadUrl
-                                            ?: "https://github.com/nkpcore/lloyd-erp/releases/latest"
-                                        com.lloyd.attendance.core.ota.OtaUpdateManager.downloadAndInstallApk(
-                                            this@MainComposeActivity,
-                                            url
-                                        )
-                                    }
-                                ) {
-                                    androidx.compose.material3.Text("Update via OTA")
-                                }
-                            }
-                        )
-                    }
-
                     MainAppShell(
                         prefs = prefs,
                         dashboardViewModel = dashboardViewModel,

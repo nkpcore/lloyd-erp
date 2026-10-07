@@ -32,6 +32,17 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SystemUpdate
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.OutlinedTextField
+import com.lloyd.attendance.data.AppPreferences
+import com.lloyd.attendance.core.telemetry.TelemetryManager
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -93,6 +104,70 @@ fun ProfileScreen(
     var isCheckingUpdate by remember { mutableStateOf(false) }
     var updateInfo by remember { mutableStateOf<OtaReleaseInfo?>(null) }
     var updateMessage by remember { mutableStateOf<String?>(null) }
+
+    val deviceId = remember { TelemetryManager.getOrCreateDeviceId(context) }
+    var showEndpointDialog by remember { mutableStateOf(false) }
+    val prefs = remember { AppPreferences.getInstance(context) }
+    var endpointInput by remember { mutableStateOf(prefs.telemetryEndpoint ?: "") }
+    var isSendingTelemetry by remember { mutableStateOf(false) }
+
+    // Admin authorization: strictly bound to logged-in student ID (260094709), zero hardcoded passwords!
+    val adminId = "260094709"
+    val isAdminUser = remember(userProfile, prefs.username, studentId) {
+        prefs.username.trim() == adminId ||
+        userProfile?.admission_no?.trim() == adminId ||
+        studentId?.toString() == adminId ||
+        biometricVault.getSavedUsername()?.trim() == adminId
+    }
+
+    if (showEndpointDialog) {
+        AlertDialog(
+            onDismissRequest = { showEndpointDialog = false },
+            title = {
+                Text(
+                    text = "Fleet Admin Server Endpoint",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Enter Fleet Telemetry / Config server base URL (e.g., http://192.168.1.100:8080). Leave blank to disable remote syncing.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = endpointInput,
+                        onValueChange = { endpointInput = it },
+                        label = { Text("Server URL") },
+                        placeholder = { Text("http://192.168.1.100:8080") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val trimmed = endpointInput.trim()
+                        val finalUrl = if (trimmed.isBlank()) null else trimmed
+                        AppPreferences.getInstance(context).telemetryEndpoint = finalUrl
+                        showEndpointDialog = false
+                        Toast.makeText(context, "Fleet server updated", Toast.LENGTH_SHORT).show()
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEndpointDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     if (showForgetCredentialsDialog) {
         AlertDialog(
@@ -292,6 +367,46 @@ fun ProfileScreen(
                     ProfileField("Program / Course", userProfile?.course?.takeIf { it.isNotBlank() } ?: "--")
                     ProfileField("Semester", userProfile?.semester?.takeIf { it.isNotBlank() } ?: "--")
                     ProfileField("Assigned Section", userProfile?.section?.takeIf { it.isNotBlank() } ?: "--")
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Device UUID",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("Device UUID", deviceId))
+                                    Toast.makeText(context, "Device UUID copied to clipboard", Toast.LENGTH_SHORT).show()
+                                }
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "${deviceId.take(8)}...${deviceId.takeLast(4)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = "Copy UUID",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -416,7 +531,9 @@ fun ProfileScreen(
 
             // Security Hardening Badge & Info
             ElevatedCard(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.large),
                 shape = MaterialTheme.shapes.large,
                 colors = androidx.compose.material3.CardDefaults.elevatedCardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -447,17 +564,141 @@ fun ProfileScreen(
                             )
                         }
                         StatusBadge(
-                            text = "v${BuildConfig.VERSION_NAME}",
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            text = if (isAdminUser) "ADMIN" else "v${BuildConfig.VERSION_NAME}",
+                            containerColor = if (isAdminUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = if (isAdminUser) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Open Source Lloyd ERP Companion • Material 3 Expressive",
+                        text = if (isAdminUser) "Fleet Governance & Developer Gateway Active" else "Open Source Lloyd ERP Companion • Material 3 Expressive",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+
+            // Admin Fleet Controls Card (Visible ONLY when logged in as admin 260094709)
+            if (isAdminUser) {
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    colors = androidx.compose.material3.CardDefaults.elevatedCardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudSync,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = "Fleet Admin Gateway",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Governance & Live Sync",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            StatusBadge(
+                                text = "ADMIN ACTIVE",
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        val currentEndpoint = prefs.telemetryEndpoint
+                        Text(
+                            text = if (!currentEndpoint.isNullOrBlank()) "Server: $currentEndpoint" else "Server: Local Simulated / Not set",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    endpointInput = prefs.telemetryEndpoint ?: ""
+                                    showEndpointDialog = true
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(imageVector = Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Set Server")
+                            }
+
+                            Button(
+                                onClick = {
+                                    isSendingTelemetry = true
+                                    coroutineScope.launch {
+                                        val res = TelemetryManager.sendTelemetry(
+                                            context = context,
+                                            endpointUrl = prefs.telemetryEndpoint,
+                                            studentId = studentId,
+                                            studentName = userProfile?.name
+                                        )
+                                        isSendingTelemetry = false
+                                        val msg = if (res.isSuccess) "Telemetry heartbeat dispatched!" else "Telemetry failed: ${res.exceptionOrNull()?.message}"
+                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                enabled = !isSendingTelemetry,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                if (isSendingTelemetry) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Icon(imageVector = Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Ping Server")
+                                }
+                            }
+                        }
+
+                        if (!currentEndpoint.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    try {
+                                        val browserIntent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(currentEndpoint))
+                                        context.startActivity(browserIntent)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Cannot open browser: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Open Fleet Dashboard")
+                            }
+                        }
+                    }
                 }
             }
 
