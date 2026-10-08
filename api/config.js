@@ -65,16 +65,17 @@ module.exports = async function handler(req, res) {
         if (req.method === 'GET') {
             const config = await db.getConfig();
             
-            // If latest_version_name is not set, try github or telemetry records
-            if (!config.latest_version_name) {
-                const gh = await getLiveGitHubRelease();
-                if (gh && gh.version) {
-                    config.latest_version_name = gh.version;
-                } else {
-                    const telemetry = await db.getTelemetryRecords();
-                    if (telemetry.length > 0 && telemetry[0].app_version) {
-                        config.latest_version_name = telemetry[0].app_version;
-                    }
+            // Prioritize live GitHub Release dynamically (strictly no hardcoded fallback)
+            const gh = await getLiveGitHubRelease();
+            if (gh && gh.version) {
+                config.latest_version_name = gh.version;
+                if (!config.download_url || config.download_url.includes('downloads/LloydAttendance-latest.apk')) {
+                    config.download_url = gh.download_url || config.download_url;
+                }
+            } else if (!config.latest_version_name) {
+                const telemetry = await db.getTelemetryRecords();
+                if (telemetry.length > 0 && telemetry[0].app_version) {
+                    config.latest_version_name = telemetry[0].app_version;
                 }
             }
 

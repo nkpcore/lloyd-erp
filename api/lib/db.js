@@ -32,11 +32,11 @@ function readDiskConfig() {
     } catch (_) {}
     return {
         min_version_code: 1,
-        latest_version_name: "1.0.11",
+        latest_version_name: null,
         download_url: "https://lloyd-erp-sand.vercel.app/downloads/LloydAttendance-latest.apk",
         banned_students: [],
         banned_devices: [],
-        broadcast_notice: "Lloyd Attendance v1.0.11 is now available.",
+        broadcast_notice: null,
         maintenance_mode: false,
         maintenance_message: "Lloyd ERP service is currently undergoing routine maintenance."
     };
@@ -126,11 +126,14 @@ async function getConfig() {
 async function saveConfig(config) {
     memConfig = { ...readDiskConfig(), ...config };
 
-    // 1. Write to Redis (fire-and-forget / non-blocking)
+    // 1. Write to Redis (await with timeout to ensure serverless persistence)
     try {
         const redis = await getRedis();
         if (redis) {
-            redis.set('lloyd_fleet_config', JSON.stringify(memConfig)).catch(() => {});
+            await Promise.race([
+                redis.set('lloyd_fleet_config', JSON.stringify(memConfig)),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500))
+            ]).catch(() => {});
         }
     } catch (_) {}
 

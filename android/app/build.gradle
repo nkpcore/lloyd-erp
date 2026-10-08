@@ -30,14 +30,15 @@ android {
             try {
                 def stdout = new ByteArrayOutputStream()
                 exec {
-                    commandLine 'git', 'describe', '--tags', '--always'
+                    commandLine 'git', 'describe', '--tags', '--abbrev=0'
                     standardOutput = stdout
                 }
                 def desc = stdout.toString().trim().replaceFirst("^v", "")
-                return desc.isEmpty() ? "1.0.0" : desc
-            } catch (Exception e) {
-                return "1.0.0"
-            }
+                if (desc ==~ /^\d+\.\d+(\.\d+)?(-.*)?$/) {
+                    return desc
+                }
+            } catch (Exception ignored) {}
+            return "1.0.0"
         }
 
         def appVersionCode = Integer.parseInt(project.findProperty('appVersionCode') ?: System.getenv('APP_VERSION_CODE') ?: getGitCommitCount().toString())

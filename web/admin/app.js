@@ -105,12 +105,16 @@ class TelemetryDashboard {
         localStorage.setItem('fleet_config', JSON.stringify(this.fleetConfig, null, 2));
 
         if (this.endpointUrl) {
-            const configUrl = this.endpointUrl.replace(/\/+$/, '') + '/config';
-            fetch(configUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(this.fleetConfig)
-            }).catch(err => console.warn('Could not sync remote config:', err));
+            const configUrl = this.endpointUrl.replace(/\/+$/, '') + (this.endpointUrl.includes('/api') ? '/config' : '/api/config');
+            try {
+                await fetch(configUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.fleetConfig)
+                });
+            } catch (err) {
+                console.warn('Could not sync remote config:', err);
+            }
         }
 
         if (this.saveConfigBtn) {
@@ -152,10 +156,10 @@ class TelemetryDashboard {
         });
     }
 
-    toggleBan(deviceId) {
+    async toggleBan(deviceId) {
         if (!deviceId) return;
         const id = String(deviceId).trim();
-        const bans = new Set(this.fleetConfig.banned_devices || []);
+        const bans = new Set((this.fleetConfig.banned_devices || []).map(d => String(d).trim()));
         if (bans.has(id)) {
             bans.delete(id);
         } else {
@@ -163,7 +167,17 @@ class TelemetryDashboard {
         }
         this.fleetConfig.banned_devices = Array.from(bans);
         this.populateGovernanceFields();
-        this.saveConfig();
+        this.renderTable();
+        await this.saveConfig();
+
+        if (this.endpointUrl) {
+            const banUrl = this.endpointUrl.replace(/\/+$/, '') + (this.endpointUrl.includes('/api') ? '/ban' : '/api/ban');
+            fetch(banUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ device_id: id })
+            }).catch(() => {});
+        }
     }
 
     bindEvents() {
@@ -237,6 +251,9 @@ class TelemetryDashboard {
         }
         if (base && !candidates.includes(base)) {
             candidates.push(base);
+        }
+        if (!candidates.includes('https://lloyd-erp-sand.vercel.app')) {
+            candidates.push('https://lloyd-erp-sand.vercel.app');
         }
         if (!candidates.includes('http://localhost:8080')) {
             candidates.push('http://localhost:8080');

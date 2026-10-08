@@ -96,4 +96,51 @@ class AccessControlManagerTest {
         assertTrue(config.bannedStudents.isEmpty())
         assertEquals(false, config.maintenanceMode)
     }
+
+    @Test
+    fun testParseFleetConfig_withHtmlContent_fallsBackGracefully() {
+        val config = AccessControlManager.parseFleetConfig("<!DOCTYPE html><html><body>Dashboard</body></html>")
+        assertEquals(1, config.minVersionCode)
+        assertTrue(config.bannedStudents.isEmpty())
+        assertTrue(config.bannedDevices.isEmpty())
+    }
+
+    @Test
+    fun testBannedStudentId_returnsRevoked() {
+        val configWithStudentBan = baseConfig.copy(
+            bannedStudents = listOf(10001)
+        )
+        val decision = AccessControlManager.evaluateAccess(
+            config = configWithStudentBan,
+            studentId = 10001,
+            deviceId = "valid-device-uuid",
+            currentVersionCode = 15
+        )
+
+        assertTrue(decision is AccessDecision.Revoked)
+        val revoked = decision as AccessDecision.Revoked
+        assertTrue(revoked.reason.contains("student"))
+    }
+
+    @Test
+    fun testBannedDevice_withWhitespaceOrCasing_returnsRevoked() {
+        val decision = AccessControlManager.evaluateAccess(
+            config = baseConfig,
+            studentId = 10001,
+            deviceId = "  BANNED-DEV-UUID-999  ",
+            currentVersionCode = 15
+        )
+
+        assertTrue(decision is AccessDecision.Revoked)
+    }
+
+    @Test
+    fun testNormalizeEndpointUrl() {
+        assertEquals("https://lloyd-erp-sand.vercel.app/config", AccessControlManager.normalizeEndpointUrl("https://lloyd-erp-sand.vercel.app"))
+        assertEquals("https://lloyd-erp-sand.vercel.app/config", AccessControlManager.normalizeEndpointUrl("https://lloyd-erp-sand.vercel.app/"))
+        assertEquals("https://lloyd-erp-sand.vercel.app/config", AccessControlManager.normalizeEndpointUrl("https://lloyd-erp-sand.vercel.app/config"))
+        assertEquals("https://lloyd-erp-sand.vercel.app/api/config", AccessControlManager.normalizeEndpointUrl("https://lloyd-erp-sand.vercel.app/api/config"))
+        assertEquals(null, AccessControlManager.normalizeEndpointUrl(null))
+        assertEquals(null, AccessControlManager.normalizeEndpointUrl("   "))
+    }
 }

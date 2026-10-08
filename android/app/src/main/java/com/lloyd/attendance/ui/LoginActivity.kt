@@ -17,6 +17,11 @@ import com.lloyd.attendance.core.security.BiometricCredentialVault
 import com.lloyd.attendance.data.AppPreferences
 import com.lloyd.attendance.feature.auth.LoginScreen
 import com.lloyd.attendance.widget.AttendanceWidgetProvider
+import com.lloyd.attendance.BuildConfig
+import com.lloyd.attendance.core.designsystem.components.InAppUpdateDialog
+import com.lloyd.attendance.core.ota.OtaReleaseInfo
+import com.lloyd.attendance.core.ota.OtaUpdateManager
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -29,6 +34,10 @@ class LoginActivity : FragmentActivity() {
 
     private var isLoading by mutableStateOf(false)
     private var errorMessage by mutableStateOf<String?>(null)
+    private var pendingUpdateInfo by mutableStateOf<OtaReleaseInfo?>(null)
+    private var isDownloadingUpdate by mutableStateOf(false)
+    private var updateDownloadProgress by mutableStateOf(0f)
+    private var pendingInstallApk by mutableStateOf<File?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,6 +64,22 @@ class LoginActivity : FragmentActivity() {
             performBiometricLogin(autoPrompt = true)
         }
 
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val otaResult = OtaUpdateManager.checkForUpdates(
+                    currentVersion = BuildConfig.VERSION_NAME,
+                    fleetEndpoint = prefs.telemetryEndpoint
+                )
+                otaResult.onSuccess { info ->
+                    if (info.hasUpdate && !info.downloadUrl.isNullOrBlank()) {
+                        withContext(Dispatchers.Main) {
+                            pendingUpdateInfo = info
+                        }
+                    }
+                }
+            } catch (ignored: Exception) {}
+        }
+
         enableEdgeToEdge()
         setContent {
             LloydTheme {
@@ -70,6 +95,59 @@ class LoginActivity : FragmentActivity() {
                     },
                     isBiometricAvailable = isBiometricAvailable
                 )
+
+                pendingUpdateInfo?.let { updateInfo ->
+                    InAppUpdateDialog(
+                        updateInfo = updateInfo,
+                        isDownloading = isDownloadingUpdate,
+                        downloadProgress = updateDownloadProgress,
+                        onConfirmUpdate = {
+                            performDownloadAndInstall(updateInfo)
+                        },
+                        onDismiss = {
+                            pendingUpdateInfo = null
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        pendingInstallApk?.let { apkFile ->
+            if (OtaUpdateManager.canInstallApk(this) && apkFile.exists()) {
+                pendingInstallApk = null
+                OtaUpdateManager.promptInstallApk(this, apkFile)
+            }
+        }
+    }
+
+    private fun performDownloadAndInstall(updateInfo: OtaReleaseInfo) {
+        val downloadUrl = updateInfo.downloadUrl ?: return
+        isDownloadingUpdate = true
+        lifecycleScope.launch(Dispatchers.IO) {
+            val result = OtaUpdateManager.downloadApkWithProgress(this@LoginActivity, downloadUrl) { progress ->
+                updateDownloadProgress = progress
+            }
+            withContext(Dispatchers.Main) {
+                isDownloadingUpdate = false
+                result.onSuccess { apkFile ->
+                    pendingUpdateInfo = null
+                    pendingInstallApk = apkFile
+                    if (!OtaUpdateManager.canInstallApk(this@LoginActivity)) {
+                        Toast.makeText(
+                            this@LoginActivity,
+                            "Allow Lloyd Attendance to install unknown apps, then return to complete update",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        OtaUpdateManager.openInstallPermissionSettings(this@LoginActivity)
+                    } else {
+                        OtaUpdateManager.promptInstallApk(this@LoginActivity, apkFile)
+                    }
+                }.onFailure { err ->
+                    Toast.makeText(this@LoginActivity, "Update download failed: ${err.message}", Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
@@ -112,7 +190,15 @@ class LoginActivity : FragmentActivity() {
                     prefs.saveTokens("", "")
                     withContext(Dispatchers.Main) {
                         isLoading = false
-                        errorMessage = "App version is outdated (minimum required: v${accessDecision.minVersionCode}). Please update the app."
+                        errorMessage = "App version is outdated (minimum required: v${accessDecision.minVersionCode}). Please update to continue."
+                        val dlUrl = accessDecision.downloadUrl ?: "https://lloyd-erp-sand.vercel.app/downloads/LloydAttendance-latest.apk"
+                        pendingUpdateInfo = OtaReleaseInfo(
+                            hasUpdate = true,
+                            latestVersion = "v${accessDecision.minVersionCode}",
+                            currentVersion = BuildConfig.VERSION_NAME,
+                            releaseNotes = "Mandatory security and stability update.",
+                            downloadUrl = dlUrl
+                        )
                     }
                     return@launch
                 }

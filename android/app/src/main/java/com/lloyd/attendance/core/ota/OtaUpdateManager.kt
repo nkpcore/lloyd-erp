@@ -4,17 +4,24 @@ import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
+import android.provider.Settings
 import androidx.core.content.FileProvider
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import com.lloyd.attendance.BuildConfig
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.TimeUnit
+import android.widget.Toast
+import android.content.pm.PackageManager
 
 data class OtaReleaseInfo(
     val hasUpdate: Boolean,
@@ -28,8 +35,8 @@ object OtaUpdateManager {
 
     private const val GITHUB_API_URL = "https://api.github.com/repos/nkpcore/lloyd-erp/releases/latest"
     private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
         .build()
     private val gson = Gson()
 
@@ -49,18 +56,34 @@ object OtaUpdateManager {
         return version.trim().removePrefix("v").removePrefix("V").trim()
     }
 
-    fun isNewerVersion(remoteTag: String, currentVersion: String): Boolean {
-        val remoteParts = cleanVersion(remoteTag).split(".").mapNotNull { it.toIntOrNull() }
-        val currentParts = cleanVersion(currentVersion).split(".").mapNotNull { it.toIntOrNull() }
+    private fun parseSemver(v: String): Triple<Int, Int, Int>? {
+        val clean = cleanVersion(v)
+        val match = Regex("""^(\d+)\.(\d+)(?:\.(\d+))?""").find(clean) ?: return null
+        val major = match.groupValues[1].toIntOrNull() ?: return null
+        val minor = match.groupValues[2].toIntOrNull() ?: return null
+        val patch = match.groupValues.getOrNull(3)?.toIntOrNull() ?: 0
+        return Triple(major, minor, patch)
+    }
 
-        val maxLen = maxOf(remoteParts.size, currentParts.size)
-        for (i in 0 until maxLen) {
-            val r = remoteParts.getOrElse(i) { 0 }
-            val c = currentParts.getOrElse(i) { 0 }
-            if (r > c) return true
-            if (r < c) return false
-        }
-        return false
+    fun isNewerVersion(remoteTag: String, currentVersion: String): Boolean {
+        val cleanRemote = cleanVersion(remoteTag)
+        val cleanCurrent = cleanVersion(currentVersion)
+        if (cleanRemote == cleanCurrent) return false
+
+        val rSemver = parseSemver(cleanRemote)
+        val cSemver = parseSemver(cleanCurrent)
+
+        // If current version is not valid semver (e.g. git hash like 12641d3), treat remote as newer
+        if (cSemver == null && rSemver != null) return true
+        if (rSemver == null) return false
+        if (cSemver == null) return true
+
+        val (rMajor, rMinor, rPatch) = rSemver
+        val (cMajor, cMinor, cPatch) = cSemver
+
+        if (rMajor != cMajor) return rMajor > cMajor
+        if (rMinor != cMinor) return rMinor > cMinor
+        return rPatch > cPatch
     }
 
     suspend fun checkForUpdates(
@@ -74,11 +97,10 @@ object OtaUpdateManager {
                 ?: BuildConfig.DEFAULT_FLEET_URL.takeIf { it.isNotBlank() }
                 ?: "https://lloyd-erp-sand.vercel.app"
 
-            // 1. Check live fleet server /ota or /config
+            // 1. Check live fleet server /ota endpoint
             if (effectiveFleet.isNotBlank()) {
                 val cleanBase = effectiveFleet.trim().removeSuffix("/")
 
-                // Attempt 1: Query dedicated /ota endpoint
                 try {
                     val otaUrl = if (cleanBase.endsWith("/ota") || cleanBase.endsWith("/api/ota")) cleanBase
                     else "$cleanBase/ota?current_version=$cleanCurrent"
@@ -97,7 +119,7 @@ object OtaUpdateManager {
                             val hasUpdate = otaJson.get("has_update")?.asBoolean ?: false
                             val latestVer = otaJson.get("latest_version")?.asString ?: currentVersion
                             val downloadUrl = otaJson.get("download_url")?.asString
-                            val notes = otaJson.get("release_notes")?.asString ?: "You are running the latest version."
+                            val notes = otaJson.get("release_notes")?.asString ?: "New update available from Lloyd Fleet Portal."
 
                             if (hasUpdate && !downloadUrl.isNullOrBlank()) {
                                 val resolvedUrl = if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
@@ -120,7 +142,7 @@ object OtaUpdateManager {
                 } catch (ignored: Exception) {
                 }
 
-                // Attempt 2: Fallback query to /config
+                // Fallback check to /config endpoint
                 try {
                     val configUrl = if (cleanBase.endsWith("/config") || cleanBase.endsWith("/api/config")) cleanBase
                     else "$cleanBase/config"
@@ -160,7 +182,7 @@ object OtaUpdateManager {
                 }
             }
 
-            // 2. Query GitHub Releases API
+            // 2. Query GitHub Releases API directly
             try {
                 val request = Request.Builder()
                     .url(GITHUB_API_URL)
@@ -170,36 +192,25 @@ object OtaUpdateManager {
 
                 val response = client.newCall(request).execute()
 
-                // When GitHub returns 404 (private repo or no release yet), handle cleanly with zero error messages
-                if (response.code == 404 || !response.isSuccessful) {
-                    return@withContext Result.success(
-                        OtaReleaseInfo(
-                            hasUpdate = false,
-                            latestVersion = cleanCurrent,
-                            currentVersion = cleanCurrent,
-                            releaseNotes = "You are running the latest version.",
-                            downloadUrl = null
-                        )
-                    )
-                }
+                if (response.isSuccessful) {
+                    val bodyStr = response.body?.string()
+                    if (!bodyStr.isNullOrBlank()) {
+                        val release = gson.fromJson(bodyStr, GitHubRelease::class.java)
+                        val tagName = release.tagName.orEmpty()
+                        val apkAsset = release.assets?.firstOrNull { it.name?.endsWith(".apk", ignoreCase = true) == true }
+                        val downloadUrl = apkAsset?.downloadUrl
 
-                val bodyStr = response.body?.string()
-                if (!bodyStr.isNullOrBlank()) {
-                    val release = gson.fromJson(bodyStr, GitHubRelease::class.java)
-                    val tagName = release.tagName.orEmpty()
-                    val apkAsset = release.assets?.firstOrNull { it.name?.endsWith(".apk", ignoreCase = true) == true }
-                    val downloadUrl = apkAsset?.downloadUrl
-
-                    if (tagName.isNotBlank() && isNewerVersion(tagName, currentVersion) && !downloadUrl.isNullOrBlank()) {
-                        return@withContext Result.success(
-                            OtaReleaseInfo(
-                                hasUpdate = true,
-                                latestVersion = cleanVersion(tagName),
-                                currentVersion = cleanCurrent,
-                                releaseNotes = release.body.orEmpty().ifBlank { "Latest release from GitHub" },
-                                downloadUrl = downloadUrl
+                        if (tagName.isNotBlank() && isNewerVersion(tagName, currentVersion) && !downloadUrl.isNullOrBlank()) {
+                            return@withContext Result.success(
+                                OtaReleaseInfo(
+                                    hasUpdate = true,
+                                    latestVersion = cleanVersion(tagName),
+                                    currentVersion = cleanCurrent,
+                                    releaseNotes = release.body.orEmpty().ifBlank { "Latest release from GitHub Releases." },
+                                    downloadUrl = downloadUrl
+                                )
                             )
-                        )
+                        }
                     }
                 }
             } catch (ignored: Exception) {
@@ -218,20 +229,114 @@ object OtaUpdateManager {
         }
     }
 
-    fun downloadAndInstallApk(context: Context, downloadUrl: String, fileName: String = "lloyd-erp-update.apk") {
-        val uri = Uri.parse(downloadUrl)
-        val request = DownloadManager.Request(uri).apply {
-            setTitle("Downloading Lloyd ERP Update")
-            setDescription("Fetching latest release...")
-            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
-        }
-
-        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        downloadManager.enqueue(request)
+    /**
+     * Resolves the standardized local storage destination for downloaded update APKs.
+     * Uses internal cacheDir to avoid Android 11+ external-storage permission blocks.
+     */
+    fun getDownloadedUpdateApk(context: Context): File {
+        val updatesDir = File(context.cacheDir, "updates")
+        return File(updatesDir, "LloydAttendance-update.apk")
     }
 
-    fun installApk(context: Context, apkFile: File) {
+    /**
+     * Downloads the APK directly with real-time percentage progress.
+     */
+    suspend fun downloadApkWithProgress(
+        context: Context,
+        downloadUrl: String,
+        onProgress: (progress: Float) -> Unit = {}
+    ): Result<File> = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url(downloadUrl)
+                .header("User-Agent", "LloydERP-Android/${BuildConfig.VERSION_NAME}")
+                .build()
+
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) {
+                return@withContext Result.failure(IOException("Download failed with HTTP ${response.code}"))
+            }
+
+            val body = response.body ?: return@withContext Result.failure(IOException("Empty response body"))
+            val contentLength = body.contentLength()
+
+            val destinationFile = getDownloadedUpdateApk(context)
+            destinationFile.parentFile?.mkdirs()
+            if (destinationFile.exists()) {
+                destinationFile.delete()
+            }
+
+            body.byteStream().use { input ->
+                destinationFile.outputStream().use { output ->
+                    val buffer = ByteArray(16 * 1024)
+                    var bytesRead: Int
+                    var totalRead = 0L
+
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        output.write(buffer, 0, bytesRead)
+                        totalRead += bytesRead
+                        if (contentLength > 0) {
+                            val progress = (totalRead.toFloat() / contentLength.toFloat()).coerceIn(0f, 1f)
+                            withContext(Dispatchers.Main) {
+                                onProgress(progress)
+                            }
+                        } else {
+                            val simulated = ((totalRead % (4 * 1024 * 1024)).toFloat() / (4 * 1024 * 1024).toFloat()).coerceIn(0.1f, 0.95f)
+                            withContext(Dispatchers.Main) {
+                                onProgress(simulated)
+                            }
+                        }
+                    }
+                    output.flush()
+                }
+            }
+
+            destinationFile.setReadable(true, false)
+
+            withContext(Dispatchers.Main) {
+                onProgress(1f)
+            }
+            Result.success(destinationFile)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Checks if the app has permission to request package installs on Android 8.0+.
+     */
+    fun canInstallApk(context: Context): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.packageManager.canRequestPackageInstalls()
+        } else {
+            true
+        }
+    }
+
+    /**
+     * Opens system Settings for "Install Unknown Apps" permission.
+     */
+    fun openInstallPermissionSettings(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:${context.packageName}")
+            ).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        }
+    }
+
+    /**
+     * Triggers the native Android PackageInstaller to prompt the user to install the APK.
+     */
+    fun promptInstallApk(context: Context, apkFile: File) {
+        if (!apkFile.exists() || apkFile.length() == 0L) {
+            Toast.makeText(context, "Update file not found or corrupted", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val contentUri: Uri = FileProvider.getUriForFile(
             context,
             "${context.packageName}.fileprovider",
@@ -240,9 +345,46 @@ object OtaUpdateManager {
 
         val installIntent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(contentUri, "application/vnd.android.package-archive")
-            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
+            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
         }
 
-        context.startActivity(installIntent)
+        try {
+            val resolveList = context.packageManager.queryIntentActivities(installIntent, PackageManager.MATCH_DEFAULT_ONLY)
+            for (resolveInfo in resolveList) {
+                val pkg = resolveInfo.activityInfo.packageName
+                context.grantUriPermission(pkg, contentUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        } catch (ignored: Exception) {}
+
+        try {
+            context.startActivity(installIntent)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Could not open installer: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /**
+     * Helper that triggers download via OkHttp with progress and automatically opens installer.
+     */
+    fun downloadAndInstallApk(context: Context, downloadUrl: String, fileName: String = "lloyd-erp-update.apk") {
+        Toast.makeText(context, "Downloading update...", Toast.LENGTH_SHORT).show()
+        CoroutineScope(Dispatchers.IO).launch {
+            val result = downloadApkWithProgress(context, downloadUrl)
+            withContext(Dispatchers.Main) {
+                result.onSuccess { apkFile ->
+                    if (!canInstallApk(context)) {
+                        Toast.makeText(context, "Please allow Lloyd Attendance to install updates", Toast.LENGTH_LONG).show()
+                        openInstallPermissionSettings(context)
+                    } else {
+                        promptInstallApk(context, apkFile)
+                    }
+                }.onFailure { err ->
+                    Toast.makeText(context, "Download failed: ${err.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
     }
 }

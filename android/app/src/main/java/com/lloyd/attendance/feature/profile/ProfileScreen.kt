@@ -54,6 +54,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.runtime.LaunchedEffect
+import java.io.File
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -104,6 +107,16 @@ fun ProfileScreen(
     var isCheckingUpdate by remember { mutableStateOf(false) }
     var updateInfo by remember { mutableStateOf<OtaReleaseInfo?>(null) }
     var updateMessage by remember { mutableStateOf<String?>(null) }
+    var isDownloadingUpdate by remember { mutableStateOf(false) }
+    var updateDownloadProgress by remember { mutableStateOf(0f) }
+    var downloadedApkFile by remember { mutableStateOf<File?>(null) }
+
+    LaunchedEffect(Unit) {
+        val existingApk = OtaUpdateManager.getDownloadedUpdateApk(context)
+        if (existingApk.exists() && existingApk.length() > 0L) {
+            downloadedApkFile = existingApk
+        }
+    }
 
     val deviceId = remember { TelemetryManager.getOrCreateDeviceId(context) }
     var showEndpointDialog by remember { mutableStateOf(false) }
@@ -779,10 +792,93 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    if (updateInfo?.hasUpdate == true && updateInfo?.downloadUrl != null) {
+                    if (isDownloadingUpdate) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            LinearProgressIndicator(
+                                progress = { updateDownloadProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Downloading update: ${(updateDownloadProgress * 100).toInt()}%",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else if (downloadedApkFile != null && downloadedApkFile!!.exists() && downloadedApkFile!!.length() > 0L) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Button(
+                                onClick = {
+                                    if (!OtaUpdateManager.canInstallApk(context)) {
+                                        Toast.makeText(context, "Please allow Lloyd Attendance to install updates", Toast.LENGTH_LONG).show()
+                                        OtaUpdateManager.openInstallPermissionSettings(context)
+                                    } else {
+                                        OtaUpdateManager.promptInstallApk(context, downloadedApkFile!!)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(imageVector = Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Install Downloaded Update (v${updateInfo?.latestVersion ?: "Latest"})")
+                            }
+
+                            if (updateInfo?.hasUpdate == true && updateInfo?.downloadUrl != null) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                TextButton(
+                                    onClick = {
+                                        isDownloadingUpdate = true
+                                        updateDownloadProgress = 0f
+                                        coroutineScope.launch {
+                                            val result = OtaUpdateManager.downloadApkWithProgress(context, updateInfo!!.downloadUrl!!) { progress ->
+                                                updateDownloadProgress = progress
+                                            }
+                                            isDownloadingUpdate = false
+                                            result.onSuccess { apkFile ->
+                                                downloadedApkFile = apkFile
+                                                if (!OtaUpdateManager.canInstallApk(context)) {
+                                                    Toast.makeText(context, "Please allow Lloyd Attendance to install updates", Toast.LENGTH_LONG).show()
+                                                    OtaUpdateManager.openInstallPermissionSettings(context)
+                                                } else {
+                                                    OtaUpdateManager.promptInstallApk(context, apkFile)
+                                                }
+                                            }.onFailure { err ->
+                                                Toast.makeText(context, "Download failed: ${err.message}", Toast.LENGTH_LONG).show()
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Re-download Package")
+                                }
+                            }
+                        }
+                    } else if (updateInfo?.hasUpdate == true && updateInfo?.downloadUrl != null) {
                         Button(
                             onClick = {
-                                OtaUpdateManager.downloadAndInstallApk(context, updateInfo!!.downloadUrl!!)
+                                isDownloadingUpdate = true
+                                updateDownloadProgress = 0f
+                                coroutineScope.launch {
+                                    val result = OtaUpdateManager.downloadApkWithProgress(context, updateInfo!!.downloadUrl!!) { progress ->
+                                        updateDownloadProgress = progress
+                                    }
+                                    isDownloadingUpdate = false
+                                    result.onSuccess { apkFile ->
+                                        downloadedApkFile = apkFile
+                                        if (!OtaUpdateManager.canInstallApk(context)) {
+                                            Toast.makeText(context, "Please allow Lloyd Attendance to install updates", Toast.LENGTH_LONG).show()
+                                            OtaUpdateManager.openInstallPermissionSettings(context)
+                                        } else {
+                                            OtaUpdateManager.promptInstallApk(context, apkFile)
+                                        }
+                                    }.onFailure { err ->
+                                        Toast.makeText(context, "Download failed: ${err.message}", Toast.LENGTH_LONG).show()
+                                    }
+                                }
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {

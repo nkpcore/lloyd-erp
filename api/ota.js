@@ -136,7 +136,7 @@ module.exports = async function handler(req, res) {
         }
 
         if (!latestVersion) {
-            latestVersion = "1.0.11"; // Safe floor baseline for v1.0.11 release
+            latestVersion = cleanClient;
         }
 
         latestVersion = cleanVersion(latestVersion);
@@ -175,8 +175,8 @@ module.exports = async function handler(req, res) {
         console.error('[API/OTA] Handler error:', err);
         res.status(200).json({
             has_update: false,
-            latest_version: cleanVersion(req.query.current_version || '1.0.11'),
-            current_version: cleanVersion(req.query.current_version || '1.0.11'),
+            latest_version: cleanVersion(req.query.current_version || ''),
+            current_version: cleanVersion(req.query.current_version || ''),
             download_url: null,
             release_notes: 'Update check completed.',
             source: 'error_fallback'

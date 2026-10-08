@@ -24,9 +24,14 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.automirrored.outlined.EventNote
@@ -40,13 +45,17 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.core.content.ContextCompat
 import androidx.work.WorkManager
@@ -58,9 +67,21 @@ import com.lloyd.attendance.data.AppPreferences
 import com.lloyd.attendance.feature.dashboard.DashboardScreen
 import com.lloyd.attendance.feature.dashboard.DashboardViewModel
 import com.lloyd.attendance.core.access.AccessControlManager
+import com.lloyd.attendance.core.ota.OtaUpdateManager
+import com.lloyd.attendance.core.designsystem.components.InAppUpdateDialog
+import com.lloyd.attendance.core.ota.OtaReleaseInfo
+import java.io.File
+import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.unit.dp
+import com.lloyd.attendance.BuildConfig
 import com.lloyd.attendance.core.access.AccessDecision
 import com.lloyd.attendance.feature.lock.AccessLockoutScreen
-import com.lloyd.attendance.core.ota.OtaUpdateManager
 import com.lloyd.attendance.feature.lock.AppLockScreen
 import com.lloyd.attendance.feature.logs.AttendanceLogsScreen
 import com.lloyd.attendance.feature.logs.AttendanceLogsViewModel
@@ -101,6 +122,10 @@ class MainComposeActivity : FragmentActivity() {
     private var isAuthenticating = false
     private var isAppLocked by mutableStateOf(false)
     private var accessDecision by mutableStateOf<AccessDecision?>(null)
+    private var pendingUpdateInfo by mutableStateOf<OtaReleaseInfo?>(null)
+    private var isDownloadingUpdate by mutableStateOf(false)
+    private var updateDownloadProgress by mutableStateOf(0f)
+    private var pendingInstallApk by mutableStateOf<File?>(null)
 
     private fun performAccessCheck() {
         lifecycleScope.launch(Dispatchers.IO) {
@@ -118,6 +143,21 @@ class MainComposeActivity : FragmentActivity() {
                 if (decision is AccessDecision.Authorized) {
                     decision.broadcastNotice?.let { dashboardViewModel.setBroadcastNotice(it) }
                 }
+            }
+
+            try {
+                val otaResult = OtaUpdateManager.checkForUpdates(
+                    currentVersion = BuildConfig.VERSION_NAME,
+                    fleetEndpoint = prefs.telemetryEndpoint
+                )
+                otaResult.onSuccess { info ->
+                    if (info.hasUpdate && !info.downloadUrl.isNullOrBlank()) {
+                        withContext(Dispatchers.Main) {
+                            pendingUpdateInfo = info
+                        }
+                    }
+                }
+            } catch (ignored: Exception) {
             }
 
             try {
@@ -270,6 +310,50 @@ class MainComposeActivity : FragmentActivity() {
                             }
                         )
                     }
+
+                    val updateToPrompt = pendingUpdateInfo
+                    if (updateToPrompt != null) {
+                        InAppUpdateDialog(
+                            updateInfo = updateToPrompt,
+                            isDownloading = isDownloadingUpdate,
+                            downloadProgress = updateDownloadProgress,
+                            onConfirmUpdate = {
+                                performDownloadAndInstall(updateToPrompt)
+                            },
+                            onDismiss = {
+                                pendingUpdateInfo = null
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun performDownloadAndInstall(updateInfo: OtaReleaseInfo) {
+        val downloadUrl = updateInfo.downloadUrl ?: return
+        isDownloadingUpdate = true
+        lifecycleScope.launch(Dispatchers.IO) {
+            val result = OtaUpdateManager.downloadApkWithProgress(this@MainComposeActivity, downloadUrl) { progress ->
+                updateDownloadProgress = progress
+            }
+            withContext(Dispatchers.Main) {
+                isDownloadingUpdate = false
+                result.onSuccess { apkFile ->
+                    pendingUpdateInfo = null
+                    pendingInstallApk = apkFile
+                    if (!OtaUpdateManager.canInstallApk(this@MainComposeActivity)) {
+                        Toast.makeText(
+                            this@MainComposeActivity,
+                            "Allow Lloyd Attendance to install unknown apps, then return to complete update",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        OtaUpdateManager.openInstallPermissionSettings(this@MainComposeActivity)
+                    } else {
+                        OtaUpdateManager.promptInstallApk(this@MainComposeActivity, apkFile)
+                    }
+                }.onFailure { err ->
+                    Toast.makeText(this@MainComposeActivity, "Update download failed: ${err.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -277,6 +361,13 @@ class MainComposeActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        performAccessCheck()
+        pendingInstallApk?.let { apkFile ->
+            if (OtaUpdateManager.canInstallApk(this) && apkFile.exists()) {
+                pendingInstallApk = null
+                OtaUpdateManager.promptInstallApk(this, apkFile)
+            }
+        }
         if (isScreenOff && isAppLocked && !isAuthenticating) {
             promptAppLockAuthentication()
         }
@@ -402,29 +493,56 @@ fun MainAppShell(
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     bottomBar = {
-                        NavigationBar(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainer
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .navigationBarsPadding()
+                                .padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            MainTab.entries.forEach { tab ->
-                                val selected = selectedTab == tab
-                                NavigationBarItem(
-                                    selected = selected,
-                                    onClick = { selectedTab = tab },
-                                    icon = {
-                                        Icon(
-                                            imageVector = if (selected) tab.activeIcon else tab.inactiveIcon,
-                                            contentDescription = tab.title
+                            Surface(
+                                shape = RoundedCornerShape(32.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                tonalElevation = 6.dp,
+                                shadowElevation = 8.dp,
+                                border = null
+                            ) {
+                                NavigationBar(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(64.dp),
+                                    containerColor = Color.Transparent,
+                                    tonalElevation = 0.dp,
+                                    windowInsets = WindowInsets(0, 0, 0, 0)
+                                ) {
+                                    MainTab.entries.forEach { tab ->
+                                        val selected = selectedTab == tab
+                                        NavigationBarItem(
+                                            selected = selected,
+                                            onClick = { selectedTab = tab },
+                                            icon = {
+                                                Icon(
+                                                    imageVector = if (selected) tab.activeIcon else tab.inactiveIcon,
+                                                    contentDescription = tab.title
+                                                )
+                                            },
+                                            label = {
+                                                Text(
+                                                    text = tab.title,
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                                                )
+                                            },
+                                            colors = NavigationBarItemDefaults.colors(
+                                                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
                                         )
-                                    },
-                                    label = { Text(tab.title) },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                                        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                )
+                                    }
+                                }
                             }
                         }
                     }
@@ -437,12 +555,22 @@ fun MainAppShell(
                         AnimatedContent(
                             targetState = selectedTab,
                             transitionSpec = {
-                                (fadeIn(animationSpec = tween(240, easing = m3Decelerate)) +
-                                 scaleIn(initialScale = 0.96f, animationSpec = tween(240, easing = m3Decelerate))) togetherWith
-                                (fadeOut(animationSpec = tween(160, easing = m3Accelerate)) +
-                                 scaleOut(targetScale = 0.96f, animationSpec = tween(160, easing = m3Accelerate)))
+                                val direction = if (targetState.ordinal >= initialState.ordinal) 1 else -1
+                                val slideFactor = 0.22f
+                                (slideInHorizontally(
+                                    initialOffsetX = { (it * slideFactor * direction).toInt() },
+                                    animationSpec = tween(300, easing = m3Decelerate)
+                                ) + fadeIn(
+                                    animationSpec = tween(260, easing = m3Decelerate)
+                                )) togetherWith
+                                (slideOutHorizontally(
+                                    targetOffsetX = { (-it * slideFactor * direction).toInt() },
+                                    animationSpec = tween(240, easing = m3Accelerate)
+                                ) + fadeOut(
+                                    animationSpec = tween(200, easing = m3Accelerate)
+                                ))
                             },
-                            label = "tab_animation"
+                            label = "tab_slide_animation"
                         ) { currentTab ->
                             when (currentTab) {
                                 MainTab.DASHBOARD -> {
@@ -484,3 +612,4 @@ fun MainAppShell(
         }
     }
 }
+

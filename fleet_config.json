@@ -1,10 +1,10 @@
 {
   "min_version_code": 1,
-  "latest_version_name": "1.0.11",
+  "latest_version_name": null,
   "download_url": "https://lloyd-erp-sand.vercel.app/downloads/LloydAttendance-latest.apk",
   "banned_students": [],
   "banned_devices": [],
-  "broadcast_notice": "Lloyd Attendance v1.0.11 is now available with improved stability, sleek dark mode, and updated icon emblem.",
+  "broadcast_notice": null,
   "maintenance_mode": false,
   "maintenance_message": "Lloyd ERP service is currently undergoing routine maintenance."
 }
