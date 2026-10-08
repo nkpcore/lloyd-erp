@@ -508,4 +508,79 @@ public class ErpApiClient {
         Models.MonthlyAttendanceData monthly = getMonthlyAttendance();
         return calculateStatsFromMonthly(monthly);
     }
+
+    public Models.InternetResourceItem fetchInternetCredentials() throws Exception {
+        String token = ensureValidToken();
+        int verifiedId = prefs.getStudentId();
+        String verifiedAdmissionNo = prefs.getUsername();
+        if (verifiedAdmissionNo == null || verifiedAdmissionNo.trim().isEmpty()) {
+            Models.UserProfile profile = prefs.getUserProfile();
+            if (profile != null && profile.admission_no != null) {
+                verifiedAdmissionNo = profile.admission_no;
+            }
+        }
+
+        String searchQuery = (verifiedAdmissionNo != null && !verifiedAdmissionNo.trim().isEmpty()) 
+                ? verifiedAdmissionNo.trim() 
+                : (verifiedId > 0 ? String.valueOf(verifiedId) : "");
+
+        String url = BASE_URL + "/academic/internet-resources?page_size=20";
+        if (!searchQuery.isEmpty()) {
+            url += "&search=" + java.net.URLEncoder.encode(searchQuery, "UTF-8");
+        }
+
+        Request request = new Request.Builder()
+                .url(url)
+                .get()
+                .header("Authorization", "Bearer " + token)
+                .header("Accept", "application/json")
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (response.code() == 401) {
+                handleUnauthorized();
+                return fetchInternetCredentials();
+            }
+
+            if (!response.isSuccessful()) {
+                throw new ErpException("Server error (" + response.code() + ") loading internet credentials.");
+            }
+
+            String resStr = response.body() != null ? response.body().string() : "";
+
+            try {
+                Type listType = new TypeToken<Models.ApiResponse<List<Models.InternetResourceItem>>>() {}.getType();
+                Models.ApiResponse<List<Models.InternetResourceItem>> apiRes = gson.fromJson(resStr, listType);
+                if (apiRes != null && apiRes.data != null && !apiRes.data.isEmpty()) {
+                    for (Models.InternetResourceItem item : apiRes.data) {
+                        if (verifiedId <= 0 || item.studentId == null || item.studentId == verifiedId) {
+                            if (item.userId != null && !item.userId.isEmpty()) {
+                                return item;
+                            }
+                        }
+                    }
+                    return apiRes.data.get(0);
+                }
+            } catch (Exception ignored) {
+            }
+
+            try {
+                Type paginatedType = new TypeToken<Models.PaginatedApiResponse<List<Models.InternetResourceItem>>>() {}.getType();
+                Models.PaginatedApiResponse<List<Models.InternetResourceItem>> paginatedRes = gson.fromJson(resStr, paginatedType);
+                if (paginatedRes != null && paginatedRes.data != null && !paginatedRes.data.isEmpty()) {
+                    for (Models.InternetResourceItem item : paginatedRes.data) {
+                        if (verifiedId <= 0 || item.studentId == null || item.studentId == verifiedId) {
+                            if (item.userId != null && !item.userId.isEmpty()) {
+                                return item;
+                            }
+                        }
+                    }
+                    return paginatedRes.data.get(0);
+                }
+            } catch (Exception ignored) {
+            }
+
+            return null;
+        }
+    }
 }

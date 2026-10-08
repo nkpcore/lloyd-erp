@@ -332,4 +332,26 @@ public class Models {
             return stats;
         }
     }
+
+    public static class InternetResourceItem {
+        public Integer id;
+        @SerializedName("school_id")
+        public Integer schoolId;
+        @SerializedName("class_id")
+        public Integer classId;
+        @SerializedName("section_id")
+        public Integer sectionId;
+        @SerializedName("student_id")
+        public Integer studentId;
+        @SerializedName("user_id")
+        public String userId; // Campus Wi-Fi / Internet Login ID
+        public String password; // Campus Wi-Fi / Internet Password
+        public String phone;
+        @SerializedName("coordinator_name")
+        public String coordinatorName;
+        @SerializedName("id_proof")
+        public String idProof;
+        public Integer status; // 1 = Active, 0 = Inactive
+        public String remark;
+    }
 }

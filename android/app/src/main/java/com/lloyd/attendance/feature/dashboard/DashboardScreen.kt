@@ -21,11 +21,20 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SignalWifiBad
+import androidx.compose.material.icons.filled.SignalWifiStatusbarConnectedNoInternet4
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -35,12 +44,18 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Color
+import com.lloyd.attendance.campus.CampusConnectManager
+import com.lloyd.attendance.campus.CampusConnectionState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,6 +83,7 @@ fun DashboardScreen(
     viewModel: DashboardViewModel,
     onNavigateToSubjectDetail: (SubjectAttendance) -> Unit,
     onNavigateToOverallSimulation: (present: Int, total: Int) -> Unit,
+    onNavigateToCampusConnect: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -96,6 +112,9 @@ fun DashboardScreen(
                     }
                 },
                 actions = {
+                    // Smart Campus Connect Wi-Fi status indicator with M3 Expressive micro-interaction
+                    CampusWifiHeaderIndicator(onClick = onNavigateToCampusConnect)
+
                     IconButton(
                         onClick = {
                             val report = AttendanceReportExporter.generateTextReport(
@@ -392,6 +411,102 @@ fun DashboardScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Material 3 Expressive Header Indicator for Lloyd Campus Wi-Fi.
+ * Displays real-time pulse and connection state, navigating to CampusConnectScreen on tap.
+ */
+@Composable
+fun CampusWifiHeaderIndicator(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val manager = remember { CampusConnectManager.getInstance(context) }
+    val connectionState by manager.connectionState.collectAsState()
+
+    val icon = when (connectionState) {
+        is CampusConnectionState.Online -> Icons.Default.Wifi
+        is CampusConnectionState.CaptiveDetected -> Icons.Default.SignalWifiStatusbarConnectedNoInternet4
+        is CampusConnectionState.WifiConnected,
+        is CampusConnectionState.Authenticating,
+        is CampusConnectionState.WaitingValidation,
+        is CampusConnectionState.ConnectingWifi -> Icons.Default.Wifi
+        is CampusConnectionState.AuthFailedPermanent,
+        is CampusConnectionState.AuthFailedTransient -> Icons.Default.SignalWifiBad
+        is CampusConnectionState.Disconnected -> Icons.Default.WifiOff
+    }
+
+    val tint = when (connectionState) {
+        is CampusConnectionState.Online -> Color(0xFF2E7D32)
+        is CampusConnectionState.CaptiveDetected -> Color(0xFFED6C02)
+        is CampusConnectionState.WifiConnected,
+        is CampusConnectionState.Authenticating,
+        is CampusConnectionState.WaitingValidation,
+        is CampusConnectionState.ConnectingWifi -> Color(0xFF1976D2)
+        is CampusConnectionState.AuthFailedPermanent,
+        is CampusConnectionState.AuthFailedTransient -> Color(0xFFD32F2F)
+        is CampusConnectionState.Disconnected -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    val backgroundTint = when (connectionState) {
+        is CampusConnectionState.Online -> Color(0xFF2E7D32).copy(alpha = 0.12f)
+        is CampusConnectionState.CaptiveDetected -> Color(0xFFED6C02).copy(alpha = 0.15f)
+        is CampusConnectionState.WifiConnected,
+        is CampusConnectionState.Authenticating,
+        is CampusConnectionState.WaitingValidation,
+        is CampusConnectionState.ConnectingWifi -> Color(0xFF1976D2).copy(alpha = 0.15f)
+        is CampusConnectionState.AuthFailedPermanent,
+        is CampusConnectionState.AuthFailedTransient -> Color(0xFFD32F2F).copy(alpha = 0.15f)
+        is CampusConnectionState.Disconnected -> MaterialTheme.colorScheme.surfaceContainerHigh
+    }
+
+    val isPulsing = when (connectionState) {
+        is CampusConnectionState.WifiConnected,
+        is CampusConnectionState.CaptiveDetected,
+        is CampusConnectionState.Authenticating,
+        is CampusConnectionState.WaitingValidation,
+        is CampusConnectionState.ConnectingWifi -> true
+        else -> false
+    }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "wifi_pulse")
+    val alphaAnim by if (isPulsing) {
+        infiniteTransition.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = androidx.compose.animation.core.tween(800, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulse_alpha"
+        )
+    } else {
+        remember { mutableFloatStateOf(1f) }
+    }
+
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = backgroundTint,
+        tonalElevation = 2.dp,
+        modifier = modifier
+            .padding(end = 4.dp)
+            .size(38.dp)
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = "Campus Wi-Fi Status",
+                tint = tint.copy(alpha = alphaAnim),
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }

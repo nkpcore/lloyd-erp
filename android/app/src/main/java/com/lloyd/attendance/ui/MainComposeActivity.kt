@@ -86,6 +86,7 @@ import com.lloyd.attendance.feature.lock.AppLockScreen
 import com.lloyd.attendance.feature.logs.AttendanceLogsScreen
 import com.lloyd.attendance.feature.logs.AttendanceLogsViewModel
 import com.lloyd.attendance.feature.onboarding.WelcomeOnboardingSheet
+import com.lloyd.attendance.campus.ui.CampusConnectScreen
 import com.lloyd.attendance.feature.profile.ProfileScreen
 import com.lloyd.attendance.feature.simulation.SimulationScreen
 import com.lloyd.attendance.feature.simulation.SimulationViewModel
@@ -433,6 +434,7 @@ sealed interface ScreenDestination {
     data object Main : ScreenDestination
     data class SubjectDetail(val subject: SubjectAttendance) : ScreenDestination
     data object OverallSimulation : ScreenDestination
+    data object CampusConnect : ScreenDestination
 }
 
 @Composable
@@ -485,6 +487,12 @@ fun MainAppShell(
             is ScreenDestination.OverallSimulation -> {
                 SimulationScreen(
                     viewModel = simulationViewModel,
+                    onNavigateBack = { destination = ScreenDestination.Main }
+                )
+            }
+
+            is ScreenDestination.CampusConnect -> {
+                CampusConnectScreen(
                     onNavigateBack = { destination = ScreenDestination.Main }
                 )
             }
@@ -586,6 +594,9 @@ fun MainAppShell(
                                                 total = t
                                             )
                                             destination = ScreenDestination.OverallSimulation
+                                        },
+                                        onNavigateToCampusConnect = {
+                                            destination = ScreenDestination.CampusConnect
                                         }
                                     )
                                 }
@@ -601,7 +612,10 @@ fun MainAppShell(
                                         userProfile = prefs.userProfile,
                                         studentId = prefs.getStudentId(),
                                         stats = prefs.cachedStats,
-                                        onLogout = onLogout
+                                        onLogout = onLogout,
+                                        onNavigateToCampusConnect = {
+                                            destination = ScreenDestination.CampusConnect
+                                        }
                                     )
                                 }
                             }
