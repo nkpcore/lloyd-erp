@@ -16,9 +16,11 @@ class CampusSessionManager(
         private set
 
     fun startSession() {
-        sessionStartTime = System.currentTimeMillis()
-        isSessionActive = true
-        credentialStore.lastLoginTimestamp = sessionStartTime
+        if (!isSessionActive || sessionStartTime <= 0L) {
+            sessionStartTime = System.currentTimeMillis()
+            isSessionActive = true
+            credentialStore.lastLoginTimestamp = sessionStartTime
+        }
     }
 
     fun endSession() {

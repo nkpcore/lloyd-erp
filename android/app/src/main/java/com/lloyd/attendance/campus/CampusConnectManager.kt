@@ -47,11 +47,15 @@ class CampusConnectManager private constructor(private val context: Context) : C
     @Volatile
     private var activeNetwork: Network? = null
 
+    @Volatile
+    private var isUserDisconnected: Boolean = false
+
     init {
         networkMonitor.startMonitoring(this)
     }
 
     override fun onWifiAvailable(network: Network) {
+        isUserDisconnected = false
         activeNetwork = network
         val capabilities = networkMonitor.getNetworkCapabilities(network)
         if (capabilities != null) {
@@ -101,8 +105,9 @@ class CampusConnectManager private constructor(private val context: Context) : C
                     "Target: $portalUrl"
                 )
 
-                // Trigger headless direct HTTP authentication if auto-login is enabled
-                if (credentialStore.isAutoLoginEnabled &&
+                // Trigger headless direct HTTP authentication if auto-login is enabled and user hasn't explicitly disconnected
+                if (!isUserDisconnected &&
+                    credentialStore.isAutoLoginEnabled &&
                     credentialStore.hasCredentials() &&
                     recoveryController.canAttempt()
                 ) {
@@ -118,9 +123,11 @@ class CampusConnectManager private constructor(private val context: Context) : C
     }
 
     override fun onWifiLost(network: Network) {
-        if (activeNetwork == network) {
-            activeNetwork = null
+        // Prevent stale network loss event from clearing newly active network state
+        if (activeNetwork != null && activeNetwork != network) {
+            return
         }
+        activeNetwork = null
         sessionManager.endSession()
         recoveryController.resetForNewNetwork()
         _connectionState.value = CampusConnectionState.Disconnected
@@ -131,6 +138,7 @@ class CampusConnectManager private constructor(private val context: Context) : C
      * Executes the direct HTTP authentication flow with circuit breaker management.
      */
     fun performAuthentication(network: Network, portalUrl: String, isManual: Boolean = false) {
+        isUserDisconnected = false
         if (!recoveryController.canAttempt() && !isManual) {
             diagnosticsStore.record(
                 CampusConnectionEvent.Type.CIRCUIT_BREAKER_TRIGGERED,
@@ -352,6 +360,7 @@ class CampusConnectManager private constructor(private val context: Context) : C
      * User-triggered Disconnect action.
      */
     fun disconnect() {
+        isUserDisconnected = true
         sessionManager.endSession()
         _connectionState.value = CampusConnectionState.Disconnected
         _healthScore.value = CampusHealthScore.DISCONNECTED
