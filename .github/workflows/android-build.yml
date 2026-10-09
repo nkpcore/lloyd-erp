@@ -55,10 +55,7 @@ jobs:
             echo "${{ secrets.RELEASE_KEYSTORE_B64 }}" | base64 -d > "$HOME/.android/release.keystore"
             echo "RESTORED_KEYSTORE_PATH=$HOME/.android/release.keystore" >> $GITHUB_ENV
           else
-            keytool -genkeypair -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
-              -keystore ~/.android/debug.keystore -storepass android -keypass android \
-              -dname "CN=Android Debug,O=Android,C=US"
-            cp ~/.android/debug.keystore ~/.config/.android/debug.keystore || true
+            echo "Using committed repository release keystore android/app/release.jks"
           fi
 
       - name: Build Release APK

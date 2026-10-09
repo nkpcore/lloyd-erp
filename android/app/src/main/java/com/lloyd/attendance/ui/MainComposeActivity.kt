@@ -510,56 +510,40 @@ fun MainAppShell(
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     bottomBar = {
-                        Box(
+                        NavigationBar(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .navigationBarsPadding()
-                                .padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
-                            contentAlignment = Alignment.Center
+                                .navigationBarsPadding(),
+                            containerColor = Color.Transparent,
+                            tonalElevation = 0.dp,
+                            windowInsets = WindowInsets(0, 0, 0, 0)
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(32.dp),
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                tonalElevation = 6.dp,
-                                shadowElevation = 8.dp,
-                                border = null
-                            ) {
-                                NavigationBar(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(64.dp),
-                                    containerColor = Color.Transparent,
-                                    tonalElevation = 0.dp,
-                                    windowInsets = WindowInsets(0, 0, 0, 0)
-                                ) {
-                                    MainTab.entries.forEach { tab ->
-                                        val selected = selectedTab == tab
-                                        NavigationBarItem(
-                                            selected = selected,
-                                            onClick = { selectedTab = tab },
-                                            icon = {
-                                                Icon(
-                                                    imageVector = if (selected) tab.activeIcon else tab.inactiveIcon,
-                                                    contentDescription = tab.title
-                                                )
-                                            },
-                                            label = {
-                                                Text(
-                                                    text = tab.title,
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
-                                                )
-                                            },
-                                            colors = NavigationBarItemDefaults.colors(
-                                                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                            MainTab.entries.forEach { tab ->
+                                val selected = selectedTab == tab
+                                NavigationBarItem(
+                                    selected = selected,
+                                    onClick = { selectedTab = tab },
+                                    icon = {
+                                        Icon(
+                                            imageVector = if (selected) tab.activeIcon else tab.inactiveIcon,
+                                            contentDescription = tab.title
                                         )
-                                    }
-                                }
+                                    },
+                                    label = {
+                                        Text(
+                                            text = tab.title,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                                        )
+                                    },
+                                    colors = NavigationBarItemDefaults.colors(
+                                        indicatorColor = Color.Transparent,
+                                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
                             }
                         }
                     }

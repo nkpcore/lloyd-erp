@@ -66,6 +66,11 @@ android {
                 storePassword System.getenv("RELEASE_KEYSTORE_PASSWORD")
                 keyAlias System.getenv("RELEASE_KEY_ALIAS")
                 keyPassword System.getenv("RELEASE_KEY_PASSWORD")
+            } else if (file("release.jks").exists()) {
+                storeFile file("release.jks")
+                storePassword "lloyd123"
+                keyAlias "lloydrelease"
+                keyPassword "lloyd123"
             } else {
                 def userHome = System.getProperty("user.home")
                 def debugStore1 = file("${userHome}/.android/debug.keystore")
@@ -110,6 +115,8 @@ android {
                     initWith(signingConfigs.debug)
                 }
             }
+            v1SigningEnabled true
+            v2SigningEnabled true
         }
     }
 
