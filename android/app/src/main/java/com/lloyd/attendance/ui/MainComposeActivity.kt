@@ -9,6 +9,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
@@ -86,7 +87,6 @@ import com.lloyd.attendance.feature.lock.AppLockScreen
 import com.lloyd.attendance.feature.logs.AttendanceLogsScreen
 import com.lloyd.attendance.feature.logs.AttendanceLogsViewModel
 import com.lloyd.attendance.feature.onboarding.WelcomeOnboardingSheet
-import com.lloyd.attendance.campus.ui.CampusConnectScreen
 import com.lloyd.attendance.feature.profile.ProfileScreen
 import com.lloyd.attendance.feature.simulation.SimulationScreen
 import com.lloyd.attendance.feature.simulation.SimulationViewModel
@@ -260,7 +260,10 @@ class MainComposeActivity : FragmentActivity() {
             }
         }
 
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        )
         setContent {
             LloydTheme {
                 if (isAppLocked) {
@@ -443,7 +446,6 @@ sealed interface ScreenDestination {
     data object Main : ScreenDestination
     data class SubjectDetail(val subject: SubjectAttendance) : ScreenDestination
     data object OverallSimulation : ScreenDestination
-    data object CampusConnect : ScreenDestination
 }
 
 @Composable
@@ -500,15 +502,11 @@ fun MainAppShell(
                 )
             }
 
-            is ScreenDestination.CampusConnect -> {
-                CampusConnectScreen(
-                    onNavigateBack = { destination = ScreenDestination.Main }
-                )
-            }
-
             is ScreenDestination.Main -> {
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
+                    containerColor = MaterialTheme.colorScheme.background,
+                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
                     bottomBar = {
                         NavigationBar(
                             modifier = Modifier
@@ -551,7 +549,7 @@ fun MainAppShell(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(innerPadding)
+                            .padding(bottom = innerPadding.calculateBottomPadding())
                     ) {
                         AnimatedContent(
                             targetState = selectedTab,
@@ -587,9 +585,6 @@ fun MainAppShell(
                                                 total = t
                                             )
                                             destination = ScreenDestination.OverallSimulation
-                                        },
-                                        onNavigateToCampusConnect = {
-                                            destination = ScreenDestination.CampusConnect
                                         }
                                     )
                                 }
@@ -605,10 +600,7 @@ fun MainAppShell(
                                         userProfile = prefs.userProfile,
                                         studentId = prefs.getStudentId(),
                                         stats = prefs.cachedStats,
-                                        onLogout = onLogout,
-                                        onNavigateToCampusConnect = {
-                                            destination = ScreenDestination.CampusConnect
-                                        }
+                                        onLogout = onLogout
                                     )
                                 }
                             }

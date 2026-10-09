@@ -41,7 +41,7 @@ android {
             return "1.0.0"
         }
 
-        def appVersionCode = Integer.parseInt(project.findProperty('appVersionCode') ?: System.getenv('APP_VERSION_CODE') ?: getGitCommitCount().toString())
+        def appVersionCode = Integer.parseInt(project.findProperty('appVersionCode') ?: System.getenv('APP_VERSION_CODE') ?: (200 + getGitCommitCount()).toString())
         def appVersionName = project.findProperty('appVersionName') ?: System.getenv('APP_VERSION_NAME') ?: getGitVersionDesc()
 
         versionCode appVersionCode

@@ -120,7 +120,7 @@ module.exports = async function handler(req, res) {
         }
 
         // 2. Query check for update
-        const clientVersion = req.query.current_version || '';
+        const clientVersion = req.query.current_version || req.query.version || '';
         const cleanClient = cleanVersion(clientVersion);
 
         // Resolve latest version from: GitHub Release > Admin Config > Telemetry Record
