@@ -4,11 +4,12 @@
  */
 
 const db = require('./lib/db');
+const { verifyAdminAuth } = require('./lib/auth');
 
 function setCors(res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, x-admin-key, x-admin-password');
 }
 
 module.exports = async function handler(req, res) {
@@ -49,6 +50,11 @@ module.exports = async function handler(req, res) {
                 try { body = JSON.parse(body); } catch (_) {}
             }
             body = body || {};
+
+            if (!verifyAdminAuth(req, body)) {
+                res.status(401).json({ error: 'Unauthorized: Admin password required' });
+                return;
+            }
 
             const deviceId = req.query?.device_id || body.device_id;
             const purge = req.query?.purge === 'test' || body.purge === 'test';

@@ -82,6 +82,10 @@
                         <svg class="refresh-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
                         Refresh Data
                     </button>
+                    <button class="btn btn-secondary btn-lock" id="lockPortalBtn" title="Lock Admin Portal">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <span>Lock</span>
+                    </button>
                 </div>
             </header>
 
@@ -361,6 +365,55 @@
                 </div>
             </section>
         </main>
+    </div>
+
+    <!-- Admin Security Passkey Gate Overlay -->
+    <div class="admin-auth-overlay" id="adminAuthOverlay" style="display: none;">
+        <div class="auth-card" id="authCard">
+            <div class="auth-brand">
+                <div class="brand-emblem">
+                    <svg viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="256" height="256" rx="56" fill="#FFFFFF"/>
+                        <circle cx="158" cy="128" r="58" fill="#FF6B35"/>
+                        <circle cx="98" cy="128" r="52" fill="none" stroke="#111111" stroke-width="14"/>
+                    </svg>
+                </div>
+                <h2>Lloyd Admin Portal</h2>
+                <p>Authentication required to manage student fleet, OTA updates, and security governance.</p>
+            </div>
+            
+            <form id="adminAuthForm" class="auth-form">
+                <div class="auth-input-group">
+                    <label for="adminPassInput">Admin Passkey</label>
+                    <div class="password-wrapper">
+                        <input type="password" id="adminPassInput" placeholder="Enter admin password..." autocomplete="current-password" required>
+                        <button type="button" id="togglePassVisibility" class="btn-toggle-eye" title="Show or hide password">
+                            <span id="eyeIcon">👁️</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="auth-error-msg" id="authErrorMsg" style="display: none;">
+                    <span>⚠️ Incorrect passkey. Access denied.</span>
+                </div>
+
+                <div class="auth-options">
+                    <label class="remember-label">
+                        <input type="checkbox" id="rememberAdminPass" checked>
+                        <span>Stay signed in on this device</span>
+                    </label>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-unlock" id="unlockPortalBtn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+                    <span>Unlock Admin Portal</span>
+                </button>
+            </form>
+
+            <div class="auth-footer-note">
+                <span>Fleet Governance Console • Authorized Staff Only</span>
+            </div>
+        </div>
     </div>
 
     <!-- Floating Toast Notification Container -->

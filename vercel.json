@@ -1,6 +1,8 @@
 {
   "version": 2,
   "rewrites": [
+    { "source": "/auth", "destination": "/api/auth" },
+    { "source": "/api/auth", "destination": "/api/auth" },
     { "source": "/config", "destination": "/api/config" },
     { "source": "/api/config", "destination": "/api/config" },
     { "source": "/telemetry", "destination": "/api/telemetry" },
@@ -10,6 +12,7 @@
     { "source": "/ota", "destination": "/api/ota" },
     { "source": "/api/ota", "destination": "/api/ota" },
     { "source": "/ban", "destination": "/api/ban" },
+    { "source": "/api/ban", "destination": "/api/ban" },
     { "source": "/downloads/(.*)", "destination": "/web/downloads/$1" },
     { "source": "/", "destination": "/web/admin/index.html" },
     { "source": "/admin", "destination": "/web/admin/index.html" },

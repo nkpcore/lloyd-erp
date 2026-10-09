@@ -4,11 +4,12 @@
  */
 
 const db = require('./lib/db');
+const { verifyAdminAuth } = require('./lib/auth');
 
 function setCors(res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-admin-key, Accept');
 }
 
 let cachedGhRelease = null;
@@ -89,6 +90,11 @@ module.exports = async function handler(req, res) {
                 try { body = JSON.parse(body); } catch (_) {}
             }
             body = body || {};
+
+            if (!verifyAdminAuth(req, body)) {
+                res.status(401).json({ error: 'Unauthorized: Invalid admin password' });
+                return;
+            }
 
             const current = await db.getConfig();
             const updated = {

@@ -44,6 +44,7 @@ function isNewerVersion(remote, current) {
 }
 
 const db = require('./api/lib/db');
+const { verifyAdminAuth } = require('./api/lib/auth');
 
 // Read configuration from unified persistence layer
 async function getFleetConfig() {
@@ -87,7 +88,7 @@ const MIME_TYPES = {
 function setCorsHeaders(res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With, x-admin-key, x-admin-password');
 }
 
 function parseJsonBody(req) {
@@ -189,10 +190,41 @@ const server = http.createServer(async (req, res) => {
 
     const parsedUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
     const pathname = parsedUrl.pathname.replace(/\/+$/, '') || '/';
+    req.query = Object.fromEntries(parsedUrl.searchParams);
 
     console.log(`[${new Date().toISOString()}] ${req.method} ${pathname}`);
 
     // --- API ROUTES ---
+
+    // POST /auth or POST /api/auth (Admin Password Verification Gate)
+    if (req.method === 'POST' && (pathname === '/auth' || pathname === '/api/auth')) {
+        try {
+            const body = await parseJsonBody(req);
+            if (verifyAdminAuth(req, body)) {
+                const token = (process.env.ADMIN_PASSWORD || 'loyderp').trim();
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    authenticated: true,
+                    token: token,
+                    message: 'Admin access authorized'
+                }));
+                return;
+            }
+
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                authenticated: false,
+                error: 'Incorrect admin password'
+            }));
+            return;
+        } catch (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: err.message }));
+            return;
+        }
+    }
 
     // GET /config or GET /api/config
     if (req.method === 'GET' && (pathname === '/config' || pathname === '/api/config')) {
@@ -217,6 +249,12 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && (pathname === '/config' || pathname === '/api/config')) {
         try {
             const body = await parseJsonBody(req);
+            if (!verifyAdminAuth(req, body)) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Unauthorized: Invalid admin password' }));
+                return;
+            }
+
             const current = await getFleetConfig();
             const updated = {
                 ...current,
@@ -338,6 +376,12 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'DELETE' && (pathname === '/telemetry' || pathname === '/api/telemetry')) {
         try {
             const body = await parseJsonBody(req).catch(() => ({}));
+            if (!verifyAdminAuth(req, body)) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Unauthorized: Invalid admin password' }));
+                return;
+            }
+
             const queryDeviceId = parsedUrl.searchParams.get('device_id');
             const queryPurge = parsedUrl.searchParams.get('purge');
             const deviceId = queryDeviceId || body.device_id;
@@ -371,6 +415,12 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && (pathname === '/ban' || pathname === '/api/ban')) {
         try {
             const body = await parseJsonBody(req);
+            if (!verifyAdminAuth(req, body)) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Unauthorized: Invalid admin password' }));
+                return;
+            }
+
             const deviceId = (body.device_id || '').trim();
             const studentId = body.student_id ? parseInt(body.student_id) : null;
 

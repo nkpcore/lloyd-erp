@@ -42,7 +42,10 @@ class TelemetryDashboard {
         this.renderMaintenanceBanner();
         this.renderActiveBanChips();
         this.updateSortIcons();
-        this.loadTelemetry();
+        
+        if (this.checkAuthStatus()) {
+            this.loadTelemetry();
+        }
     }
 
     loadStoredConfig() {
@@ -116,6 +119,139 @@ class TelemetryDashboard {
         // Test telemetry cleanup & GitHub sync
         this.purgeTestsBtn = document.getElementById('purgeTestsBtn');
         this.fetchGhBtn = document.getElementById('fetchGhBtn');
+
+        // Admin Security Passkey Gate Elements
+        this.adminAuthOverlay = document.getElementById('adminAuthOverlay');
+        this.authCard = document.getElementById('authCard');
+        this.adminAuthForm = document.getElementById('adminAuthForm');
+        this.adminPassInput = document.getElementById('adminPassInput');
+        this.togglePassVisibility = document.getElementById('togglePassVisibility');
+        this.eyeIcon = document.getElementById('eyeIcon');
+        this.authErrorMsg = document.getElementById('authErrorMsg');
+        this.rememberAdminPass = document.getElementById('rememberAdminPass');
+        this.unlockPortalBtn = document.getElementById('unlockPortalBtn');
+        this.lockPortalBtn = document.getElementById('lockPortalBtn');
+    }
+
+    getStoredPass() {
+        return sessionStorage.getItem('lloyd_admin_pass') || localStorage.getItem('lloyd_admin_pass') || '';
+    }
+
+    setStoredPass(pass, remember = true) {
+        sessionStorage.setItem('lloyd_admin_pass', pass);
+        if (remember) {
+            localStorage.setItem('lloyd_admin_pass', pass);
+        } else {
+            localStorage.removeItem('lloyd_admin_pass');
+        }
+    }
+
+    clearStoredPass() {
+        sessionStorage.removeItem('lloyd_admin_pass');
+        localStorage.removeItem('lloyd_admin_pass');
+    }
+
+    getAuthHeaders() {
+        const pass = this.getStoredPass();
+        return {
+            'Content-Type': 'application/json',
+            'x-admin-key': pass,
+            'Authorization': `Bearer ${pass}`
+        };
+    }
+
+    checkAuthStatus() {
+        const pass = this.getStoredPass();
+        if (pass) {
+            this.hideAuthOverlay();
+            return true;
+        } else {
+            this.showAuthOverlay();
+            return false;
+        }
+    }
+
+    showAuthOverlay() {
+        if (!this.adminAuthOverlay) return;
+        this.adminAuthOverlay.style.display = 'flex';
+        if (this.authErrorMsg) this.authErrorMsg.style.display = 'none';
+        if (this.adminPassInput) {
+            this.adminPassInput.value = '';
+            setTimeout(() => this.adminPassInput.focus(), 150);
+        }
+    }
+
+    hideAuthOverlay() {
+        if (!this.adminAuthOverlay) return;
+        this.adminAuthOverlay.style.display = 'none';
+        if (this.authErrorMsg) this.authErrorMsg.style.display = 'none';
+    }
+
+    async handleAuthSubmit() {
+        if (!this.adminPassInput) return;
+        const pass = (this.adminPassInput.value || '').trim();
+        if (!pass) return;
+
+        if (this.unlockPortalBtn) {
+            this.unlockPortalBtn.disabled = true;
+            this.unlockPortalBtn.innerHTML = '<span>Verifying passkey...</span>';
+        }
+
+        try {
+            const res = await fetch(this.getApiUrl('/auth'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: pass })
+            });
+
+            if (res.ok) {
+                const remember = this.rememberAdminPass ? this.rememberAdminPass.checked : true;
+                this.setStoredPass(pass, remember);
+                this.hideAuthOverlay();
+                this.showToast('Admin access verified. Welcome!', 'success');
+                this.loadTelemetry();
+            } else {
+                this.showAuthError();
+            }
+        } catch (err) {
+            // Local fallback check if server is offline or unreachable
+            if (pass === 'loyderp') {
+                const remember = this.rememberAdminPass ? this.rememberAdminPass.checked : true;
+                this.setStoredPass(pass, remember);
+                this.hideAuthOverlay();
+                this.showToast('Admin access verified (offline)', 'success');
+                this.loadTelemetry();
+            } else {
+                this.showAuthError();
+            }
+        } finally {
+            if (this.unlockPortalBtn) {
+                this.unlockPortalBtn.disabled = false;
+                this.unlockPortalBtn.innerHTML = `
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+                    <span>Unlock Admin Portal</span>
+                `;
+            }
+        }
+    }
+
+    showAuthError() {
+        if (this.authErrorMsg) this.authErrorMsg.style.display = 'block';
+        if (this.authCard) {
+            this.authCard.classList.remove('shake');
+            void this.authCard.offsetWidth;
+            this.authCard.classList.add('shake');
+        }
+        if (this.adminPassInput) {
+            this.adminPassInput.select();
+            this.adminPassInput.focus();
+        }
+    }
+
+    lockPortal() {
+        this.clearStoredPass();
+        this.showAuthOverlay();
+        this.showToast('Admin portal locked', 'info');
     }
 
     initGovernanceElements() {
@@ -309,9 +445,14 @@ class TelemetryDashboard {
             try {
                 const res = await fetch(this.getApiUrl('/config'), {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: this.getAuthHeaders(),
                     body: JSON.stringify(this.fleetConfig)
                 });
+                if (res.status === 401) {
+                    this.showToast('Unauthorized: Please unlock admin portal with passkey.', 'error');
+                    this.lockPortal();
+                    return;
+                }
                 if (res.ok) {
                     this.showToast('Config saved and deployed to fleet!', 'success');
                 } else {
@@ -346,11 +487,16 @@ class TelemetryDashboard {
         this.renderMaintenanceBanner();
 
         try {
-            await fetch(this.getApiUrl('/config'), {
+            const res = await fetch(this.getApiUrl('/config'), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: this.getAuthHeaders(),
                 body: JSON.stringify({ maintenance_mode: false })
             });
+            if (res.status === 401) {
+                this.showToast('Unauthorized: Please unlock admin portal.', 'error');
+                this.lockPortal();
+                return;
+            }
             this.showToast('Global maintenance mode deactivated! All students restored.', 'success');
         } catch (e) {
             this.showToast('Deactivated locally', 'info');
@@ -370,9 +516,14 @@ class TelemetryDashboard {
         try {
             const res = await fetch(this.getApiUrl('/config'), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: this.getAuthHeaders(),
                 body: JSON.stringify({ broadcast_notice: text || null })
             });
+            if (res.status === 401) {
+                this.showToast('Unauthorized: Please unlock admin portal.', 'error');
+                this.lockPortal();
+                return;
+            }
             if (res.ok) {
                 this.showToast(text ? 'Broadcast notice pushed to student dashboards!' : 'Broadcast notice cleared.', 'success');
             } else {
@@ -441,9 +592,14 @@ class TelemetryDashboard {
         try {
             const res = await fetch(this.getApiUrl('/ban'), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: this.getAuthHeaders(),
                 body: JSON.stringify({ device_id: id, action })
             });
+            if (res.status === 401) {
+                this.showToast('Unauthorized: Please unlock admin portal.', 'error');
+                this.lockPortal();
+                return;
+            }
             if (res.ok) {
                 const data = await res.json();
                 if (Array.isArray(data.banned_devices)) {
@@ -491,9 +647,14 @@ class TelemetryDashboard {
         try {
             const res = await fetch(this.getApiUrl('/ban'), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: this.getAuthHeaders(),
                 body: JSON.stringify({ student_id: id, action })
             });
+            if (res.status === 401) {
+                this.showToast('Unauthorized: Please unlock admin portal.', 'error');
+                this.lockPortal();
+                return;
+            }
             if (res.ok) {
                 const data = await res.json();
                 if (Array.isArray(data.banned_students)) {
@@ -652,8 +813,14 @@ class TelemetryDashboard {
         try {
             const res = await fetch(this.getApiUrl(`/telemetry?device_id=${encodeURIComponent(deviceId)}`), {
                 method: 'DELETE',
+                headers: this.getAuthHeaders(),
                 signal: AbortSignal.timeout(5000)
             });
+            if (res.status === 401) {
+                this.showToast('Unauthorized: Please unlock admin portal.', 'error');
+                this.lockPortal();
+                return;
+            }
             if (res.ok) {
                 this.showToast(`Removed device record`, 'success');
             } else {
@@ -675,8 +842,14 @@ class TelemetryDashboard {
         try {
             const res = await fetch(this.getApiUrl('/telemetry?purge=test'), {
                 method: 'DELETE',
+                headers: this.getAuthHeaders(),
                 signal: AbortSignal.timeout(5000)
             });
+            if (res.status === 401) {
+                this.showToast('Unauthorized: Please unlock admin portal.', 'error');
+                this.lockPortal();
+                return;
+            }
             if (res.ok) {
                 const data = await res.json();
                 this.showToast(`Purged ${data.purged_count || 0} test records`, 'success');
@@ -715,6 +888,27 @@ class TelemetryDashboard {
     }
 
     bindEvents() {
+        if (this.lockPortalBtn) {
+            this.lockPortalBtn.addEventListener('click', () => this.lockPortal());
+        }
+
+        if (this.adminAuthForm) {
+            this.adminAuthForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleAuthSubmit();
+            });
+        }
+
+        if (this.togglePassVisibility && this.adminPassInput) {
+            this.togglePassVisibility.addEventListener('click', () => {
+                const isPassword = this.adminPassInput.type === 'password';
+                this.adminPassInput.type = isPassword ? 'text' : 'password';
+                if (this.eyeIcon) {
+                    this.eyeIcon.textContent = isPassword ? '🙈' : '👁️';
+                }
+            });
+        }
+
         if (this.switchServerBtn) {
             this.switchServerBtn.addEventListener('click', () => this.switchServer());
         }
