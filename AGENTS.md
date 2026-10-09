@@ -34,3 +34,25 @@
    - Mathematical attendance calculation rules ($75\%$, $80\%$, $85\%$, $90\%$) are pure Kotlin functions, unit-tested with boundary cases ($0/0 \to \text{NoData}$).
 4. **Verification Gate**:
    - Run unit tests (`./gradlew testDebugUnitTest`) before committing any task. No speculative completions.
+
+---
+
+## 3. 🚨 Pre-Push & OTA Release Integrity Gate (MANDATORY CROSS-CHECK)
+
+Before ANY `git push`, release deployment, or PR merge, you MUST perform this strict end-to-end cross-check:
+
+1. **Tag Alignment**:
+   - Always run `git fetch --tags` to ensure local tags match remote tags.
+   - Verify local `versionName` matches the latest release tag or targeted increment.
+2. **Zero Stale APK Serving**:
+   - Never serve or redirect to outdated static local/Vercel files when a newer GitHub Release asset exists.
+   - Dynamic endpoints (`/api/ota`, `/api/config`) must resolve and redirect directly to the live GitHub Release asset matching the version.
+3. **No Infinite Update Loops**:
+   - The APK delivered by the download URL must contain the exact `versionName` advertised as `latest_version`.
+   - Never repeatedly prompt or nag the user with modal update dialogs in `onResume()`.
+   - Honor user dismissals: save `lastDismissedUpdateVersion` and suppress non-mandatory update dialogs once dismissed by the user.
+   - Only block with non-dismissible lockout screens when the update is mandatory (`currentVersionCode < minVersionCode`).
+4. **Build & Release Cross-Check**:
+   - Cleanly verify `./gradlew testDebugUnitTest` passes 100%.
+   - Verify `./gradlew assembleRelease` builds without warnings or errors.
+   - Inspect `git diff` for accidental regressions, mock data, or hardcoded fallbacks before finishing.

@@ -93,9 +93,7 @@ public class AttendanceSyncWorker extends Worker {
             AttendanceWidgetProvider.updateAllWidgets(context, freshStats, false, null);
 
             // 4. Check if faculty has marked any new attendance records using reconciled logs
-            if (prefs.isNotificationsEnabled()) {
-                checkForNewAttendanceMarks(context, prefs, snapshot.getRecords(), freshStats);
-            }
+            checkForNewAttendanceMarks(context, prefs, snapshot.getRecords(), freshStats, prefs.isNotificationsEnabled());
 
             return Result.success();
         } catch (Exception e) {
@@ -104,14 +102,16 @@ public class AttendanceSyncWorker extends Worker {
     }
 
     /**
-     * Inspects attendance logs and only notifies when a new Present or Absent record has been added.
+     * Inspects attendance logs and notifies when a new Present or Absent record has been added.
      * Prevents false alerts on first install/login via bootstrap initialization.
+     * Always tracks seen IDs so re-enabling notifications later does not cause a burst.
      */
     private void checkForNewAttendanceMarks(
             Context context,
             AppPreferences prefs,
             List<Models.StudentAttendanceItem> logs,
-            Models.CalculatedStats freshStats
+            Models.CalculatedStats freshStats,
+            boolean notifyUser
     ) {
         try {
             if (logs == null || logs.isEmpty()) {
@@ -157,15 +157,17 @@ public class AttendanceSyncWorker extends Worker {
             double currentOverallPct = freshStats != null ? freshStats.overallPercentage : 0.0;
 
             for (com.lloyd.attendance.core.notification.AttendanceMarkEvent.Marked newMark : newlyMarkedItems) {
-                NotificationHelper.showAttendanceMarkedNotification(
-                        context,
-                        newMark.getAttendanceId(),
-                        newMark.getSubjectName(),
-                        newMark.getFacultyName(),
-                        newMark.getLectureDetails(),
-                        newMark.isPresent(),
-                        currentOverallPct
-                );
+                if (notifyUser) {
+                    NotificationHelper.showAttendanceMarkedNotification(
+                            context,
+                            newMark.getAttendanceId(),
+                            newMark.getSubjectName(),
+                            newMark.getFacultyName(),
+                            newMark.getLectureDetails(),
+                            newMark.isPresent(),
+                            currentOverallPct
+                    );
+                }
 
                 newlySeenIds.add(newMark.getAttendanceId());
             }

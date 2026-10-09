@@ -37,7 +37,7 @@ data class AttendanceReconciliation(
             ledgerAbsent: Int
         ): AttendanceReconciliation {
             val ledgerTotal = ledgerPresent + ledgerAbsent
-            val discrepancy = (aggregateTotal - ledgerTotal).coerceAtLeast(0)
+            val discrepancy = kotlin.math.abs(aggregateTotal - ledgerTotal)
             val isReconciled = discrepancy == 0 && (aggregatePresent == ledgerPresent)
 
             val explanation = if (isReconciled) {

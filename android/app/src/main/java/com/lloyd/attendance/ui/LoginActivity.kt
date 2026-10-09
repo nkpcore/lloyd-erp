@@ -72,8 +72,11 @@ class LoginActivity : FragmentActivity() {
                 )
                 otaResult.onSuccess { info ->
                     if (info.hasUpdate && !info.downloadUrl.isNullOrBlank()) {
-                        withContext(Dispatchers.Main) {
-                            pendingUpdateInfo = info
+                        val lastDismissed = prefs.lastDismissedUpdateVersion
+                        if (info.latestVersion != lastDismissed) {
+                            withContext(Dispatchers.Main) {
+                                pendingUpdateInfo = info
+                            }
                         }
                     }
                 }
@@ -105,6 +108,7 @@ class LoginActivity : FragmentActivity() {
                             performDownloadAndInstall(updateInfo)
                         },
                         onDismiss = {
+                            prefs.lastDismissedUpdateVersion = updateInfo.latestVersion
                             pendingUpdateInfo = null
                         }
                     )

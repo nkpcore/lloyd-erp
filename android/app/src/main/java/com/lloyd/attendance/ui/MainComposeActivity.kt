@@ -147,21 +147,6 @@ class MainComposeActivity : FragmentActivity() {
             }
 
             try {
-                val otaResult = OtaUpdateManager.checkForUpdates(
-                    currentVersion = BuildConfig.VERSION_NAME,
-                    fleetEndpoint = prefs.telemetryEndpoint
-                )
-                otaResult.onSuccess { info ->
-                    if (info.hasUpdate && !info.downloadUrl.isNullOrBlank()) {
-                        withContext(Dispatchers.Main) {
-                            pendingUpdateInfo = info
-                        }
-                    }
-                }
-            } catch (ignored: Exception) {
-            }
-
-            try {
                 TelemetryManager.sendTelemetry(
                     context = applicationContext,
                     endpointUrl = prefs.telemetryEndpoint,
@@ -186,6 +171,28 @@ class MainComposeActivity : FragmentActivity() {
                     } catch (ignored: Exception) {
                     }
                 }
+            }
+        }
+    }
+
+    private fun checkForAppUpdate() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val otaResult = OtaUpdateManager.checkForUpdates(
+                    currentVersion = BuildConfig.VERSION_NAME,
+                    fleetEndpoint = prefs.telemetryEndpoint
+                )
+                otaResult.onSuccess { info ->
+                    if (info.hasUpdate && !info.downloadUrl.isNullOrBlank()) {
+                        val lastDismissed = prefs.lastDismissedUpdateVersion
+                        if (info.latestVersion != lastDismissed) {
+                            withContext(Dispatchers.Main) {
+                                pendingUpdateInfo = info
+                            }
+                        }
+                    }
+                }
+            } catch (ignored: Exception) {
             }
         }
     }
@@ -241,6 +248,7 @@ class MainComposeActivity : FragmentActivity() {
         registerReceiver(screenOffReceiver, screenFilter)
 
         performAccessCheck()
+        checkForAppUpdate()
 
         // Wire auto-logout on session expiration
         val repository = com.lloyd.attendance.core.data.AttendanceRepository.getInstance(applicationContext)
@@ -322,6 +330,7 @@ class MainComposeActivity : FragmentActivity() {
                                 performDownloadAndInstall(updateToPrompt)
                             },
                             onDismiss = {
+                                prefs.lastDismissedUpdateVersion = updateToPrompt.latestVersion
                                 pendingUpdateInfo = null
                             }
                         )

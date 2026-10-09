@@ -108,9 +108,16 @@ class AttendanceRepository(
 
                 // 2. Transactional Fetch: Class detailed logs
                 val studentId = if (monthlyData.studentId > 0) monthlyData.studentId else prefs.studentId
+                var logsFetchSucceeded = false
                 val freshLogs: List<Models.StudentAttendanceItem> = if (studentId > 0) {
                     try {
-                        apiClient.getStudentAttendanceLogs(studentId) ?: emptyList()
+                        val fetched = apiClient.getStudentAttendanceLogs(studentId)
+                        if (fetched != null) {
+                            logsFetchSucceeded = true
+                            fetched
+                        } else {
+                            emptyList()
+                        }
                     } catch (e: Exception) {
                         emptyList()
                     }
@@ -124,9 +131,18 @@ class AttendanceRepository(
                 }
                 apiClient.calculateStatsFromMonthly(monthlyData)
 
-                // 4. Derive reconciled models
-                val subjects = if (freshLogs.isNotEmpty()) {
-                    AttendanceLogsProcessor.reconcileSubjectAttendance(freshLogs)
+                // 4. Derive reconciled models, keeping last good cached records if log fetch failed
+                val currentRecords = _snapshot.value.records
+                val effectiveLogs = if (logsFetchSucceeded) {
+                    freshLogs
+                } else if (currentRecords.isNotEmpty()) {
+                    currentRecords
+                } else {
+                    freshLogs
+                }
+
+                val subjects = if (effectiveLogs.isNotEmpty()) {
+                    AttendanceLogsProcessor.reconcileSubjectAttendance(effectiveLogs)
                 } else {
                     parseSubjectsFromMonthly(prefs.monthlyData)
                 }
@@ -147,8 +163,8 @@ class AttendanceRepository(
                     lastUpdatedMillis = nowMillis
                 )
 
-                val ledgerPresent = freshLogs.count { it.isPresent }
-                val ledgerAbsent = freshLogs.size - ledgerPresent
+                val ledgerPresent = effectiveLogs.count { it.isPresent }
+                val ledgerAbsent = effectiveLogs.size - ledgerPresent
                 val reconciliation = AttendanceReconciliation.compute(
                     aggregatePresent = totalP,
                     aggregateTotal = totalC,
@@ -156,12 +172,18 @@ class AttendanceRepository(
                     ledgerAbsent = ledgerAbsent
                 )
 
+                val derivedState = if (!logsFetchSucceeded || (totalC > 0 && effectiveLogs.isEmpty())) {
+                    DataSourceState.PARTIAL
+                } else {
+                    DataSourceState.FRESH
+                }
+
                 val freshSnapshot = AttendanceSnapshot(
                     overall = overall,
-                    records = freshLogs,
+                    records = effectiveLogs,
                     reconciliation = reconciliation,
                     lastUpdatedMillis = nowMillis,
-                    sourceState = DataSourceState.FRESH,
+                    sourceState = derivedState,
                     error = null
                 )
 

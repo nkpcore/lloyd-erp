@@ -6,7 +6,7 @@
     <title>Lloyd ERP — Student Fleet & Telemetry Admin</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -36,6 +36,10 @@
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                     <span>Student Fleet</span>
                 </a>
+                <a href="#governance" class="nav-item">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="11" r="3"/></svg>
+                    <span>Governance & Bans</span>
+                </a>
                 <a href="#releases" class="nav-item">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/><polyline points="16 16 12 12 8 16"/></svg>
                     <span>OTA Releases</span>
@@ -51,29 +55,49 @@
         </aside>
 
         <!-- Main Content Area -->
-        <main class="main-content">
+        <main class="main-content" id="overview">
             <header class="top-nav">
                 <div class="page-title">
                     <h2>Student Fleet Telemetry</h2>
-                    <p>Live active client distribution, version adoption, and device insights</p>
+                    <p>Live active client distribution, version adoption, and dynamic device governance</p>
                 </div>
                 <div class="top-actions">
-                    <div class="sync-indicator">
-                        <span class="live-dot"></span>
-                        <span id="syncStatus">Live Telemetry Active</span>
+                    <div class="sync-indicator" id="syncIndicator">
+                        <span class="live-dot" id="liveDot"></span>
+                        <span id="syncStatus">Connecting...</span>
                     </div>
-                    <button class="btn btn-secondary" id="configBtn">
+                    <button class="btn btn-secondary" id="switchServerBtn" title="Switch between Local (localhost:8080) and Cloud (Vercel) server">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                        <span id="serverLabel">Server: Auto</span>
+                    </button>
+                    <button class="btn btn-secondary" id="pingBtn" title="Dispatch test telemetry heartbeat to verify pipeline">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                        Test Ping
+                    </button>
+                    <button class="btn btn-secondary" id="configBtn" title="Manually specify custom API URL">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                        API Endpoint
+                        API Server
                     </button>
                     <button class="btn btn-secondary" id="refreshBtn">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                        <svg class="refresh-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
                         Refresh Data
                     </button>
                 </div>
             </header>
 
-            <!-- KPI Metric Cards -->
+            <!-- Global Maintenance Mode Live Status Banner -->
+            <div class="maintenance-alert-banner" id="maintenanceAlertBanner" style="display: none;">
+                <div class="maint-banner-content">
+                    <span class="maint-banner-icon">⚠️</span>
+                    <div class="maint-banner-text">
+                        <strong>GLOBAL MAINTENANCE LOCKOUT IS ACTIVE</strong>
+                        <span>All student apps are currently blocked. Lockdown notice: <q id="maintBannerMsg">Maintenance active</q></span>
+                    </div>
+                </div>
+                <button class="btn btn-sm btn-action-success" id="deactivateMaintBtn">Deactivate Maintenance Mode</button>
+            </div>
+
+            <!-- KPI Metric Cards Grid -->
             <section class="kpi-grid">
                 <div class="kpi-card">
                     <div class="kpi-label">TOTAL REGISTERED STUDENTS</div>
@@ -95,10 +119,15 @@
                     <div class="kpi-value" id="osDominance">—</div>
                     <div class="kpi-subtext">Modern runtime compatibility</div>
                 </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">ACCESS RESTRICTIONS</div>
+                    <div class="kpi-value highlight-coral" id="restrictedCount">0</div>
+                    <div class="kpi-subtext" id="restrictedSub">Revoked devices & accounts</div>
+                </div>
             </section>
 
             <!-- Charts & Analytics Section -->
-            <section class="analytics-row">
+            <section class="analytics-row" id="releases">
                 <div class="card chart-card">
                     <div class="card-header">
                         <h3>App Version Adoption Distribution</h3>
@@ -112,12 +141,12 @@
                 <div class="card ota-card">
                     <div class="card-header">
                         <h3>In-App OTA Release Status</h3>
-                        <span class="badge badge-success">GitHub OTA Synced</span>
+                        <span class="badge badge-success">Live GitHub OTA Synced</span>
                     </div>
                     <div class="ota-details">
                         <div class="ota-item">
                             <span class="label">Repository:</span>
-                            <span class="val"><a href="https://github.com/nkpcore/lloyd-erp" target="_blank">nkpcore/lloyd-erp</a></span>
+                            <span class="val"><a href="https://github.com/nkpcore/lloyd-erp" target="_blank" rel="noopener">nkpcore/lloyd-erp</a></span>
                         </div>
                         <div class="ota-item">
                             <span class="label">Target SDK:</span>
@@ -136,7 +165,7 @@
             </section>
 
             <!-- Master Fleet Governance & Deprecation Control Panel -->
-            <section class="card governance-card" id="governanceSection">
+            <section class="card governance-card" id="governance">
                 <div class="card-header">
                     <div class="governance-title">
                         <div class="governance-icon">
@@ -163,22 +192,82 @@
                     </div>
                 </div>
 
+                <!-- Instant Fleet Broadcast Announcement Tool -->
+                <div class="broadcast-banner-tool">
+                    <div class="broadcast-tool-icon">📢</div>
+                    <div class="broadcast-tool-body">
+                        <div class="broadcast-tool-text">
+                            <strong>Instant Dashboard Broadcast:</strong>
+                            <span>Push announcement banner instantly to all student Compose home screens:</span>
+                        </div>
+                        <div class="broadcast-inputs">
+                            <input type="text" id="quickBroadcastInput" placeholder="Type notice to push (e.g. ERP maintenance scheduled for Sunday 2 AM)...">
+                            <button class="btn btn-primary" id="quickBroadcastBtn">📢 Push Notice</button>
+                            <button class="btn btn-secondary" id="clearBroadcastBtn" title="Clear current broadcast notice">Clear Notice</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Direct Restriction Quick Tool -->
+                <div class="quick-ban-banner">
+                    <div class="quick-ban-text">
+                        <strong>⚡ Quick Manual Restriction:</strong>
+                        <span>Instantly revoke or restore access for any device or student account without waiting:</span>
+                    </div>
+                    <div class="quick-ban-inputs">
+                        <select id="quickBanType" class="select-filter">
+                            <option value="DEVICE">Device UUID</option>
+                            <option value="STUDENT">Student ID</option>
+                        </select>
+                        <input type="text" id="quickBanInput" placeholder="Enter ID or UUID...">
+                        <button class="btn btn-action-danger" id="quickBanBtn">⛔ Ban / Revoke</button>
+                        <button class="btn btn-action-success" id="quickUnbanBtn">🟢 Restore / Unban</button>
+                    </div>
+                </div>
+
+                <!-- Active Bans Visual Manager (Interactive Chips) -->
+                <div class="active-bans-card">
+                    <div class="bans-grid">
+                        <div class="bans-column">
+                            <div class="bans-column-header">
+                                <h4>Revoked Devices (<span id="bannedDevCount">0</span>)</h4>
+                                <small>Hardware installations blocked by UUID</small>
+                            </div>
+                            <div class="chips-container" id="bannedDevChips">
+                                <span class="no-chips">No devices currently revoked.</span>
+                            </div>
+                        </div>
+                        <div class="bans-column">
+                            <div class="bans-column-header">
+                                <h4>Banned Student Accounts (<span id="bannedStudentCount">0</span>)</h4>
+                                <small>Accounts blocked from logging in across all devices</small>
+                            </div>
+                            <div class="chips-container" id="bannedStudentChips">
+                                <span class="no-chips">No student accounts currently banned.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="governance-grid">
                     <div class="gov-field">
                         <label for="cfgMinVersion">Minimum Allowed Version Code</label>
-                        <input type="number" id="cfgMinVersion" min="1" placeholder="Live minimum version code">
+                        <input type="number" id="cfgMinVersion" min="1" placeholder="e.g. 1">
                         <small>Older app versions will be blocked and directed to update</small>
                     </div>
 
                     <div class="gov-field">
-                        <label for="cfgLatestVersion">Latest Release Version (OTA Target)</label>
-                        <input type="text" id="cfgLatestVersion" placeholder="e.g. 1.0.11">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <label for="cfgLatestVersion" style="margin-bottom:0;">Latest Release Version (OTA Target)</label>
+                            <button class="btn-text-action" id="fetchGhBtn" title="Fetch latest release tag from GitHub">🔄 Sync GitHub</button>
+                        </div>
+                        <input type="text" id="cfgLatestVersion" placeholder="e.g. 1.0.15">
                         <small>Target release version resolved during in-app OTA updates</small>
                     </div>
 
-                    <div class="gov-field">
-                        <label for="cfgDownloadUrl">OTA Update Download URL</label>
-                        <input type="text" id="cfgDownloadUrl" placeholder="Direct APK download URL">
+                    <div class="gov-field gov-field-full">
+                        <label for="cfgDownloadUrl">OTA Update Download URL (Optional Fallback)</label>
+                        <input type="text" id="cfgDownloadUrl" placeholder="Direct APK download URL (leave empty to use live GitHub release asset)">
                         <small>Direct APK or GitHub release download link</small>
                     </div>
 
@@ -194,17 +283,29 @@
                         <small>Device-targeted revocation: only blocks this specific device installation; student is not blocked across other devices</small>
                     </div>
 
-                    <div class="gov-field-row">
+                    <div class="gov-field gov-field-full">
+                        <label for="cfgBannedStudents">Revoked Student IDs (Account-Level Banlist)</label>
+                        <input type="text" id="cfgBannedStudents" value="" placeholder="Comma-separated Student IDs, e.g. 10245, 10290">
+                        <small>Account-level revocation: blocks the student account across all devices</small>
+                    </div>
+
+                    <div class="gov-field gov-field-full">
+                        <label for="cfgMaintenanceMessage">Custom Maintenance Lockdown Notice</label>
+                        <input type="text" id="cfgMaintenanceMessage" placeholder="e.g. Lloyd ERP service is currently undergoing routine maintenance.">
+                        <small>Displayed on full-screen lockout to all students when maintenance mode is active</small>
+                    </div>
+
+                    <div class="gov-field-row gov-field-full">
                         <label class="toggle-label">
                             <input type="checkbox" id="cfgMaintenanceMode">
-                            <span>Enable Global Maintenance Mode (Block all students)</span>
+                            <span>Enable Global Maintenance Mode (Block all students with lockout screen)</span>
                         </label>
                     </div>
                 </div>
             </section>
 
             <!-- Live Student Fleet Table -->
-            <section class="card table-card" id="usersSection">
+            <section class="card table-card" id="users">
                 <div class="table-header">
                     <div class="table-title">
                         <h3>Active Student Installations</h3>
@@ -219,11 +320,21 @@
                             <option value="ALL">All Statuses</option>
                             <option value="ACTIVE">Active (Last 24h)</option>
                             <option value="IDLE">Idle (>24h)</option>
-                            <option value="REVOKED">Revoked Only</option>
+                            <option value="REVOKED_DEVICE">Revoked Devices</option>
+                            <option value="BANNED_STUDENT">Banned Accounts</option>
+                            <option value="OUTDATED">Outdated Version</option>
                         </select>
                         <select id="versionFilter" class="select-filter">
                             <option value="ALL">All Versions</option>
                         </select>
+                        <button class="btn btn-secondary" id="exportCsvBtn" title="Export current telemetry to CSV">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Export CSV
+                        </button>
+                        <button class="btn btn-secondary" id="purgeTestsBtn" title="Clean up simulated test records">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            Purge Tests
+                        </button>
                     </div>
                 </div>
 
@@ -231,14 +342,14 @@
                     <table class="data-table" id="studentTable">
                         <thead>
                             <tr>
-                                <th>Student</th>
-                                <th>Student ID</th>
-                                <th>App Version</th>
+                                <th class="sortable-th" data-sort="student_name">Student <span class="sort-icon" id="sort-student_name">↕</span></th>
+                                <th class="sortable-th" data-sort="student_id">Student ID <span class="sort-icon" id="sort-student_id">↕</span></th>
+                                <th class="sortable-th" data-sort="app_version">App Version <span class="sort-icon" id="sort-app_version">↕</span></th>
                                 <th>Device Model</th>
                                 <th>OS Runtime</th>
-                                <th>Last Active</th>
+                                <th class="sortable-th" data-sort="timestamp">Last Active <span class="sort-icon" id="sort-timestamp">↕</span></th>
                                 <th>Status</th>
-                                <th>Access Control</th>
+                                <th>Access Controls</th>
                             </tr>
                         </thead>
                         <tbody id="tableBody">
@@ -251,6 +362,9 @@
             </section>
         </main>
     </div>
+
+    <!-- Floating Toast Notification Container -->
+    <div class="toast-container" id="toastContainer"></div>
 
     <script src="app.js"></script>
 </body>

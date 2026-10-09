@@ -48,7 +48,9 @@ object TelemetryManager {
         osVersion: String,
         deviceModel: String
     ): Map<String, Any?> {
-        val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+        val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }
         val timestamp = isoFormat.format(Date())
 
         return mapOf(

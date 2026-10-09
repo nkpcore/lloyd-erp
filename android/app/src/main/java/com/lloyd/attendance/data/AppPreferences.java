@@ -313,4 +313,14 @@ public class AppPreferences {
     public void setOnboardingCompleted(boolean completed) {
         prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETED, completed).apply();
     }
+
+    private static final String KEY_LAST_DISMISSED_UPDATE = "last_dismissed_update_version";
+
+    public String getLastDismissedUpdateVersion() {
+        return prefs.getString(KEY_LAST_DISMISSED_UPDATE, "");
+    }
+
+    public void setLastDismissedUpdateVersion(String version) {
+        prefs.edit().putString(KEY_LAST_DISMISSED_UPDATE, version != null ? version : "").apply();
+    }
 }

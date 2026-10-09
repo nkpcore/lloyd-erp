@@ -7,7 +7,7 @@ const db = require('./lib/db');
 
 function setCors(res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
 }
 
@@ -43,9 +43,35 @@ module.exports = async function handler(req, res) {
             return;
         }
 
+        if (req.method === 'DELETE') {
+            let body = req.body;
+            if (typeof body === 'string') {
+                try { body = JSON.parse(body); } catch (_) {}
+            }
+            body = body || {};
+
+            const deviceId = req.query?.device_id || body.device_id;
+            const purge = req.query?.purge === 'test' || body.purge === 'test';
+
+            if (purge) {
+                const purged = await db.purgeTestTelemetry();
+                res.status(200).json({ success: true, purged_count: purged.length, purged });
+                return;
+            }
+
+            if (!deviceId) {
+                res.status(400).json({ error: 'device_id is required' });
+                return;
+            }
+
+            await db.deleteTelemetryRecord(deviceId);
+            res.status(200).json({ success: true, deleted: deviceId });
+            return;
+        }
+
         res.status(405).json({ error: 'Method not allowed' });
     } catch (err) {
         console.error('[API/TELEMETRY] Handler error:', err);
-        res.status(200).json([]);
+        res.status(500).json({ error: err.message });
     }
 };

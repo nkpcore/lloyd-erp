@@ -43,7 +43,7 @@ async function getLiveGitHubRelease() {
 
         cachedGhRelease = {
             version: (release.tag_name || release.name || '').trim().replace(/^[vV]/, ''),
-            download_url: apkAsset ? `/api/ota?download=latest` : null,
+            download_url: apkAsset ? apkAsset.browser_download_url : null,
             notes: release.body || release.name || null
         };
         lastGhCheckTime = now;
@@ -69,8 +69,8 @@ module.exports = async function handler(req, res) {
             const gh = await getLiveGitHubRelease();
             if (gh && gh.version) {
                 config.latest_version_name = gh.version;
-                if (!config.download_url || config.download_url.includes('downloads/LloydAttendance-latest.apk')) {
-                    config.download_url = gh.download_url || config.download_url;
+                if (gh.download_url) {
+                    config.download_url = gh.download_url;
                 }
             } else if (!config.latest_version_name) {
                 const telemetry = await db.getTelemetryRecords();
@@ -98,8 +98,10 @@ module.exports = async function handler(req, res) {
                 latest_version_name: body.latest_version_name !== undefined ? (body.latest_version_name || null) : current.latest_version_name,
                 download_url: body.download_url !== undefined ? body.download_url : current.download_url,
                 banned_devices: Array.isArray(body.banned_devices) ? [...new Set(body.banned_devices)] : current.banned_devices,
-                banned_students: Array.isArray(body.banned_students) ? [...new Set(body.banned_students)] : current.banned_students,
-                maintenance_mode: typeof body.maintenance_mode === 'boolean' ? body.maintenance_mode : current.maintenance_mode
+                banned_students: Array.isArray(body.banned_students) ? [...new Set(body.banned_students.map(s => parseInt(s)).filter(Boolean))] : current.banned_students,
+                maintenance_mode: typeof body.maintenance_mode === 'boolean' ? body.maintenance_mode : current.maintenance_mode,
+                maintenance_message: body.maintenance_message !== undefined ? body.maintenance_message : current.maintenance_message,
+                broadcast_notice: body.broadcast_notice !== undefined ? body.broadcast_notice : current.broadcast_notice
             };
 
             await db.saveConfig(updated);

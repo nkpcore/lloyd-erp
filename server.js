@@ -43,41 +43,20 @@ function isNewerVersion(remote, current) {
     return false;
 }
 
-// Read configuration file
-function getFleetConfig() {
-    try {
-        if (fs.existsSync(CONFIG_FILE)) {
-            const raw = fs.readFileSync(CONFIG_FILE, 'utf8');
-            return JSON.parse(raw);
-        }
-    } catch (err) {
-        console.error('[CONFIG] Error reading config file, falling back to default:', err.message);
-    }
-    return DEFAULT_CONFIG;
+const db = require('./api/lib/db');
+
+// Read configuration from unified persistence layer
+async function getFleetConfig() {
+    return await db.getConfig();
 }
 
-function saveFleetConfig(config) {
-    try {
-        fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf8');
-        return true;
-    } catch (err) {
-        console.error('[CONFIG] Error writing config file:', err.message);
-        return false;
-    }
+async function saveFleetConfig(config) {
+    return await db.saveConfig(config);
 }
 
-// In-memory / JSON persistence for telemetry records
-function getTelemetryRecords() {
-    try {
-        if (fs.existsSync(TELEMETRY_FILE)) {
-            const raw = fs.readFileSync(TELEMETRY_FILE, 'utf8');
-            const data = JSON.parse(raw);
-            return Array.isArray(data) ? data : Object.values(data);
-        }
-    } catch (err) {
-        console.error('[TELEMETRY] Error reading telemetry file:', err.message);
-    }
-    return [];
+// Telemetry records from unified persistence layer
+async function getTelemetryRecords() {
+    return await db.getTelemetryRecords();
 }
 
 function getLiveFleetVersion(records) {
@@ -89,31 +68,8 @@ function getLiveFleetVersion(records) {
     return sorted.length > 0 ? sorted[0].name : null;
 }
 
-function upsertTelemetryRecord(record) {
-    if (!record || !record.device_id) return false;
-    try {
-        let store = {};
-        if (fs.existsSync(TELEMETRY_FILE)) {
-            try {
-                const raw = fs.readFileSync(TELEMETRY_FILE, 'utf8');
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed)) {
-                    parsed.forEach(r => { if (r.device_id) store[r.device_id] = r; });
-                } else if (typeof parsed === 'object') {
-                    store = parsed;
-                }
-            } catch (e) {}
-        }
-        store[record.device_id] = {
-            ...record,
-            server_received_at: new Date().toISOString()
-        };
-        fs.writeFileSync(TELEMETRY_FILE, JSON.stringify(Object.values(store), null, 2), 'utf8');
-        return true;
-    } catch (err) {
-        console.error('[TELEMETRY] Error upserting record:', err.message);
-        return false;
-    }
+async function upsertTelemetryRecord(record) {
+    return await db.upsertTelemetryRecord(record);
 }
 
 const MIME_TYPES = {
@@ -178,20 +134,6 @@ function serveStaticFile(filePath, res) {
     });
 }
 
-const server = http.createServer(async (req, res) => {
-    setCorsHeaders(res);
-
-    if (req.method === 'OPTIONS') {
-        res.writeHead(204);
-        res.end();
-        return;
-    }
-
-    const parsedUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
-    const pathname = parsedUrl.pathname.replace(/\/+$/, '') || '/';
-
-    console.log(`[${new Date().toISOString()}] ${req.method} ${pathname}`);
-
 let cachedGhRelease = null;
 let lastGhCheckTime = 0;
 
@@ -213,7 +155,10 @@ async function getLiveGitHubRelease() {
             headers['Authorization'] = `Bearer ${token}`;
         }
 
-        const resp = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, { headers });
+        const resp = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
+            headers,
+            signal: AbortSignal.timeout(2000)
+        });
         if (!resp.ok) return null;
 
         const release = await resp.json();
@@ -233,12 +178,26 @@ async function getLiveGitHubRelease() {
     }
 }
 
+const server = http.createServer(async (req, res) => {
+    setCorsHeaders(res);
+
+    if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+    }
+
+    const parsedUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
+    const pathname = parsedUrl.pathname.replace(/\/+$/, '') || '/';
+
+    console.log(`[${new Date().toISOString()}] ${req.method} ${pathname}`);
+
     // --- API ROUTES ---
 
     // GET /config or GET /api/config
     if (req.method === 'GET' && (pathname === '/config' || pathname === '/api/config')) {
-        const config = getFleetConfig();
-        const records = getTelemetryRecords();
+        const config = await getFleetConfig();
+        const records = await getTelemetryRecords();
         const ghRelease = await getLiveGitHubRelease();
         const dynamicLatest = (ghRelease && ghRelease.version) || config.latest_version_name || getLiveFleetVersion(records);
         const downloadUrl = (ghRelease && ghRelease.assetUrl) ? `/ota/download` : (config.download_url || '');
@@ -258,7 +217,7 @@ async function getLiveGitHubRelease() {
     if (req.method === 'POST' && (pathname === '/config' || pathname === '/api/config')) {
         try {
             const body = await parseJsonBody(req);
-            const current = getFleetConfig();
+            const current = await getFleetConfig();
             const updated = {
                 ...current,
                 ...body,
@@ -266,10 +225,12 @@ async function getLiveGitHubRelease() {
                 latest_version_name: body.latest_version_name !== undefined ? (body.latest_version_name || null) : current.latest_version_name,
                 download_url: body.download_url !== undefined ? body.download_url : current.download_url,
                 banned_devices: Array.isArray(body.banned_devices) ? [...new Set(body.banned_devices)] : current.banned_devices,
-                banned_students: Array.isArray(body.banned_students) ? [...new Set(body.banned_students)] : current.banned_students,
-                maintenance_mode: typeof body.maintenance_mode === 'boolean' ? body.maintenance_mode : current.maintenance_mode
+                banned_students: Array.isArray(body.banned_students) ? [...new Set(body.banned_students.map(s => parseInt(s)).filter(Boolean))] : current.banned_students,
+                maintenance_mode: typeof body.maintenance_mode === 'boolean' ? body.maintenance_mode : current.maintenance_mode,
+                maintenance_message: body.maintenance_message !== undefined ? body.maintenance_message : current.maintenance_message,
+                broadcast_notice: body.broadcast_notice !== undefined ? body.broadcast_notice : current.broadcast_notice
             };
-            saveFleetConfig(updated);
+            await saveFleetConfig(updated);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ success: true, config: updated }));
         } catch (err) {
@@ -301,7 +262,7 @@ async function getLiveGitHubRelease() {
                 }
             } catch (e) {}
         }
-        const config = getFleetConfig();
+        const config = await getFleetConfig();
         if (config.download_url) {
             res.writeHead(302, { 'Location': config.download_url });
             res.end();
@@ -314,8 +275,8 @@ async function getLiveGitHubRelease() {
 
     // GET /ota or GET /api/ota (Dynamic Live In-App OTA Update Check)
     if (req.method === 'GET' && (pathname === '/ota' || pathname === '/api/ota')) {
-        const config = getFleetConfig();
-        const records = getTelemetryRecords();
+        const config = await getFleetConfig();
+        const records = await getTelemetryRecords();
         const ghRelease = await getLiveGitHubRelease();
         const clientVer = (parsedUrl.searchParams.get('current_version') || '').trim();
         const latestVer = (ghRelease && ghRelease.version) || config.latest_version_name || getLiveFleetVersion(records) || clientVer;
@@ -344,7 +305,7 @@ async function getLiveGitHubRelease() {
 
     // GET /telemetry
     if (req.method === 'GET' && (pathname === '/telemetry' || pathname === '/api/telemetry')) {
-        const records = getTelemetryRecords();
+        const records = await getTelemetryRecords();
         records.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(records, null, 2));
@@ -356,7 +317,7 @@ async function getLiveGitHubRelease() {
         try {
             const payload = await parseJsonBody(req);
             if (payload && payload.device_id) {
-                upsertTelemetryRecord(payload);
+                await upsertTelemetryRecord(payload);
                 console.log(`[TELEMETRY] Live device heartbeat received: ${payload.device_id} (Student ID: ${payload.student_id})`);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true, timestamp: new Date().toISOString() }));
@@ -373,35 +334,110 @@ async function getLiveGitHubRelease() {
         }
     }
 
-    // POST /ban (Quick toggle ban for device UUID)
-    if (req.method === 'POST' && pathname === '/ban') {
+    // DELETE /telemetry
+    if (req.method === 'DELETE' && (pathname === '/telemetry' || pathname === '/api/telemetry')) {
         try {
-            const body = await parseJsonBody(req);
-            const deviceId = (body.device_id || '').trim();
-            if (!deviceId) {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'device_id required' }));
+            const body = await parseJsonBody(req).catch(() => ({}));
+            const queryDeviceId = parsedUrl.searchParams.get('device_id');
+            const queryPurge = parsedUrl.searchParams.get('purge');
+            const deviceId = queryDeviceId || body.device_id;
+            const purge = queryPurge === 'test' || body.purge === 'test';
+
+            if (purge) {
+                const purged = await db.purgeTestTelemetry();
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, purged_count: purged.length, purged }));
                 return;
             }
 
-            const config = getFleetConfig();
-            const bans = new Set(config.banned_devices || []);
-            let isBanned = false;
-
-            if (bans.has(deviceId)) {
-                bans.delete(deviceId);
-                isBanned = false;
-            } else {
-                bans.add(deviceId);
-                isBanned = true;
+            if (!deviceId) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'device_id is required' }));
+                return;
             }
 
-            config.banned_devices = Array.from(bans);
-            saveFleetConfig(config);
-
-            console.log(`[BAN] Device ${deviceId} ban toggled: ${isBanned}`);
+            await db.deleteTelemetryRecord(deviceId);
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: true, device_id: deviceId, is_banned: isBanned, total_banned: config.banned_devices.length }));
+            res.end(JSON.stringify({ success: true, deleted: deviceId }));
+            return;
+        } catch (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: err.message }));
+            return;
+        }
+    }
+
+    // POST /ban or POST /api/ban (1-Click Device & Student Account Revocation)
+    if (req.method === 'POST' && (pathname === '/ban' || pathname === '/api/ban')) {
+        try {
+            const body = await parseJsonBody(req);
+            const deviceId = (body.device_id || '').trim();
+            const studentId = body.student_id ? parseInt(body.student_id) : null;
+
+            if (!deviceId && !studentId) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'device_id or student_id required' }));
+                return;
+            }
+
+            const config = await getFleetConfig();
+            let isDeviceBanned = false;
+            let isStudentBanned = false;
+            const action = (body.action || 'toggle').toLowerCase();
+
+            if (deviceId) {
+                const bans = new Set((config.banned_devices || []).map(d => String(d).trim()));
+                if (action === 'ban') {
+                    bans.add(deviceId);
+                    isDeviceBanned = true;
+                } else if (action === 'unban') {
+                    bans.delete(deviceId);
+                    isDeviceBanned = false;
+                } else {
+                    if (bans.has(deviceId)) {
+                        bans.delete(deviceId);
+                        isDeviceBanned = false;
+                    } else {
+                        bans.add(deviceId);
+                        isDeviceBanned = true;
+                    }
+                }
+                config.banned_devices = Array.from(bans);
+            }
+
+            if (studentId) {
+                const studentBans = new Set((config.banned_students || []).map(s => parseInt(s)).filter(Boolean));
+                if (action === 'ban') {
+                    studentBans.add(studentId);
+                    isStudentBanned = true;
+                } else if (action === 'unban') {
+                    studentBans.delete(studentId);
+                    isStudentBanned = false;
+                } else {
+                    if (studentBans.has(studentId)) {
+                        studentBans.delete(studentId);
+                        isStudentBanned = false;
+                    } else {
+                        studentBans.add(studentId);
+                        isStudentBanned = true;
+                    }
+                }
+                config.banned_students = Array.from(studentBans);
+            }
+
+            await saveFleetConfig(config);
+            console.log(`[BAN] Action ${action} executed — device: ${deviceId} (${isDeviceBanned}), student: ${studentId} (${isStudentBanned})`);
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                device_id: deviceId || null,
+                student_id: studentId || null,
+                is_device_banned: isDeviceBanned,
+                is_student_banned: isStudentBanned,
+                banned_devices: config.banned_devices || [],
+                banned_students: config.banned_students || []
+            }));
             return;
         } catch (err) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -416,11 +452,18 @@ async function getLiveGitHubRelease() {
         return;
     }
 
-    const safePath = path.normalize(pathname).replace(/^(\.\.[\/\\])+/, '');
+    const relPath = pathname.startsWith('/admin/') ? pathname.substring(7) : pathname.replace(/^\/+/, '');
+    const safePath = path.normalize(relPath).replace(/^(\.\.[\/\\])+/, '');
     const targetPath = path.join(ADMIN_DIR, safePath);
 
-    if (targetPath.startsWith(ADMIN_DIR)) {
+    if (fs.existsSync(targetPath) && targetPath.startsWith(ADMIN_DIR)) {
         serveStaticFile(targetPath, res);
+        return;
+    }
+
+    const publicTarget = path.join(__dirname, 'public', safePath);
+    if (fs.existsSync(publicTarget) && publicTarget.startsWith(__dirname)) {
+        serveStaticFile(publicTarget, res);
         return;
     }
 
@@ -438,3 +481,6 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(` Telemetry Endpoint:  http://localhost:${PORT}/telemetry `);
     console.log(`=======================================================`);
 });
+
+module.exports = server;
+

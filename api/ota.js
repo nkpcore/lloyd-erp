@@ -97,18 +97,18 @@ module.exports = async function handler(req, res) {
 
         // 1. If download action is requested, redirect to direct APK or proxy
         if (isDownload) {
-            if (config.download_url && config.download_url.trim().length > 0) {
+            if (ghRelease && ghRelease.browserDownloadUrl) {
+                res.writeHead(302, { 'Location': ghRelease.browserDownloadUrl });
+                res.end();
+                return;
+            }
+
+            if (config.download_url && config.download_url.trim().length > 0 && !config.download_url.includes('/api/ota')) {
                 let target = config.download_url.trim();
                 if (!target.startsWith('http://') && !target.startsWith('https://')) {
                     target = `${baseUrl}/${target.replace(/^\/+/, '')}`;
                 }
                 res.writeHead(302, { 'Location': target });
-                res.end();
-                return;
-            }
-
-            if (ghRelease && ghRelease.browserDownloadUrl) {
-                res.writeHead(302, { 'Location': ghRelease.browserDownloadUrl });
                 res.end();
                 return;
             }
@@ -147,13 +147,13 @@ module.exports = async function handler(req, res) {
         let releaseNotes = config.broadcast_notice || 'You are running the latest version.';
 
         if (hasUpdate) {
-            if (config.download_url && config.download_url.trim().length > 0) {
+            if (ghRelease && ghRelease.browserDownloadUrl) {
+                downloadUrl = ghRelease.browserDownloadUrl;
+            } else if (config.download_url && config.download_url.trim().length > 0 && !config.download_url.includes('downloads/LloydAttendance-latest.apk')) {
                 let dl = config.download_url.trim();
                 downloadUrl = (dl.startsWith('http://') || dl.startsWith('https://'))
                     ? dl
                     : `${baseUrl}/${dl.replace(/^\/+/, '')}`;
-            } else if (ghRelease && ghRelease.browserDownloadUrl) {
-                downloadUrl = ghRelease.browserDownloadUrl;
             } else {
                 downloadUrl = `${baseUrl}/downloads/LloydAttendance-latest.apk`;
             }

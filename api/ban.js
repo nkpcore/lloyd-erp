@@ -43,26 +43,44 @@ module.exports = async function handler(req, res) {
         let isDeviceBanned = false;
         let isStudentBanned = false;
 
+        const action = (body.action || 'toggle').toLowerCase();
+
         if (deviceId) {
             const bans = new Set((config.banned_devices || []).map(d => String(d).trim()));
-            if (bans.has(deviceId)) {
-                bans.delete(deviceId);
-                isDeviceBanned = false;
-            } else {
+            if (action === 'ban') {
                 bans.add(deviceId);
                 isDeviceBanned = true;
+            } else if (action === 'unban') {
+                bans.delete(deviceId);
+                isDeviceBanned = false;
+            } else { // toggle
+                if (bans.has(deviceId)) {
+                    bans.delete(deviceId);
+                    isDeviceBanned = false;
+                } else {
+                    bans.add(deviceId);
+                    isDeviceBanned = true;
+                }
             }
             config.banned_devices = Array.from(bans);
         }
 
         if (studentId) {
             const studentBans = new Set((config.banned_students || []).map(s => parseInt(s)).filter(Boolean));
-            if (studentBans.has(studentId)) {
-                studentBans.delete(studentId);
-                isStudentBanned = false;
-            } else {
+            if (action === 'ban') {
                 studentBans.add(studentId);
                 isStudentBanned = true;
+            } else if (action === 'unban') {
+                studentBans.delete(studentId);
+                isStudentBanned = false;
+            } else { // toggle
+                if (studentBans.has(studentId)) {
+                    studentBans.delete(studentId);
+                    isStudentBanned = false;
+                } else {
+                    studentBans.add(studentId);
+                    isStudentBanned = true;
+                }
             }
             config.banned_students = Array.from(studentBans);
         }

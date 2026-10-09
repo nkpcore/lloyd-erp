@@ -71,11 +71,7 @@ class DirectHttpPortalAuthenticator {
             .socketFactory(network.socketFactory)
             .dns(object : okhttp3.Dns {
                 override fun lookup(hostname: String): List<java.net.InetAddress> {
-                    return try {
-                        network.getAllByName(hostname).toList()
-                    } catch (e: Exception) {
-                        java.net.InetAddress.getAllByName(hostname).toList()
-                    }
+                    return network.getAllByName(hostname).toList()
                 }
             })
             .connectTimeout(10, TimeUnit.SECONDS)

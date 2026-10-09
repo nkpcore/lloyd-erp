@@ -169,14 +169,19 @@ public class ErpApiClient {
     }
 
     private synchronized void handleUnauthorized() throws Exception {
-        prefs.saveTokens("", "");
+        prefs.saveTokens("", null); // Invalidate access token while preserving refresh token
         if (refreshToken()) {
             return;
         }
+        prefs.saveTokens("", ""); // Invalidate both when refresh fails
         throw new ErpException("Session expired. Please sign in again.", true);
     }
 
     public Models.MonthlyAttendanceData getMonthlyAttendance() throws Exception {
+        return getMonthlyAttendance(false);
+    }
+
+    private Models.MonthlyAttendanceData getMonthlyAttendance(boolean isRetry) throws Exception {
         String token = ensureValidToken();
 
         Request request = new Request.Builder()
@@ -188,8 +193,13 @@ public class ErpApiClient {
 
         try (Response response = client.newCall(request).execute()) {
             if (response.code() == 401) {
-                handleUnauthorized();
-                return getMonthlyAttendance(); // Retry once with fresh credentials
+                if (!isRetry) {
+                    handleUnauthorized();
+                    return getMonthlyAttendance(true); // Retry once with fresh credentials
+                } else {
+                    prefs.saveTokens("", "");
+                    throw new ErpException("Session expired. Please sign in again.", true);
+                }
             }
 
             if (!response.isSuccessful()) {
@@ -267,6 +277,10 @@ public class ErpApiClient {
     }
 
     public List<Models.StudentAttendanceItem> getStudentAttendanceLogs(int studentId) throws Exception {
+        return getStudentAttendanceLogs(studentId, false);
+    }
+
+    private List<Models.StudentAttendanceItem> getStudentAttendanceLogs(int studentId, boolean isRetry) throws Exception {
         String token = ensureValidToken();
         int verifiedId = prefs.getStudentId();
         if (verifiedId <= 0) {
@@ -309,8 +323,13 @@ public class ErpApiClient {
 
             try (Response response = client.newCall(request).execute()) {
                 if (response.code() == 401) {
-                    handleUnauthorized();
-                    return getStudentAttendanceLogs(targetStudentId);
+                    if (!isRetry) {
+                        handleUnauthorized();
+                        return getStudentAttendanceLogs(targetStudentId, true);
+                    } else {
+                        prefs.saveTokens("", "");
+                        throw new ErpException("Session expired. Please sign in again.", true);
+                    }
                 }
 
                 if (!response.isSuccessful()) {
@@ -559,7 +578,6 @@ public class ErpApiClient {
                             }
                         }
                     }
-                    return apiRes.data.get(0);
                 }
             } catch (Exception ignored) {
             }
@@ -575,7 +593,6 @@ public class ErpApiClient {
                             }
                         }
                     }
-                    return paginatedRes.data.get(0);
                 }
             } catch (Exception ignored) {
             }

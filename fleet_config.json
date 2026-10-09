@@ -1,7 +1,7 @@
 {
   "min_version_code": 1,
   "latest_version_name": null,
-  "download_url": "https://lloyd-erp-sand.vercel.app/downloads/LloydAttendance-latest.apk",
+  "download_url": null,
   "banned_students": [],
   "banned_devices": [],
   "broadcast_notice": null,

@@ -55,15 +55,17 @@ class WebViewPortalAuthenticator(private val context: Context) {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
 
-                    // Inject credential filling script
+                    // Inject credential filling script with safely quoted values
+                    val quotedUser = org.json.JSONObject.quote(username)
+                    val quotedPass = org.json.JSONObject.quote(password)
                     val js = """
                         (function() {
                             try {
                                 var userInputs = document.querySelectorAll('input[type="text"], input[type="email"], input:not([type])');
                                 var passInputs = document.querySelectorAll('input[type="password"]');
                                 if (userInputs.length > 0 && passInputs.length > 0) {
-                                    userInputs[0].value = '$username';
-                                    passInputs[0].value = '$password';
+                                    userInputs[0].value = $quotedUser;
+                                    passInputs[0].value = $quotedPass;
                                     var submitBtn = document.querySelector('button[type="submit"], input[type="submit"], button');
                                     if (submitBtn) {
                                         submitBtn.click();
@@ -90,7 +92,7 @@ class WebViewPortalAuthenticator(private val context: Context) {
                     val currentUrl = request?.url?.toString().orEmpty()
                     if (currentUrl.contains("google.com") || currentUrl.contains("generate_204")) {
                         if (isFinished.compareAndSet(false, true)) {
-                            webView.destroy()
+                            cleanupWebView(webView)
                             continuation.resume(PortalAuthResult.Success("WebView navigated to open internet"))
                             return true
                         }
@@ -102,7 +104,7 @@ class WebViewPortalAuthenticator(private val context: Context) {
             // Set safety timeout of 20 seconds
             mainHandler.postDelayed({
                 if (isFinished.compareAndSet(false, true)) {
-                    webView.destroy()
+                    cleanupWebView(webView)
                     continuation.resume(
                         PortalAuthResult.TransientFailure("WebView authentication timed out", retryAfterSeconds = 10)
                     )
@@ -111,11 +113,25 @@ class WebViewPortalAuthenticator(private val context: Context) {
 
             continuation.invokeOnCancellation {
                 mainHandler.post {
-                    webView.destroy()
+                    cleanupWebView(webView)
                 }
             }
 
             webView.loadUrl(portalUrl)
+        }
+    }
+
+    private fun cleanupWebView(webView: WebView) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+                connectivityManager?.bindProcessToNetwork(null)
+            } catch (ignored: Exception) {
+            }
+        }
+        try {
+            webView.destroy()
+        } catch (ignored: Exception) {
         }
     }
 }

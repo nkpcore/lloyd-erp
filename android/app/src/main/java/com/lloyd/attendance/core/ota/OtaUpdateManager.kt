@@ -136,6 +136,16 @@ object OtaUpdateManager {
                                         downloadUrl = resolvedUrl
                                     )
                                 )
+                            } else if (!hasUpdate) {
+                                return@withContext Result.success(
+                                    OtaReleaseInfo(
+                                        hasUpdate = false,
+                                        latestVersion = cleanVersion(latestVer),
+                                        currentVersion = cleanCurrent,
+                                        releaseNotes = notes,
+                                        downloadUrl = null
+                                    )
+                                )
                             }
                         }
                     }
