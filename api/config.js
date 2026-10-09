@@ -107,7 +107,8 @@ module.exports = async function handler(req, res) {
                 banned_students: Array.isArray(body.banned_students) ? [...new Set(body.banned_students.map(s => parseInt(s)).filter(Boolean))] : current.banned_students,
                 maintenance_mode: typeof body.maintenance_mode === 'boolean' ? body.maintenance_mode : current.maintenance_mode,
                 maintenance_message: body.maintenance_message !== undefined ? body.maintenance_message : current.maintenance_message,
-                broadcast_notice: body.broadcast_notice !== undefined ? body.broadcast_notice : current.broadcast_notice
+                broadcast_notice: body.broadcast_notice !== undefined ? body.broadcast_notice : current.broadcast_notice,
+                pause_updates: typeof body.pause_updates === 'boolean' ? body.pause_updates : (body.pause_updates === 'true' ? true : (body.pause_updates === 'false' ? false : (current.pause_updates || false)))
             };
 
             await db.saveConfig(updated);

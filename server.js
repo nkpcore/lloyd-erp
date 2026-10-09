@@ -23,7 +23,8 @@ const DEFAULT_CONFIG = {
     banned_devices: [],
     broadcast_notice: null,
     maintenance_mode: false,
-    maintenance_message: 'Lloyd ERP service is currently undergoing routine maintenance.'
+    maintenance_message: 'Lloyd ERP service is currently undergoing routine maintenance.',
+    pause_updates: false
 };
 
 function cleanVersion(v) {
@@ -266,7 +267,8 @@ const server = http.createServer(async (req, res) => {
                 banned_students: Array.isArray(body.banned_students) ? [...new Set(body.banned_students.map(s => parseInt(s)).filter(Boolean))] : current.banned_students,
                 maintenance_mode: typeof body.maintenance_mode === 'boolean' ? body.maintenance_mode : current.maintenance_mode,
                 maintenance_message: body.maintenance_message !== undefined ? body.maintenance_message : current.maintenance_message,
-                broadcast_notice: body.broadcast_notice !== undefined ? body.broadcast_notice : current.broadcast_notice
+                broadcast_notice: body.broadcast_notice !== undefined ? body.broadcast_notice : current.broadcast_notice,
+                pause_updates: typeof body.pause_updates === 'boolean' ? body.pause_updates : (body.pause_updates === 'true' ? true : (body.pause_updates === 'false' ? false : (current.pause_updates || false)))
             };
             await saveFleetConfig(updated);
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -318,6 +320,21 @@ const server = http.createServer(async (req, res) => {
         const ghRelease = await getLiveGitHubRelease();
         const clientVer = (parsedUrl.searchParams.get('current_version') || '').trim();
         const latestVer = (ghRelease && ghRelease.version) || config.latest_version_name || getLiveFleetVersion(records) || clientVer;
+
+        // Admin pause updates override
+        if (config && config.pause_updates) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                has_update: false,
+                latest_version: cleanVersion(latestVer),
+                current_version: cleanVersion(clientVer),
+                download_url: null,
+                release_notes: config.broadcast_notice || 'Updates are temporarily paused by administrator.',
+                source: 'admin_paused',
+                paused: true
+            }, null, 2));
+            return;
+        }
 
         let dlUrl = config.download_url || '';
         let notes = config.broadcast_notice || 'New update available from Lloyd Fleet Portal.';

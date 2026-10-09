@@ -24,13 +24,7 @@ function getLocalTelemetryPath() {
 }
 
 function readDiskConfig() {
-    try {
-        const p = getLocalConfigPath();
-        if (fs.existsSync(p)) {
-            return JSON.parse(fs.readFileSync(p, 'utf8'));
-        }
-    } catch (_) {}
-    return {
+    const defaults = {
         min_version_code: 1,
         latest_version_name: null,
         download_url: null,
@@ -38,8 +32,17 @@ function readDiskConfig() {
         banned_devices: [],
         broadcast_notice: null,
         maintenance_mode: false,
-        maintenance_message: "Lloyd ERP service is currently undergoing routine maintenance."
+        maintenance_message: "Lloyd ERP service is currently undergoing routine maintenance.",
+        pause_updates: false
     };
+    try {
+        const p = getLocalConfigPath();
+        if (fs.existsSync(p)) {
+            const diskData = JSON.parse(fs.readFileSync(p, 'utf8'));
+            return { ...defaults, ...diskData };
+        }
+    } catch (_) {}
+    return defaults;
 }
 
 function readDiskTelemetry() {
@@ -135,8 +138,8 @@ async function getConfig() {
         const restResult = await upstashRestCmd('get', 'lloyd_fleet_config');
         if (restResult) {
             const parsed = typeof restResult === 'string' ? JSON.parse(restResult) : restResult;
-            memConfig = parsed;
-            return parsed;
+            memConfig = { ...readDiskConfig(), ...parsed };
+            return memConfig;
         }
     } catch (_) {}
 
@@ -150,8 +153,8 @@ async function getConfig() {
             ]);
             if (raw) {
                 const parsed = JSON.parse(raw);
-                memConfig = parsed;
-                return parsed;
+                memConfig = { ...readDiskConfig(), ...parsed };
+                return memConfig;
             }
         }
     } catch (_) {}

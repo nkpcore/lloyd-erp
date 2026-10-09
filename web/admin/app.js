@@ -20,6 +20,13 @@ function safeAttr(str) {
     return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }
 
+const ICON_COPY = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+const ICON_TRASH = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
+const ICON_DEVICE = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>`;
+const ICON_STUDENT = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+const ICON_EYE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const ICON_EYE_OFF = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+
 class TelemetryDashboard {
     constructor() {
         this.records = [];
@@ -27,6 +34,7 @@ class TelemetryDashboard {
         this.isFetching = false;
         this.sortColumn = 'timestamp';
         this.sortDirection = 'desc';
+        this.viewMode = (typeof window !== 'undefined' && window.innerWidth < 768) ? 'card' : 'table';
         
         // Auto-connect to origin or local node server without prompting
         const isHttp = typeof window !== 'undefined' && window.location.protocol.startsWith('http');
@@ -40,8 +48,10 @@ class TelemetryDashboard {
         this.populateGovernanceFields();
         this.updateServerLabel();
         this.renderMaintenanceBanner();
+        this.renderOtaPausedBanner();
         this.renderActiveBanChips();
         this.updateSortIcons();
+        this.setViewMode(this.viewMode);
         
         if (this.checkAuthStatus()) {
             this.loadTelemetry();
@@ -63,7 +73,8 @@ class TelemetryDashboard {
             banned_devices: [],
             maintenance_mode: false,
             maintenance_message: 'Lloyd ERP service is currently undergoing routine maintenance.',
-            broadcast_notice: ''
+            broadcast_notice: '',
+            pause_updates: false
         };
     }
 
@@ -90,6 +101,15 @@ class TelemetryDashboard {
         this.syncIndicatorEl = document.getElementById('syncIndicator');
         this.toastContainer = document.getElementById('toastContainer');
 
+        // Sidebar & Mobile Navigation
+        this.sidebar = document.getElementById('sidebar');
+        this.sidebarOverlay = document.getElementById('sidebarOverlay');
+        this.closeSidebarBtn = document.getElementById('closeSidebarBtn');
+        this.mobileMenuToggle = document.getElementById('mobileMenuToggle');
+        this.mobileLiveDot = document.getElementById('mobileLiveDot');
+        this.mobileRefreshBtn = document.getElementById('mobileRefreshBtn');
+        this.mobileLockBtn = document.getElementById('mobileLockBtn');
+
         // Server switcher
         this.switchServerBtn = document.getElementById('switchServerBtn');
         this.serverLabel = document.getElementById('serverLabel');
@@ -98,6 +118,17 @@ class TelemetryDashboard {
         this.maintenanceAlertBanner = document.getElementById('maintenanceAlertBanner');
         this.maintBannerMsg = document.getElementById('maintBannerMsg');
         this.deactivateMaintBtn = document.getElementById('deactivateMaintBtn');
+
+        // In-App OTA Updates Paused Banner & Control
+        this.otaPausedAlertBanner = document.getElementById('otaPausedAlertBanner');
+        this.resumeOtaBtn = document.getElementById('resumeOtaBtn');
+        this.cfgPauseUpdates = document.getElementById('cfgPauseUpdates');
+
+        // View Mode Switcher & Card Grid
+        this.tableViewBtn = document.getElementById('tableViewBtn');
+        this.cardViewBtn = document.getElementById('cardViewBtn');
+        this.tableContainer = document.getElementById('tableContainer');
+        this.studentCardGrid = document.getElementById('studentCardGrid');
 
         // Quick broadcast tools
         this.quickBroadcastInput = document.getElementById('quickBroadcastInput');
@@ -303,6 +334,9 @@ class TelemetryDashboard {
         if (this.cfgMaintenanceMode) {
             this.cfgMaintenanceMode.checked = !!this.fleetConfig.maintenance_mode;
         }
+        if (this.cfgPauseUpdates) {
+            this.cfgPauseUpdates.checked = !!this.fleetConfig.pause_updates;
+        }
     }
 
     renderMaintenanceBanner() {
@@ -318,6 +352,86 @@ class TelemetryDashboard {
         }
     }
 
+    renderOtaPausedBanner() {
+        if (!this.otaPausedAlertBanner) return;
+        const isPaused = !!this.fleetConfig.pause_updates;
+        this.otaPausedAlertBanner.style.display = isPaused ? 'flex' : 'none';
+        if (this.cfgPauseUpdates) {
+            this.cfgPauseUpdates.checked = isPaused;
+        }
+    }
+
+    async togglePauseUpdates(explicitState = null) {
+        const nextState = explicitState !== null ? !!explicitState : !this.fleetConfig.pause_updates;
+        this.fleetConfig.pause_updates = nextState;
+        if (this.cfgPauseUpdates) this.cfgPauseUpdates.checked = nextState;
+        this.renderOtaPausedBanner();
+        localStorage.setItem('fleet_config', JSON.stringify(this.fleetConfig, null, 2));
+
+        try {
+            const res = await fetch(this.getApiUrl('/config'), {
+                method: 'POST',
+                headers: this.getAuthHeaders(),
+                body: JSON.stringify({ pause_updates: nextState })
+            });
+            if (res.status === 401) {
+                this.showToast('Unauthorized: Please unlock admin portal.', 'error');
+                this.lockPortal();
+                return;
+            }
+            if (nextState) {
+                this.showToast('In-app OTA updates PAUSED fleet-wide.', 'info');
+            } else {
+                this.showToast('In-app OTA updates RESUMED.', 'success');
+            }
+        } catch (e) {
+            this.showToast(`Updates ${nextState ? 'paused' : 'resumed'} locally (offline)`, 'info');
+        }
+    }
+
+    openSidebar() {
+        if (this.sidebar) this.sidebar.classList.add('open');
+        if (this.sidebarOverlay) this.sidebarOverlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    closeSidebar() {
+        if (this.sidebar) this.sidebar.classList.remove('open');
+        if (this.sidebarOverlay) this.sidebarOverlay.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    syncMobileLiveDot() {
+        if (!this.mobileLiveDot) return;
+        if (this.liveDotEl) {
+            this.mobileLiveDot.style.backgroundColor = this.liveDotEl.style.backgroundColor;
+            this.mobileLiveDot.style.boxShadow = this.liveDotEl.style.boxShadow;
+        }
+    }
+
+    setViewMode(mode) {
+        this.viewMode = mode;
+        if (this.tableViewBtn && this.cardViewBtn) {
+            if (mode === 'table') {
+                this.tableViewBtn.classList.add('active');
+                this.cardViewBtn.classList.remove('active');
+                if (this.tableContainer) this.tableContainer.style.display = 'block';
+                if (this.studentCardGrid) this.studentCardGrid.style.display = 'none';
+            } else {
+                this.cardViewBtn.classList.add('active');
+                this.tableViewBtn.classList.remove('active');
+                if (this.tableContainer) this.tableContainer.style.display = 'none';
+                if (this.studentCardGrid) this.studentCardGrid.style.display = 'grid';
+            }
+        }
+        this.renderCurrentView();
+    }
+
+    renderCurrentView() {
+        this.renderTable();
+        this.renderCards();
+    }
+
     renderActiveBanChips() {
         // Render Banned Devices
         if (this.bannedDevChips) {
@@ -331,8 +445,8 @@ class TelemetryDashboard {
                     const short = id.length > 22 ? id.substring(0, 10) + '...' + id.slice(-6) : id;
                     return `
                         <div class="ban-chip" title="Device UUID: ${escapeHtml(id)}">
-                            <span>📱 ${escapeHtml(short)}</span>
-                            <button class="btn-remove-chip" title="Restore device access" onclick="window.telemetryDashboard.toggleDeviceBan('${safeAttr(id)}', 'unban')">×</button>
+                            <span>${ICON_DEVICE} ${escapeHtml(short)}</span>
+                            <button class="btn-remove-chip" title="Restore device access" aria-label="Restore device" onclick="window.telemetryDashboard.toggleDeviceBan('${safeAttr(id)}', 'unban')">×</button>
                         </div>
                     `;
                 }).join('');
@@ -350,8 +464,8 @@ class TelemetryDashboard {
                     const id = parseInt(rawId);
                     return `
                         <div class="ban-chip ban-chip-student" title="Student ID: ${id}">
-                            <span>👤 #${id}</span>
-                            <button class="btn-remove-chip" title="Unban student account" onclick="window.telemetryDashboard.toggleStudentBan(${id}, 'unban')">×</button>
+                            <span>${ICON_STUDENT} #${id}</span>
+                            <button class="btn-remove-chip" title="Unban student account" aria-label="Unban student account" onclick="window.telemetryDashboard.toggleStudentBan(${id}, 'unban')">×</button>
                         </div>
                     `;
                 }).join('');
@@ -427,6 +541,7 @@ class TelemetryDashboard {
 
         const maintMsg = (this.cfgMaintenanceMessage ? this.cfgMaintenanceMessage.value : '').trim();
         const isMaint = this.cfgMaintenanceMode ? this.cfgMaintenanceMode.checked : false;
+        const pauseUpdates = this.cfgPauseUpdates ? this.cfgPauseUpdates.checked : false;
 
         this.fleetConfig.min_version_code = minVer;
         this.fleetConfig.latest_version_name = latestVer || null;
@@ -435,6 +550,7 @@ class TelemetryDashboard {
         this.fleetConfig.banned_devices = [...new Set(bannedDevList)];
         this.fleetConfig.banned_students = [...new Set(bannedStudentsList)];
         this.fleetConfig.maintenance_mode = isMaint;
+        this.fleetConfig.pause_updates = pauseUpdates;
         if (maintMsg) {
             this.fleetConfig.maintenance_message = maintMsg;
         }
@@ -475,9 +591,10 @@ class TelemetryDashboard {
         }
 
         this.renderMaintenanceBanner();
+        this.renderOtaPausedBanner();
         this.renderActiveBanChips();
         this.computeKPIs();
-        this.renderTable();
+        this.renderCurrentView();
     }
 
     async deactivateMaintenance() {
@@ -502,7 +619,7 @@ class TelemetryDashboard {
             this.showToast('Deactivated locally', 'info');
         }
         this.computeKPIs();
-        this.renderTable();
+        this.renderCurrentView();
     }
 
     async pushBroadcast(noticeText = null) {
@@ -587,7 +704,7 @@ class TelemetryDashboard {
         this.populateGovernanceFields();
         this.renderActiveBanChips();
         this.computeKPIs();
-        this.renderTable();
+        this.renderCurrentView();
 
         try {
             const res = await fetch(this.getApiUrl('/ban'), {
@@ -608,7 +725,7 @@ class TelemetryDashboard {
                     this.populateGovernanceFields();
                     this.renderActiveBanChips();
                     this.computeKPIs();
-                    this.renderTable();
+                    this.renderCurrentView();
                 }
                 this.showToast(action === 'ban' ? `Device ${id} revoked successfully` : `Device ${id} restored successfully`, action === 'ban' ? 'error' : 'success');
             } else {
@@ -642,7 +759,7 @@ class TelemetryDashboard {
         this.populateGovernanceFields();
         this.renderActiveBanChips();
         this.computeKPIs();
-        this.renderTable();
+        this.renderCurrentView();
 
         try {
             const res = await fetch(this.getApiUrl('/ban'), {
@@ -663,7 +780,7 @@ class TelemetryDashboard {
                     this.populateGovernanceFields();
                     this.renderActiveBanChips();
                     this.computeKPIs();
-                    this.renderTable();
+                    this.renderCurrentView();
                 }
                 this.showToast(action === 'ban' ? `Student #${id} account banned` : `Student #${id} account restored`, action === 'ban' ? 'error' : 'success');
             } else {
@@ -795,7 +912,10 @@ class TelemetryDashboard {
             this.showToast(`GitHub sync failed: ${err.message}`, 'error');
         } finally {
             if (this.fetchGhBtn) {
-                this.fetchGhBtn.textContent = '🔄 Sync GitHub';
+                this.fetchGhBtn.innerHTML = `
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                    <span>Sync GitHub</span>
+                `;
                 this.fetchGhBtn.disabled = false;
             }
         }
@@ -904,9 +1024,51 @@ class TelemetryDashboard {
                 const isPassword = this.adminPassInput.type === 'password';
                 this.adminPassInput.type = isPassword ? 'text' : 'password';
                 if (this.eyeIcon) {
-                    this.eyeIcon.textContent = isPassword ? '🙈' : '👁️';
+                    this.eyeIcon.innerHTML = isPassword ? ICON_EYE_OFF : ICON_EYE;
                 }
+                this.togglePassVisibility.setAttribute('aria-label', isPassword ? 'Hide passkey' : 'Show passkey');
             });
+        }
+
+        // Mobile drawer navigation listeners
+        if (this.mobileMenuToggle) {
+            this.mobileMenuToggle.addEventListener('click', () => this.openSidebar());
+        }
+        if (this.closeSidebarBtn) {
+            this.closeSidebarBtn.addEventListener('click', () => this.closeSidebar());
+        }
+        if (this.sidebarOverlay) {
+            this.sidebarOverlay.addEventListener('click', () => this.closeSidebar());
+        }
+        if (this.mobileRefreshBtn) {
+            this.mobileRefreshBtn.addEventListener('click', () => {
+                const icon = this.mobileRefreshBtn.querySelector('.refresh-icon');
+                if (icon) icon.classList.add('spinning');
+                this.loadTelemetry().finally(() => {
+                    setTimeout(() => {
+                        if (icon) icon.classList.remove('spinning');
+                    }, 600);
+                });
+            });
+        }
+        if (this.mobileLockBtn) {
+            this.mobileLockBtn.addEventListener('click', () => this.lockPortal());
+        }
+
+        // OTA pause controls
+        if (this.resumeOtaBtn) {
+            this.resumeOtaBtn.addEventListener('click', () => this.togglePauseUpdates(false));
+        }
+        if (this.cfgPauseUpdates) {
+            this.cfgPauseUpdates.addEventListener('change', () => this.togglePauseUpdates(this.cfgPauseUpdates.checked));
+        }
+
+        // View Mode Switcher (Table vs Mobile Cards)
+        if (this.tableViewBtn) {
+            this.tableViewBtn.addEventListener('click', () => this.setViewMode('table'));
+        }
+        if (this.cardViewBtn) {
+            this.cardViewBtn.addEventListener('click', () => this.setViewMode('card'));
         }
 
         if (this.switchServerBtn) {
@@ -1004,8 +1166,12 @@ class TelemetryDashboard {
             });
         }
 
+        // Debounced search for smooth 60fps typing without layout jitter
         if (this.searchInput) {
-            this.searchInput.addEventListener('input', () => this.applyFilters());
+            this.searchInput.addEventListener('input', () => {
+                clearTimeout(this.searchDebounceTimer);
+                this.searchDebounceTimer = setTimeout(() => this.applyFilters(), 150);
+            });
         }
         if (this.statusFilter) {
             this.statusFilter.addEventListener('change', () => this.applyFilters());
@@ -1018,6 +1184,7 @@ class TelemetryDashboard {
         document.querySelectorAll('.nav-menu .nav-item').forEach(link => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
+                this.closeSidebar();
                 document.querySelectorAll('.nav-menu .nav-item').forEach(item => item.classList.remove('active'));
                 link.classList.add('active');
                 const target = link.getAttribute('href');
@@ -1031,6 +1198,12 @@ class TelemetryDashboard {
                     document.getElementById('releases')?.scrollIntoView({ behavior: 'smooth' });
                 }
             });
+        });
+
+        window.addEventListener('resize', () => {
+            if (window.innerWidth >= 1024) {
+                this.closeSidebar();
+            }
         });
     }
 
@@ -1107,6 +1280,7 @@ class TelemetryDashboard {
                 this.liveDotEl.style.boxShadow = '0 0 8px #F28482';
             }
         }
+        this.syncMobileLiveDot();
 
         this.populateVersionFilter();
         this.computeKPIs();
@@ -1280,18 +1454,20 @@ class TelemetryDashboard {
             }
         });
 
-        this.renderTable();
+        this.renderCurrentView();
     }
 
     renderTable() {
         if (!this.tableBodyEl) return;
-        this.tableCountEl.textContent = `(${this.filteredRecords.length} records)`;
+        if (this.tableCountEl) {
+            this.tableCountEl.textContent = `(${this.filteredRecords.length} records)`;
+        }
 
         if (this.records.length === 0) {
             this.tableBodyEl.innerHTML = `
                 <tr>
                     <td colspan="8" style="text-align: center; padding: 48px 16px; color: var(--text-secondary);">
-                        <div style="font-size: 32px; margin-bottom: 8px;">📡</div>
+                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--brand-honey-bronze)" stroke-width="1.8" style="margin-bottom: 8px;"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"/></svg>
                         <strong style="display: block; font-size: 15px; color: var(--text-primary); margin-bottom: 6px;">No Active Fleet Devices Registered Yet</strong>
                         <span style="font-size: 13px;">Open the Lloyd ERP Android app or click "Test Ping" above to dispatch telemetry into the live fleet stream.</span>
                     </td>
@@ -1342,14 +1518,14 @@ class TelemetryDashboard {
                                 <strong>${studentName}</strong>
                                 <small style="display:block; color:var(--text-secondary); font-size:11px;">
                                     UUID: <span style="font-family:'JetBrains Mono',monospace;">${escapeHtml(shortId || '--')}</span>
-                                    ${deviceId ? `<button class="copy-inline" title="Copy Full UUID" onclick="window.telemetryDashboard.copyToClipboard('${safeAttr(deviceId)}', 'Device UUID')">📋</button>` : ''}
+                                    ${deviceId ? `<button class="copy-inline" title="Copy Full UUID" aria-label="Copy Full UUID" onclick="window.telemetryDashboard.copyToClipboard('${safeAttr(deviceId)}', 'Device UUID')">${ICON_COPY}</button>` : ''}
                                 </small>
                             </div>
                         </div>
                     </td>
                     <td>
                         <code>${studentId !== null ? studentId : '--'}</code>
-                        ${studentId !== null ? `<button class="copy-inline" title="Copy Student ID" onclick="window.telemetryDashboard.copyToClipboard('${studentId}', 'Student ID')">📋</button>` : ''}
+                        ${studentId !== null ? `<button class="copy-inline" title="Copy Student ID" aria-label="Copy Student ID" onclick="window.telemetryDashboard.copyToClipboard('${studentId}', 'Student ID')">${ICON_COPY}</button>` : ''}
                     </td>
                     <td>
                         <span class="version-pill">${escapeHtml(r.app_version || '--')}</span>
@@ -1379,10 +1555,126 @@ class TelemetryDashboard {
                                     ? `<button class="btn-action btn-unban-student" onclick="window.telemetryDashboard.toggleStudentBan(${studentId}, 'unban')">Unban Account</button>`
                                     : `<button class="btn-action btn-ban-student" onclick="window.telemetryDashboard.toggleStudentBan(${studentId}, 'ban')">Ban Account</button>`
                             ) : ''}
-                            ${deviceId ? `<button class="btn-action btn-delete-row" title="Delete record from telemetry" onclick="window.telemetryDashboard.deleteTelemetry('${safeAttr(deviceId)}')">🗑️</button>` : ''}
+                            ${deviceId ? `<button class="btn-action btn-delete-row" title="Delete record from telemetry" aria-label="Delete record" onclick="window.telemetryDashboard.deleteTelemetry('${safeAttr(deviceId)}')">${ICON_TRASH}</button>` : ''}
                         </div>
                     </td>
                 </tr>
+            `;
+        }).join('');
+    }
+
+    renderCards() {
+        if (!this.studentCardGrid) return;
+
+        if (this.records.length === 0) {
+            this.studentCardGrid.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 48px 16px; color: var(--text-secondary); background: var(--bg-surface-elevated); border-radius: var(--radius-lg); border: 1px dashed var(--border-color);">
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--brand-honey-bronze)" stroke-width="1.8" style="margin-bottom: 8px;"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"/></svg>
+                    <strong style="display: block; font-size: 15px; color: var(--text-primary); margin-bottom: 6px;">No Active Fleet Devices Registered Yet</strong>
+                    <span style="font-size: 13px;">Open the Lloyd ERP Android app or click "Test Ping" above to dispatch telemetry into the live fleet stream.</span>
+                </div>
+            `;
+            return;
+        }
+
+        if (this.filteredRecords.length === 0) {
+            this.studentCardGrid.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 36px 16px; color: var(--text-secondary); background: var(--bg-surface-elevated); border-radius: var(--radius-lg);">
+                    No student records match the search filter.
+                </div>
+            `;
+            return;
+        }
+
+        const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+        const bannedDevSet = new Set((this.fleetConfig.banned_devices || []).map(d => String(d).trim()));
+        const bannedStudentSet = new Set((this.fleetConfig.banned_students || []).map(s => String(s).trim()));
+        const minVerCode = parseInt(this.fleetConfig.min_version_code) || 1;
+
+        this.studentCardGrid.innerHTML = this.filteredRecords.map(r => {
+            const lastActiveTime = (r.timestamp || r.server_received_at) ? new Date(r.timestamp || r.server_received_at).getTime() : 0;
+            const isOnline = lastActiveTime >= oneDayAgo;
+            const timeAgoStr = lastActiveTime > 0 ? this.formatTimeAgo(lastActiveTime) : 'Never';
+            const fullDateStr = lastActiveTime > 0 ? new Date(lastActiveTime).toLocaleString() : 'N/A';
+            
+            const isDevBanned = r.device_id && bannedDevSet.has(String(r.device_id).trim());
+            const isStudentBanned = r.student_id && bannedStudentSet.has(String(r.student_id).trim());
+            const isOutdated = r.version_code && (parseInt(r.version_code) < minVerCode);
+
+            const studentName = escapeHtml(r.student_name || 'Student');
+            const initials = r.student_name
+                ? r.student_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+                : 'ST';
+
+            const deviceId = String(r.device_id || '').trim();
+            const shortId = deviceId.length > 22 ? deviceId.substring(0, 14) + '...' + deviceId.slice(-6) : deviceId;
+            const studentId = r.student_id ? parseInt(r.student_id) : null;
+
+            return `
+                <div class="student-card">
+                    <div class="student-card-header">
+                        <div class="student-card-profile">
+                            <div class="avatar-circle">${escapeHtml(initials)}</div>
+                            <div class="student-card-name-wrap">
+                                <div class="student-card-name" title="${studentName}">${studentName}</div>
+                                <div class="student-card-id">
+                                    <span>#${studentId !== null ? studentId : '--'}</span>
+                                    ${studentId !== null ? `<button class="copy-inline" title="Copy Student ID" aria-label="Copy Student ID" onclick="window.telemetryDashboard.copyToClipboard('${studentId}', 'Student ID')">${ICON_COPY}</button>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="student-card-badges">
+                            ${isDevBanned
+                                ? '<span class="status-badge status-revoked">● Device Revoked</span>'
+                                : `<span class="status-badge ${isOnline ? 'status-online' : 'status-offline'}">● ${isOnline ? 'Active' : 'Idle'}</span>`
+                            }
+                            ${isStudentBanned ? '<span class="status-badge status-banned">● Account Banned</span>' : ''}
+                        </div>
+                    </div>
+
+                    <div class="student-card-meta">
+                        <div class="meta-item">
+                            <span class="meta-label">App Version</span>
+                            <span class="meta-val">
+                                <span class="version-pill">${escapeHtml(r.app_version || '--')}</span>
+                                ${isOutdated ? '<span class="status-badge status-outdated" style="margin-left:4px;" title="Below minimum allowed version">Outdated</span>' : ''}
+                            </span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Last Active</span>
+                            <span class="meta-val" title="${escapeHtml(fullDateStr)}">${escapeHtml(timeAgoStr)}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Device</span>
+                            <span class="meta-val">${escapeHtml(r.device_model || 'Unknown')}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">OS Version</span>
+                            <span class="meta-val">${escapeHtml(r.os_version || 'Android')}</span>
+                        </div>
+                        <div class="meta-item meta-uuid">
+                            <div style="min-width:0; overflow:hidden; text-overflow:ellipsis;">
+                                <span class="meta-label" style="display:block;">Device UUID</span>
+                                <span style="color:var(--text-secondary);">${escapeHtml(shortId || '--')}</span>
+                            </div>
+                            ${deviceId ? `<button class="copy-inline" title="Copy Full UUID" aria-label="Copy Full UUID" onclick="window.telemetryDashboard.copyToClipboard('${safeAttr(deviceId)}', 'Device UUID')">${ICON_COPY}</button>` : ''}
+                        </div>
+                    </div>
+
+                    <div class="student-card-actions">
+                        ${deviceId ? (
+                            isDevBanned
+                                ? `<button class="btn-action btn-restore" onclick="window.telemetryDashboard.toggleDeviceBan('${safeAttr(deviceId)}', 'unban')">Restore Device</button>`
+                                : `<button class="btn-action btn-revoke" onclick="window.telemetryDashboard.toggleDeviceBan('${safeAttr(deviceId)}', 'ban')">Revoke Device</button>`
+                        ) : ''}
+                        ${studentId ? (
+                            isStudentBanned
+                                ? `<button class="btn-action btn-unban-student" onclick="window.telemetryDashboard.toggleStudentBan(${studentId}, 'unban')">Unban Account</button>`
+                                : `<button class="btn-action btn-ban-student" onclick="window.telemetryDashboard.toggleStudentBan(${studentId}, 'ban')">Ban Account</button>`
+                        ) : ''}
+                        ${deviceId ? `<button class="btn-action btn-delete-row" title="Delete record from telemetry" aria-label="Delete record" onclick="window.telemetryDashboard.deleteTelemetry('${safeAttr(deviceId)}')">${ICON_TRASH}</button>` : ''}
+                    </div>
+                </div>
             `;
         }).join('');
     }

@@ -6,5 +6,6 @@
   "banned_devices": [],
   "broadcast_notice": null,
   "maintenance_mode": false,
-  "maintenance_message": "Lloyd ERP service is currently undergoing routine maintenance."
+  "maintenance_message": "Lloyd ERP service is currently undergoing routine maintenance.",
+  "pause_updates": false
 }

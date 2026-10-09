@@ -141,6 +141,20 @@ module.exports = async function handler(req, res) {
 
         latestVersion = cleanVersion(latestVersion);
 
+        // Administrator OTA Pause Override: Instantly halts all update popups
+        if (config && config.pause_updates) {
+            res.status(200).json({
+                has_update: false,
+                latest_version: latestVersion,
+                current_version: cleanClient.length > 0 ? cleanClient : latestVersion,
+                download_url: null,
+                release_notes: config.broadcast_notice || 'Updates are temporarily paused by administrator.',
+                source: 'admin_paused',
+                paused: true
+            });
+            return;
+        }
+
         const hasUpdate = isNewerVersion(latestVersion, cleanClient);
 
         let downloadUrl = null;

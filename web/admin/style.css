@@ -825,24 +825,7 @@ body {
     cursor: pointer;
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-    .app-layout {
-        flex-direction: column;
-    }
 
-    .sidebar {
-        width: 100%;
-        height: auto;
-        position: relative;
-        border-right: none;
-        border-bottom: 1px solid var(--border-color);
-    }
-
-    .main-content {
-        padding: 20px;
-    }
-}
 
 /* Enhanced Fleet UI Components */
 .highlight-coral {
@@ -1580,4 +1563,624 @@ body {
     border-color: rgba(242, 132, 130, 0.4);
     background: rgba(242, 132, 130, 0.08);
 }
+
+/* ==========================================================================
+   Mobile Drawer Navigation & Overlay (ui-ux-pro-max)
+   ========================================================================== */
+.sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 12, 15, 0.72);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 99;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.sidebar-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.sidebar-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.sidebar-header-row .brand {
+    margin-bottom: 32px;
+}
+
+.btn-close-sidebar {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    background: rgba(247, 237, 226, 0.06);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: var(--transition);
+    margin-bottom: 32px;
+}
+
+.btn-close-sidebar:hover {
+    color: var(--brand-light-coral);
+    border-color: rgba(242, 132, 130, 0.4);
+    background: rgba(242, 132, 130, 0.1);
+}
+
+.mobile-top-bar {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 85;
+    height: 60px;
+    padding: 0 16px;
+    background: rgba(27, 30, 34, 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+
+.mobile-menu-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(247, 237, 226, 0.05);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--brand-linen);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.mobile-menu-btn:hover,
+.mobile-menu-btn:active {
+    background: rgba(246, 189, 96, 0.12);
+    border-color: var(--brand-honey-bronze);
+    color: var(--brand-honey-bronze);
+}
+
+.mobile-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 800;
+    font-size: 1.05rem;
+    color: var(--brand-linen);
+    letter-spacing: -0.02em;
+}
+
+.mobile-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mobile-icon-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--brand-linen);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.mobile-icon-btn:hover,
+.mobile-icon-btn:active {
+    border-color: var(--brand-honey-bronze);
+    background: rgba(246, 189, 96, 0.1);
+    color: var(--brand-honey-bronze);
+}
+
+/* ==========================================================================
+   OTA Paused Alert Banner (1-Click Governance)
+   ========================================================================== */
+.ota-paused-banner {
+    background: rgba(246, 189, 96, 0.12);
+    border: 1px solid rgba(246, 189, 96, 0.45);
+    border-radius: var(--radius-md);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    box-shadow: 0 4px 20px rgba(246, 189, 96, 0.12);
+    animation: fadeIn 0.3s ease-out;
+}
+
+.ota-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.ota-banner-icon-badge {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: rgba(246, 189, 96, 0.2);
+    border: 1px solid rgba(246, 189, 96, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--brand-honey-bronze);
+    flex-shrink: 0;
+}
+
+.ota-banner-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ota-banner-text strong {
+    color: var(--brand-honey-bronze);
+    font-size: 0.92rem;
+    letter-spacing: 0.02em;
+    font-weight: 700;
+}
+
+.ota-banner-text span {
+    font-size: 0.82rem;
+    color: var(--brand-linen);
+}
+
+#resumeOtaBtn {
+    min-height: 44px;
+    padding: 8px 18px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 14px rgba(132, 165, 157, 0.25);
+}
+
+.ota-pause-control-box {
+    background: rgba(246, 189, 96, 0.06);
+    border: 1px solid rgba(246, 189, 96, 0.25);
+    border-radius: var(--radius-md);
+    padding: 14px 18px;
+    margin-top: 4px;
+}
+
+.toggle-pause-ota strong {
+    color: var(--brand-honey-bronze);
+}
+
+/* ==========================================================================
+   Table & Cards View Switcher
+   ========================================================================== */
+.view-mode-toggle {
+    display: inline-flex;
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 3px;
+    gap: 2px;
+}
+
+.btn-view-toggle {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-view-toggle:hover:not(.active) {
+    color: var(--brand-linen);
+    background: rgba(247, 237, 226, 0.06);
+}
+
+.btn-view-toggle.active {
+    background: rgba(246, 189, 96, 0.16);
+    color: var(--brand-honey-bronze);
+}
+
+/* ==========================================================================
+   Mobile Responsive Student Cards Grid
+   ========================================================================== */
+.mobile-card-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin-top: 14px;
+}
+
+.student-card {
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: var(--transition);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.student-card:hover {
+    border-color: rgba(246, 189, 96, 0.3);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.student-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.student-card-profile {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.student-card-profile .avatar-circle {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    font-size: 0.88rem;
+}
+
+.student-card-name-wrap {
+    min-width: 0;
+}
+
+.student-card-name {
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: var(--brand-linen);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.student-card-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+}
+
+.student-card-badges {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.student-card-meta {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.22);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+}
+
+.meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.meta-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+}
+
+.meta-val {
+    color: var(--brand-linen);
+    font-size: 0.82rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.meta-uuid {
+    grid-column: 1 / -1;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.student-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 4px;
+    flex-wrap: wrap;
+}
+
+.student-card-actions .btn-action {
+    flex: 1;
+    min-width: 120px;
+    min-height: 44px;
+    padding: 10px 14px;
+    font-size: 0.82rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.student-card-actions .btn-delete-row {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: var(--radius-md);
+    flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Full Responsive Layout Engine (ui-ux-pro-max standard)
+   ========================================================================== */
+@media (max-width: 1024px) {
+    .app-layout {
+        flex-direction: column;
+        width: 100vw;
+        min-height: 100vh;
+    }
+
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 300px;
+        max-width: 85vw;
+        height: 100vh;
+        z-index: 100;
+        transform: translateX(-100%);
+        transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+        box-shadow: 0 0 50px rgba(0, 0, 0, 0.7);
+        overflow-y: auto;
+    }
+
+    .sidebar.open {
+        transform: translateX(0);
+    }
+
+    .btn-close-sidebar {
+        display: flex;
+    }
+
+    .mobile-top-bar {
+        display: flex;
+    }
+
+    .top-nav {
+        display: none;
+    }
+
+    .main-content {
+        padding: 16px 16px 48px;
+        max-width: 100%;
+        gap: 20px;
+    }
+
+    .analytics-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+
+    .kpi-card {
+        padding: 16px;
+    }
+
+    .kpi-value {
+        font-size: 1.8rem;
+    }
+
+    .table-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 14px;
+    }
+
+    .table-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .search-box {
+        width: 100%;
+        min-height: 44px;
+    }
+
+    .select-filter {
+        width: 100%;
+        min-height: 44px;
+    }
+
+    .table-controls .btn {
+        min-height: 44px;
+        justify-content: center;
+    }
+
+    .view-mode-toggle {
+        align-self: flex-start;
+    }
+
+    .governance-card .card-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 14px;
+    }
+
+    .governance-actions {
+        width: 100%;
+        display: flex;
+        gap: 8px;
+    }
+
+    .governance-actions .btn {
+        flex: 1;
+        min-height: 44px;
+        justify-content: center;
+    }
+
+    .governance-grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+    }
+
+    .broadcast-banner-tool {
+        flex-direction: column;
+        padding: 14px;
+    }
+
+    .broadcast-inputs {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+    }
+
+    .broadcast-inputs input {
+        min-height: 44px;
+        width: 100%;
+        min-width: unset;
+    }
+
+    .broadcast-inputs .btn {
+        min-height: 44px;
+        justify-content: center;
+        width: 100%;
+    }
+
+    .quick-ban-banner {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 14px;
+    }
+
+    .quick-ban-inputs {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .quick-ban-inputs input,
+    .quick-ban-inputs select,
+    .quick-ban-inputs .btn {
+        min-height: 44px;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .ota-paused-banner,
+    .maintenance-alert-banner {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: left;
+    }
+
+    .ota-paused-banner .btn,
+    .maintenance-alert-banner .btn {
+        min-height: 44px;
+        justify-content: center;
+        width: 100%;
+    }
+
+    /* Enforce 44px Touch Targets */
+    .btn,
+    .btn-action,
+    .copy-inline {
+        min-height: 44px;
+    }
+
+    .copy-inline {
+        min-width: 38px;
+        padding: 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .kpi-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .main-content {
+        padding: 12px 10px 40px;
+    }
+
+    .card {
+        padding: 16px 14px;
+    }
+
+    .student-card-meta {
+        grid-template-columns: 1fr;
+    }
+
+    .student-card-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .student-card-actions .btn-action {
+        width: 100%;
+    }
+
+    .student-card-actions .btn-delete-row {
+        width: 100%;
+    }
+}
+
 

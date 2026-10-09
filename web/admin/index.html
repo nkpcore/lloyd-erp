@@ -10,21 +10,27 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
     <div class="app-layout">
         <!-- Sidebar Navigation -->
-        <aside class="sidebar">
-            <div class="brand">
-                <div class="brand-emblem">
-                    <svg viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect width="256" height="256" rx="56" fill="#FFFFFF"/>
-                        <circle cx="158" cy="128" r="58" fill="#FF6B35"/>
-                        <circle cx="98" cy="128" r="52" fill="none" stroke="#111111" stroke-width="14"/>
-                    </svg>
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header-row">
+                <div class="brand">
+                    <div class="brand-emblem">
+                        <svg viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="256" height="256" rx="56" fill="#FFFFFF"/>
+                            <circle cx="158" cy="128" r="58" fill="#FF6B35"/>
+                            <circle cx="98" cy="128" r="52" fill="none" stroke="#111111" stroke-width="14"/>
+                        </svg>
+                    </div>
+                    <div class="brand-text">
+                        <h1>Lloyd ERP</h1>
+                        <span>Admin Fleet Portal</span>
+                    </div>
                 </div>
-                <div class="brand-text">
-                    <h1>Lloyd ERP</h1>
-                    <span>Admin Fleet Portal</span>
-                </div>
+                <button class="btn-close-sidebar" id="closeSidebarBtn" aria-label="Close menu">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
             </div>
 
             <nav class="nav-menu">
@@ -56,6 +62,25 @@
 
         <!-- Main Content Area -->
         <main class="main-content" id="overview">
+            <!-- Mobile Sticky Top App Bar -->
+            <div class="mobile-top-bar">
+                <button class="mobile-menu-btn" id="mobileMenuToggle" aria-label="Open Navigation Menu">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+                <div class="mobile-brand">
+                    <span class="brand-title">Lloyd ERP</span>
+                    <span class="live-dot" id="mobileLiveDot"></span>
+                </div>
+                <div class="mobile-actions">
+                    <button class="mobile-icon-btn" id="mobileRefreshBtn" aria-label="Refresh Data" title="Refresh Telemetry">
+                        <svg class="refresh-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                    </button>
+                    <button class="mobile-icon-btn btn-lock" id="mobileLockBtn" aria-label="Lock Portal" title="Lock Admin Portal">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </button>
+                </div>
+            </div>
+
             <header class="top-nav">
                 <div class="page-title">
                     <h2>Student Fleet Telemetry</h2>
@@ -92,13 +117,32 @@
             <!-- Global Maintenance Mode Live Status Banner -->
             <div class="maintenance-alert-banner" id="maintenanceAlertBanner" style="display: none;">
                 <div class="maint-banner-content">
-                    <span class="maint-banner-icon">⚠️</span>
+                    <span class="maint-banner-icon">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    </span>
                     <div class="maint-banner-text">
                         <strong>GLOBAL MAINTENANCE LOCKOUT IS ACTIVE</strong>
                         <span>All student apps are currently blocked. Lockdown notice: <q id="maintBannerMsg">Maintenance active</q></span>
                     </div>
                 </div>
                 <button class="btn btn-sm btn-action-success" id="deactivateMaintBtn">Deactivate Maintenance Mode</button>
+            </div>
+
+            <!-- In-App Updates Paused Banner -->
+            <div class="ota-paused-banner" id="otaPausedAlertBanner" style="display: none;">
+                <div class="ota-banner-content">
+                    <div class="ota-banner-icon-badge">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+                    </div>
+                    <div class="ota-banner-text">
+                        <strong>IN-APP OTA UPDATES ARE CURRENTLY PAUSED</strong>
+                        <span>Student devices will not receive update prompts, even if newer releases exist on GitHub.</span>
+                    </div>
+                </div>
+                <button class="btn btn-sm btn-action-success" id="resumeOtaBtn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <span>Resume Updates</span>
+                </button>
             </div>
 
             <!-- KPI Metric Cards Grid -->
@@ -198,7 +242,9 @@
 
                 <!-- Instant Fleet Broadcast Announcement Tool -->
                 <div class="broadcast-banner-tool">
-                    <div class="broadcast-tool-icon">📢</div>
+                    <div class="broadcast-tool-icon">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                    </div>
                     <div class="broadcast-tool-body">
                         <div class="broadcast-tool-text">
                             <strong>Instant Dashboard Broadcast:</strong>
@@ -206,7 +252,10 @@
                         </div>
                         <div class="broadcast-inputs">
                             <input type="text" id="quickBroadcastInput" placeholder="Type notice to push (e.g. ERP maintenance scheduled for Sunday 2 AM)...">
-                            <button class="btn btn-primary" id="quickBroadcastBtn">📢 Push Notice</button>
+                            <button class="btn btn-primary" id="quickBroadcastBtn">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                                <span>Push Notice</span>
+                            </button>
                             <button class="btn btn-secondary" id="clearBroadcastBtn" title="Clear current broadcast notice">Clear Notice</button>
                         </div>
                     </div>
@@ -215,7 +264,10 @@
                 <!-- Direct Restriction Quick Tool -->
                 <div class="quick-ban-banner">
                     <div class="quick-ban-text">
-                        <strong>⚡ Quick Manual Restriction:</strong>
+                        <strong>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: text-bottom; margin-right: 4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                            Quick Manual Restriction:
+                        </strong>
                         <span>Instantly revoke or restore access for any device or student account without waiting:</span>
                     </div>
                     <div class="quick-ban-inputs">
@@ -224,8 +276,14 @@
                             <option value="STUDENT">Student ID</option>
                         </select>
                         <input type="text" id="quickBanInput" placeholder="Enter ID or UUID...">
-                        <button class="btn btn-action-danger" id="quickBanBtn">⛔ Ban / Revoke</button>
-                        <button class="btn btn-action-success" id="quickUnbanBtn">🟢 Restore / Unban</button>
+                        <button class="btn btn-action-danger" id="quickBanBtn">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                            <span>Ban / Revoke</span>
+                        </button>
+                        <button class="btn btn-action-success" id="quickUnbanBtn">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>Restore / Unban</span>
+                        </button>
                     </div>
                 </div>
 
@@ -263,7 +321,10 @@
                     <div class="gov-field">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                             <label for="cfgLatestVersion" style="margin-bottom:0;">Latest Release Version (OTA Target)</label>
-                            <button class="btn-text-action" id="fetchGhBtn" title="Fetch latest release tag from GitHub">🔄 Sync GitHub</button>
+                            <button class="btn-text-action" id="fetchGhBtn" title="Fetch latest release tag from GitHub">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align: text-bottom; margin-right: 3px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                                <span>Sync GitHub</span>
+                            </button>
                         </div>
                         <input type="text" id="cfgLatestVersion" placeholder="e.g. 1.0.15">
                         <small>Target release version resolved during in-app OTA updates</small>
@@ -299,6 +360,13 @@
                         <small>Displayed on full-screen lockout to all students when maintenance mode is active</small>
                     </div>
 
+                    <div class="gov-field-row gov-field-full ota-pause-control-box">
+                        <label class="toggle-label toggle-pause-ota">
+                            <input type="checkbox" id="cfgPauseUpdates">
+                            <span><strong>Pause In-App OTA Updates</strong> (Instantly stops update popups across all student devices)</span>
+                        </label>
+                    </div>
+
                     <div class="gov-field-row gov-field-full">
                         <label class="toggle-label">
                             <input type="checkbox" id="cfgMaintenanceMode">
@@ -308,7 +376,7 @@
                 </div>
             </section>
 
-            <!-- Live Student Fleet Table -->
+            <!-- Live Student Fleet Table & Cards -->
             <section class="card table-card" id="users">
                 <div class="table-header">
                     <div class="table-title">
@@ -320,7 +388,7 @@
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                             <input type="text" id="searchInput" placeholder="Search by student, ID, or device...">
                         </div>
-                        <select id="statusFilter" class="select-filter">
+                        <select id="statusFilter" class="select-filter" aria-label="Status filter">
                             <option value="ALL">All Statuses</option>
                             <option value="ACTIVE">Active (Last 24h)</option>
                             <option value="IDLE">Idle (>24h)</option>
@@ -328,9 +396,17 @@
                             <option value="BANNED_STUDENT">Banned Accounts</option>
                             <option value="OUTDATED">Outdated Version</option>
                         </select>
-                        <select id="versionFilter" class="select-filter">
+                        <select id="versionFilter" class="select-filter" aria-label="Version filter">
                             <option value="ALL">All Versions</option>
                         </select>
+                        <div class="view-mode-toggle" id="viewModeToggleGroup">
+                            <button class="btn-view-toggle active" id="tableViewBtn" title="Table View" aria-label="Table View">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                            </button>
+                            <button class="btn-view-toggle" id="cardViewBtn" title="Cards View" aria-label="Cards View">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+                            </button>
+                        </div>
                         <button class="btn btn-secondary" id="exportCsvBtn" title="Export current telemetry to CSV">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                             Export CSV
@@ -342,7 +418,7 @@
                     </div>
                 </div>
 
-                <div class="table-responsive">
+                <div class="table-responsive" id="tableContainer">
                     <table class="data-table" id="studentTable">
                         <thead>
                             <tr>
@@ -362,6 +438,11 @@
                             </tr>
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Mobile Responsive Card View -->
+                <div class="mobile-card-grid" id="studentCardGrid" style="display: none;">
+                    <!-- Dynamically populated student cards for mobile devices -->
                 </div>
             </section>
         </main>
@@ -387,14 +468,19 @@
                     <label for="adminPassInput">Admin Passkey</label>
                     <div class="password-wrapper">
                         <input type="password" id="adminPassInput" placeholder="Enter admin password..." autocomplete="current-password" required>
-                        <button type="button" id="togglePassVisibility" class="btn-toggle-eye" title="Show or hide password">
-                            <span id="eyeIcon">👁️</span>
+                        <button type="button" id="togglePassVisibility" class="btn-toggle-eye" title="Show or hide password" aria-label="Toggle password visibility">
+                            <span id="eyeIcon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </span>
                         </button>
                     </div>
                 </div>
                 
                 <div class="auth-error-msg" id="authErrorMsg" style="display: none;">
-                    <span>⚠️ Incorrect passkey. Access denied.</span>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        <span>Incorrect passkey. Access denied.</span>
+                    </div>
                 </div>
 
                 <div class="auth-options">
