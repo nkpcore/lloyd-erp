@@ -279,8 +279,7 @@ fun ProfileScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        containerColor = Color.Transparent,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
@@ -290,8 +289,8 @@ fun ProfileScreen(
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = Color.Transparent
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.background
                 )
             )
         }
@@ -985,6 +984,9 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Sign Out of Lloyd ERP")
             }
+
+            // Bottom space clearance for floating navigation pill
+            Spacer(modifier = Modifier.height(100.dp))
         }
     }
 }

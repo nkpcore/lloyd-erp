@@ -85,8 +85,7 @@ fun DashboardScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        containerColor = Color.Transparent,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
@@ -143,8 +142,8 @@ fun DashboardScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = Color.Transparent
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.background
                 )
             )
         }
@@ -166,7 +165,7 @@ fun DashboardScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 100.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Offline Notice Banner
@@ -273,7 +272,7 @@ fun DashboardScreen(
                                     }
                                     val animatedProgress by animateFloatAsState(
                                         targetValue = targetProgress,
-                                        animationSpec = tween(durationMillis = 800),
+                                        animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
                                         label = "overallProgress"
                                     )
 

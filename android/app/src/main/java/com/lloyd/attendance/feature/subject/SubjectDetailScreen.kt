@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -93,7 +94,7 @@ fun SubjectDetailScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        containerColor = Color.Transparent,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
@@ -149,8 +150,8 @@ fun SubjectDetailScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = Color.Transparent
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.background
                 )
             )
         }
@@ -316,7 +317,7 @@ private fun SubjectHeroCard(
                     }
                     val animatedProgress by animateFloatAsState(
                         targetValue = targetProgress,
-                        animationSpec = tween(durationMillis = 800),
+                        animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
                         label = "subjectGauge"
                     )
 

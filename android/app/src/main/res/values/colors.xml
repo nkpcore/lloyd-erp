@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Material Design 3 Tonal Surface Roles (Warm Light Theme) -->
+    <color name="md_theme_light_background">#FDFBF7</color>
+    <color name="md_theme_light_surface">#FFFFFF</color>
+    <color name="md_theme_light_onSurface">#2B2D42</color>
+    <color name="md_theme_light_surfaceContainerLowest">#FFFFFF</color>
+    <color name="md_theme_light_surfaceContainerLow">#FBF7F0</color>
+    <color name="md_theme_light_surfaceContainer">#F7EDE2</color>
+
     <!-- Material Design 3 Tonal Surface Roles (Warm Dark Theme) -->
     <color name="md_theme_dark_surface">#161B22</color>
     <color name="md_theme_dark_onSurface">#F0F6FC</color>

@@ -1,6 +1,7 @@
 package com.lloyd.attendance.core.designsystem.components
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -92,7 +93,7 @@ fun AttendanceCard(
                             val targetProgress = (pct.percentage / 100.0).toFloat().coerceIn(0f, 1f)
                             val animatedProgress by animateFloatAsState(
                                 targetValue = targetProgress,
-                                animationSpec = tween(durationMillis = 800),
+                                animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
                                 label = "progressAnimation"
                             )
 

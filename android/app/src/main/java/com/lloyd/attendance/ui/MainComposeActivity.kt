@@ -9,17 +9,25 @@ import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.SystemBarStyle
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.activity.result.contract.ActivityResultContracts
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.IntentFilter
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.EaseInCubic
+import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -28,11 +36,10 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.automirrored.outlined.EventNote
@@ -260,10 +267,7 @@ class MainComposeActivity : FragmentActivity() {
             }
         }
 
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
-        )
+        enableEdgeToEdge()
         setContent {
             LloydTheme {
                 if (isAppLocked) {
@@ -464,24 +468,37 @@ fun MainAppShell(
         destination = ScreenDestination.Main
     }
 
-    val m3Decelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f)
-    val m3Accelerate = CubicBezierEasing(0.3f, 0.0f, 0.8f, 0.15f)
-
     AnimatedContent(
         targetState = destination,
         transitionSpec = {
             if (targetState is ScreenDestination.Main) {
-                // Backward transition: Shared Z-Axis Zoom Out
-                (fadeIn(animationSpec = tween(280, easing = m3Decelerate)) +
-                 scaleIn(initialScale = 1.08f, animationSpec = tween(320, easing = m3Decelerate))) togetherWith
-                (fadeOut(animationSpec = tween(200, easing = m3Accelerate)) +
-                 scaleOut(targetScale = 0.90f, animationSpec = tween(240, easing = m3Accelerate)))
+                // Backward transition: Shared Axis Slide Deck
+                (slideInHorizontally(
+                    initialOffsetX = { -(it * 0.20f).toInt() },
+                    animationSpec = tween(300, easing = EaseOutCubic)
+                ) + fadeIn(
+                    animationSpec = tween(240, easing = EaseOutCubic)
+                )) togetherWith
+                (slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(280, easing = EaseInCubic)
+                ) + fadeOut(
+                    animationSpec = tween(200, easing = EaseInCubic)
+                ))
             } else {
-                // Forward transition: Shared Z-Axis Zoom In
-                (fadeIn(animationSpec = tween(280, easing = m3Decelerate)) +
-                 scaleIn(initialScale = 0.90f, animationSpec = tween(320, easing = m3Decelerate))) togetherWith
-                (fadeOut(animationSpec = tween(200, easing = m3Accelerate)) +
-                 scaleOut(targetScale = 1.08f, animationSpec = tween(240, easing = m3Accelerate)))
+                // Forward transition: Shared Axis Slide Deck
+                (slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(320, easing = EaseOutCubic)
+                ) + fadeIn(
+                    animationSpec = tween(240, easing = EaseOutCubic)
+                )) togetherWith
+                (slideOutHorizontally(
+                    targetOffsetX = { -(it * 0.20f).toInt() },
+                    animationSpec = tween(280, easing = EaseInCubic)
+                ) + fadeOut(
+                    animationSpec = tween(200, easing = EaseInCubic)
+                ))
             }
         },
         label = "screen_nav_transition"
@@ -503,104 +520,112 @@ fun MainAppShell(
             }
 
             is ScreenDestination.Main -> {
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    containerColor = MaterialTheme.colorScheme.background,
-                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                    bottomBar = {
-                        NavigationBar(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .navigationBarsPadding(),
-                            containerColor = Color.Transparent,
-                            tonalElevation = 0.dp,
-                            windowInsets = WindowInsets(0, 0, 0, 0)
-                        ) {
-                            MainTab.entries.forEach { tab ->
-                                val selected = selectedTab == tab
-                                NavigationBarItem(
-                                    selected = selected,
-                                    onClick = { selectedTab = tab },
-                                    icon = {
-                                        Icon(
-                                            imageVector = if (selected) tab.activeIcon else tab.inactiveIcon,
-                                            contentDescription = tab.title
-                                        )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
+                    // Content Layer: Sibling tab fade-through with subtle scale
+                    AnimatedContent(
+                        targetState = selectedTab,
+                        transitionSpec = {
+                            (fadeIn(animationSpec = tween(220, easing = FastOutSlowInEasing)) +
+                             scaleIn(initialScale = 0.98f, animationSpec = tween(220, easing = FastOutSlowInEasing))) togetherWith
+                            (fadeOut(animationSpec = tween(150, easing = FastOutSlowInEasing)))
+                        },
+                        label = "tab_fade_through_animation"
+                    ) { currentTab ->
+                        when (currentTab) {
+                            MainTab.DASHBOARD -> {
+                                DashboardScreen(
+                                    viewModel = dashboardViewModel,
+                                    onNavigateToSubjectDetail = { subject: SubjectAttendance ->
+                                        destination = ScreenDestination.SubjectDetail(subject)
                                     },
-                                    label = {
-                                        Text(
-                                            text = tab.title,
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                                    onNavigateToOverallSimulation = { p: Int, t: Int ->
+                                        simulationViewModel.initialize(
+                                            subjectName = "Overall Attendance",
+                                            present = p,
+                                            total = t
                                         )
-                                    },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        indicatorColor = Color.Transparent,
-                                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        selectedTextColor = MaterialTheme.colorScheme.primary,
-                                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                        destination = ScreenDestination.OverallSimulation
+                                    }
+                                )
+                            }
+
+                            MainTab.LOGS -> {
+                                AttendanceLogsScreen(
+                                    viewModel = logsViewModel
+                                )
+                            }
+
+                            MainTab.PROFILE -> {
+                                ProfileScreen(
+                                    userProfile = prefs.userProfile,
+                                    studentId = prefs.getStudentId(),
+                                    stats = prefs.cachedStats,
+                                    onLogout = onLogout
                                 )
                             }
                         }
                     }
-                ) { innerPadding ->
+
+                    // Floating Navigation Pill Overlay
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(bottom = innerPadding.calculateBottomPadding())
+                            .align(Alignment.BottomCenter)
+                            .navigationBarsPadding()
+                            .padding(start = 24.dp, end = 24.dp, bottom = 12.dp)
                     ) {
-                        AnimatedContent(
-                            targetState = selectedTab,
-                            transitionSpec = {
-                                val direction = if (targetState.ordinal >= initialState.ordinal) 1 else -1
-                                val slideFactor = 0.22f
-                                (slideInHorizontally(
-                                    initialOffsetX = { (it * slideFactor * direction).toInt() },
-                                    animationSpec = tween(300, easing = m3Decelerate)
-                                ) + fadeIn(
-                                    animationSpec = tween(260, easing = m3Decelerate)
-                                )) togetherWith
-                                (slideOutHorizontally(
-                                    targetOffsetX = { (-it * slideFactor * direction).toInt() },
-                                    animationSpec = tween(240, easing = m3Accelerate)
-                                ) + fadeOut(
-                                    animationSpec = tween(200, easing = m3Accelerate)
-                                ))
-                            },
-                            label = "tab_slide_animation"
-                        ) { currentTab ->
-                            when (currentTab) {
-                                MainTab.DASHBOARD -> {
-                                    DashboardScreen(
-                                        viewModel = dashboardViewModel,
-                                        onNavigateToSubjectDetail = { subject: SubjectAttendance ->
-                                            destination = ScreenDestination.SubjectDetail(subject)
-                                        },
-                                        onNavigateToOverallSimulation = { p: Int, t: Int ->
-                                            simulationViewModel.initialize(
-                                                subjectName = "Overall Attendance",
-                                                present = p,
-                                                total = t
+                        Surface(
+                            shape = RoundedCornerShape(32.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                            tonalElevation = 3.dp,
+                            shadowElevation = 8.dp,
+                            border = BorderStroke(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.40f)
+                            )
+                        ) {
+                            NavigationBar(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(64.dp),
+                                containerColor = Color.Transparent,
+                                tonalElevation = 0.dp,
+                                windowInsets = WindowInsets(0, 0, 0, 0)
+                            ) {
+                                MainTab.entries.forEach { tab ->
+                                    val selected = selectedTab == tab
+                                    val iconScale by animateFloatAsState(
+                                        targetValue = if (selected) 1.10f else 1.0f,
+                                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                        label = "tabIconScale"
+                                    )
+                                    NavigationBarItem(
+                                        selected = selected,
+                                        onClick = { selectedTab = tab },
+                                        icon = {
+                                            Icon(
+                                                imageVector = if (selected) tab.activeIcon else tab.inactiveIcon,
+                                                contentDescription = tab.title,
+                                                modifier = Modifier.scale(iconScale)
                                             )
-                                            destination = ScreenDestination.OverallSimulation
-                                        }
-                                    )
-                                }
-
-                                MainTab.LOGS -> {
-                                    AttendanceLogsScreen(
-                                        viewModel = logsViewModel
-                                    )
-                                }
-
-                                MainTab.PROFILE -> {
-                                    ProfileScreen(
-                                        userProfile = prefs.userProfile,
-                                        studentId = prefs.getStudentId(),
-                                        stats = prefs.cachedStats,
-                                        onLogout = onLogout
+                                        },
+                                        label = {
+                                            Text(
+                                                text = tab.title,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        },
+                                        colors = NavigationBarItemDefaults.colors(
+                                            indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
                                     )
                                 }
                             }

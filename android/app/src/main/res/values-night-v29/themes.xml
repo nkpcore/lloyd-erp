@@ -14,7 +14,7 @@
         <item name="colorOnSecondaryContainer">@color/md_theme_dark_onSecondaryContainer</item>
 
         <!-- Window System Bars (Full Edge-to-Edge Transparency) -->
-        <item name="android:windowBackground">@color/md_theme_light_background</item>
+        <item name="android:windowBackground">@color/md_theme_dark_surfaceContainerLowest</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:enforceNavigationBarContrast">false</item>
