@@ -4,6 +4,17 @@ on:
   push:
     branches: [ "main" ]
   workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Publish official GitHub Release and update fleet server'
+        required: true
+        type: boolean
+        default: true
+      version_tag:
+        description: 'Release version tag (e.g. v1.1.0; leave empty for auto v1.0.<run_number>)'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -67,12 +78,20 @@ jobs:
         run: |
           cd android
           VERSION_CODE=$((200 + ${{ github.run_number }}))
-          ./gradlew assembleRelease -PappVersionCode=${VERSION_CODE} -PappVersionName="1.0.${{ github.run_number }}" --no-daemon --stacktrace
+          VERSION_NAME="1.0.${{ github.run_number }}"
+          if [ -n "${{ inputs.version_tag }}" ]; then
+            VERSION_NAME="${{ inputs.version_tag }}"
+            VERSION_NAME="${VERSION_NAME#v}"
+          fi
+          ./gradlew assembleRelease -PappVersionCode=${VERSION_CODE} -PappVersionName="${VERSION_NAME}" --no-daemon --stacktrace
 
       - name: Prepare Release Artifacts
         run: |
           mkdir -p release-artifacts
           VERSION_TAG="v1.0.${{ github.run_number }}"
+          if [ -n "${{ inputs.version_tag }}" ]; then
+            VERSION_TAG="${{ inputs.version_tag }}"
+          fi
           RELEASE_APK="android/app/build/outputs/apk/release/app-release.apk"
           DEST_APK="release-artifacts/LloydAttendance-${VERSION_TAG}.apk"
           
@@ -95,43 +114,49 @@ jobs:
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
-        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && (inputs.create_release == true || inputs.create_release == 'true')
         with:
-          tag_name: "v1.0.${{ github.run_number }}"
-          name: "Lloyd Attendance v1.0.${{ github.run_number }}"
+          tag_name: ${{ inputs.version_tag != '' && inputs.version_tag || format('v1.0.{0}', github.run_number) }}
+          name: ${{ inputs.version_tag != '' && format('Lloyd Attendance {0}', inputs.version_tag) || format('Lloyd Attendance v1.0.{0}', github.run_number) }}
           draft: false
           prerelease: false
           make_latest: true
           generate_release_notes: true
           target_commitish: ${{ github.sha }}
           body: |
-            ## 🚀 Lloyd Attendance Release `v1.0.${{ github.run_number }}`
+            ## 🚀 Lloyd Attendance Release `${{ inputs.version_tag != '' && inputs.version_tag || format('v1.0.{0}', github.run_number) }}`
             
             ### 📱 What's New & Included
             - **Native Material Design 3 Expressive UI** (dynamic color theming, edge-to-edge system bars, M3 typography & cards).
+            - **AKTU Syllabus In-App Viewer**: Complete 2026-27 university curriculum bundled directly inside the APK with native PDF rendering, table of contents, and search.
+            - **Daily Attendance Logs**: Clean 12-hour timestamps, date headers, and status badges.
             - **Intelligent Attendance Change Detector**: Real-time notifications triggered exclusively on actual status changes (marked Present or Absent).
             - **Comprehensive ERP Discovery Integration**: High-fidelity subject metadata, room numbers, teacher names, syllabus trackers, and Bunk Safe zone analytics.
-            - **Automated Continuous Versioning**: Built dynamically from commit `${{ github.sha }}` on `${{ github.ref_name }}`.
             
             ### 📥 Download & Installation
             Download the signed APK below directly to your Android device to install or update.
-            - **File**: `LloydAttendance-v1.0.${{ github.run_number }}.apk`
             - Checksum verification available in `.sha256`.
           files: |
-            release-artifacts/LloydAttendance-v1.0.${{ github.run_number }}.apk
-            release-artifacts/LloydAttendance-v1.0.${{ github.run_number }}.apk.sha256
+            release-artifacts/*.apk
+            release-artifacts/*.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Broadcast Release to Fleet Server
-        if: success() && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+        if: success() && github.event_name == 'workflow_dispatch' && (inputs.create_release == true || inputs.create_release == 'true')
         env:
           FLEET_SERVER_URL: ${{ secrets.FLEET_SERVER_URL }}
+          FLEET_ADMIN_TOKEN: ${{ secrets.FLEET_ADMIN_TOKEN }}
         run: |
           if [ -n "$FLEET_SERVER_URL" ]; then
-            VERSION_TAG="v1.0.${{ github.run_number }}"
+            VERSION_TAG="${{ inputs.version_tag != '' && inputs.version_tag || format('v1.0.{0}', github.run_number) }}"
             echo "Broadcasting $VERSION_TAG to fleet server $FLEET_SERVER_URL..."
+            AUTH_HEADER=""
+            if [ -n "$FLEET_ADMIN_TOKEN" ]; then
+              AUTH_HEADER="Authorization: Bearer $FLEET_ADMIN_TOKEN"
+            fi
             curl -s -X POST "${FLEET_SERVER_URL%/}/config" \
               -H "Content-Type: application/json" \
-              -d "{\"latest_version_name\":\"${VERSION_TAG}\",\"broadcast_notice\":\"New update ${VERSION_TAG} released.\"}" || true
+              ${AUTH_HEADER:+-H "$AUTH_HEADER"} \
+              -d "{\"latest_version_name\":\"${VERSION_TAG}\",\"broadcast_notice\":\"New update ${VERSION_TAG} released.\"}"
           fi

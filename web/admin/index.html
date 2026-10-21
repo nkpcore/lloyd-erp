@@ -50,6 +50,10 @@
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/><polyline points="16 16 12 12 8 16"/></svg>
                     <span>OTA Releases</span>
                 </a>
+                <a href="#feedback" class="nav-item" id="feedbackNavLink">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <span>Feedback <span class="nav-badge" id="feedbackBadge" style="display:none"></span></span>
+                </a>
             </nav>
 
             <div class="sidebar-footer">
@@ -501,6 +505,82 @@
             </div>
         </div>
     </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- Feedback Section                                                  -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <section class="content-section" id="feedback" style="display:none;">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title">Student Feedback</h2>
+                <p class="section-subtitle">Direct feedback from the student fleet — stored securely on fleet server.</p>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <select id="fbStatusFilter" class="filter-select" style="min-width:110px;">
+                    <option value="">All</option>
+                    <option value="new">New</option>
+                    <option value="read">Read</option>
+                    <option value="actioned">Actioned</option>
+                    <option value="closed">Closed</option>
+                </select>
+                <select id="fbCategoryFilter" class="filter-select" style="min-width:110px;">
+                    <option value="">All Categories</option>
+                    <option value="general">General</option>
+                    <option value="bug">Bug</option>
+                    <option value="feature">Feature</option>
+                    <option value="attendance">Attendance</option>
+                    <option value="marks">Marks</option>
+                    <option value="ui">UI</option>
+                    <option value="other">Other</option>
+                </select>
+                <button class="btn btn-secondary" id="fbRefreshBtn" title="Refresh feedback">
+                    <svg class="refresh-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                    Refresh
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats row -->
+        <div class="kpi-grid" style="margin-bottom:20px;">
+            <div class="kpi-card">
+                <div class="kpi-label">Total</div>
+                <div class="kpi-value" id="fbTotal">—</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">New</div>
+                <div class="kpi-value" id="fbNewCount" style="color:var(--accent)">—</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Actioned</div>
+                <div class="kpi-value" id="fbActionedCount">—</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Closed</div>
+                <div class="kpi-value" id="fbClosedCount">—</div>
+            </div>
+        </div>
+
+        <!-- Feedback list -->
+        <div class="card" style="padding:0;overflow:hidden;">
+            <div id="fbList" style="min-height:120px;">
+                <div class="empty-state" id="fbEmpty" style="display:none;">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <p>No feedback yet</p>
+                </div>
+                <div id="fbCards"></div>
+            </div>
+        </div>
+
+        <!-- Feedback detail modal -->
+        <div id="fbModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:900;align-items:center;justify-content:center;">
+            <div class="card" style="max-width:560px;width:92%;max-height:90vh;overflow-y:auto;position:relative;padding:28px 24px 24px;">
+                <button onclick="window.feedbackPanel.closeModal()" style="position:absolute;top:14px;right:14px;background:none;border:none;cursor:pointer;color:var(--text-muted);">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+                <div id="fbModalContent"></div>
+            </div>
+        </div>
+    </section>
 
     <!-- Floating Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>

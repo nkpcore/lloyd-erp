@@ -27,11 +27,22 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.EventNote
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Feedback
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -48,7 +59,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,17 +84,39 @@ import com.lloyd.attendance.core.domain.BunkAdvisor
 import com.lloyd.attendance.core.domain.SubjectAttendance
 import com.lloyd.attendance.core.export.AttendanceReportExporter
 
+private fun getContextualGreeting(studentName: String): String {
+    val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Kolkata"))
+    val hour = cal.get(java.util.Calendar.HOUR_OF_DAY)
+    val salutation = when (hour) {
+        in 5..11 -> "Good morning"
+        in 12..16 -> "Good afternoon"
+        in 17..21 -> "Good evening"
+        else -> "Good night"
+    }
+    val firstName = studentName.trim().split(Regex("\\s+")).firstOrNull()?.takeIf { it.isNotBlank() }
+    return if (firstName != null) "$salutation, $firstName 👋" else "$salutation 👋"
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel,
     onNavigateToSubjectDetail: (SubjectAttendance) -> Unit,
     onNavigateToOverallSimulation: (present: Int, total: Int) -> Unit,
+    onNavigateToCalendar: () -> Unit = {},
+    onNavigateToLatestAttendance: () -> Unit = {},
+    onNavigateToSyllabus: () -> Unit = {},
+    onNavigateToSyllabusPdf: (initialPage: Int) -> Unit = {},
+    onNavigateToFeedback: () -> Unit = {},
+    onNavigateToFeeReceipts: () -> Unit = {},
+    onCheckForUpdates: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val overall = uiState.overall
     val context = LocalContext.current
+    var moreMenuExpanded by remember { mutableStateOf(false) }
+    val greeting = remember(uiState.studentName) { getContextualGreeting(uiState.studentName) }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -107,23 +142,15 @@ fun DashboardScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = {
-                            val report = AttendanceReportExporter.generateTextReport(
-                                studentName = uiState.studentName,
-                                section = uiState.section,
-                                overallPercentage = overall.percentage.displayValue,
-                                totalPresent = overall.totalPresent,
-                                totalClasses = overall.totalClasses,
-                                subjects = overall.subjects
-                            )
-                            AttendanceReportExporter.shareReport(context, report)
-                        }
+                        onClick = { onNavigateToSyllabusPdf(0) }
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = "Share Attendance Report"
+                            imageVector = Icons.Default.PictureAsPdf,
+                            contentDescription = "Open AKTU Syllabus PDF",
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
+
                     IconButton(
                         onClick = { viewModel.refresh() },
                         enabled = !uiState.isRefreshing
@@ -137,6 +164,92 @@ fun DashboardScreen(
                             Icon(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = "Refresh Data"
+                            )
+                        }
+                    }
+
+                    Box {
+                        IconButton(onClick = { moreMenuExpanded = true }) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More options"
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = moreMenuExpanded,
+                            onDismissRequest = { moreMenuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Attendance Calendar") },
+                                leadingIcon = { Icon(Icons.Default.DateRange, contentDescription = null) },
+                                onClick = {
+                                    moreMenuExpanded = false
+                                    onNavigateToCalendar()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Latest Attendance") },
+                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.EventNote, contentDescription = null) },
+                                onClick = {
+                                    moreMenuExpanded = false
+                                    onNavigateToLatestAttendance()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Open Syllabus PDF") },
+                                leadingIcon = { Icon(Icons.Default.PictureAsPdf, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                onClick = {
+                                    moreMenuExpanded = false
+                                    onNavigateToSyllabusPdf(0)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("AKTU Syllabus (2026-27)") },
+                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
+                                onClick = {
+                                    moreMenuExpanded = false
+                                    onNavigateToSyllabus()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Feedback & Grievances") },
+                                leadingIcon = { Icon(Icons.Default.Feedback, contentDescription = null) },
+                                onClick = {
+                                    moreMenuExpanded = false
+                                    onNavigateToFeedback()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Fee Receipts") },
+                                leadingIcon = { Icon(Icons.Default.Receipt, contentDescription = null) },
+                                onClick = {
+                                    moreMenuExpanded = false
+                                    onNavigateToFeeReceipts()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Check for Updates") },
+                                leadingIcon = { Icon(Icons.Default.SystemUpdate, contentDescription = null) },
+                                onClick = {
+                                    moreMenuExpanded = false
+                                    onCheckForUpdates()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Share Academic Report") },
+                                leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                                onClick = {
+                                    moreMenuExpanded = false
+                                    val report = AttendanceReportExporter.generateTextReport(
+                                        studentName = uiState.studentName,
+                                        section = uiState.section,
+                                        overallPercentage = overall.percentage.displayValue,
+                                        totalPresent = overall.totalPresent,
+                                        totalClasses = overall.totalClasses,
+                                        subjects = overall.subjects
+                                    )
+                                    AttendanceReportExporter.shareReport(context, report)
+                                }
                             )
                         }
                     }
@@ -207,6 +320,17 @@ fun DashboardScreen(
                             }
                         }
                     }
+                }
+
+                // Contextual Greeting Header
+                item {
+                    Text(
+                        text = greeting,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
                 }
 
                 // Hero Attendance Summary Card (M3 Expressive Compact Header)
@@ -337,6 +461,65 @@ fun DashboardScreen(
                     }
                 }
 
+                // Official AKTU Syllabus In-App PDF Card
+                item {
+                    ElevatedCard(
+                        onClick = { onNavigateToSyllabusPdf(0) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = ExpressiveShapes.largeIncreased,
+                        colors = androidx.compose.material3.CardDefaults.elevatedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.PictureAsPdf,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(14.dp))
+                                Column {
+                                    Text(
+                                        text = "Official AKTU Syllabus",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Open 2026-27 Syllabus PDF inside app",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            FilledTonalButton(
+                                onClick = { onNavigateToSyllabusPdf(0) },
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("Open PDF")
+                            }
+                        }
+                    }
+                }
 
                 // Section Header: Subject Breakdown
                 item {

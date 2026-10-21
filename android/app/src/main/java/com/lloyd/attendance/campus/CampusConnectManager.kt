@@ -374,14 +374,16 @@ class CampusConnectManager private constructor(private val context: Context) : C
             val apiClient = ErpApiClient(context)
             val credItem = apiClient.fetchInternetCredentials()
 
-            if (credItem != null && !credItem.userId.isNullOrBlank() && !credItem.password.isNullOrBlank()) {
-                credentialStore.saveCredentials(credItem.userId.trim(), credItem.password.trim())
+            val uId = credItem?.userId?.trim()
+            val pwd = credItem?.password?.trim()
+            if (!uId.isNullOrBlank() && !pwd.isNullOrBlank()) {
+                credentialStore.saveCredentials(uId, pwd)
                 diagnosticsStore.record(
                     CampusConnectionEvent.Type.CREDENTIALS_SYNCED,
                     "Credentials Synced from ERP",
-                    "Assigned User ID: ${credItem.userId}"
+                    "Assigned User ID: $uId"
                 )
-                Result.success("Wi-Fi credentials synced: ${credItem.userId}")
+                Result.success("Wi-Fi credentials synced: $uId")
             } else {
                 Result.failure(Exception("No assigned campus internet credentials found on ERP. Please contact college IT."))
             }

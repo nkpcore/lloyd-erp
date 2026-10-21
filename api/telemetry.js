@@ -22,6 +22,10 @@ module.exports = async function handler(req, res) {
 
     try {
         if (req.method === 'GET') {
+            if (!verifyAdminAuth(req)) {
+                res.status(401).json({ error: 'Unauthorized: Admin access required' });
+                return;
+            }
             const records = await db.getTelemetryRecords();
             res.status(200).json(records);
             return;
@@ -39,7 +43,29 @@ module.exports = async function handler(req, res) {
                 return;
             }
 
-            await db.upsertTelemetryRecord(body);
+            // Phase 1.4: Strict schema allowlist — drop unknown properties, sanitize strings
+            const ALLOWED_TELEMETRY_KEYS = [
+                'device_id', 'student_id', 'app_version_code', 'app_version_name',
+                'os_version', 'device_model', 'timestamp'
+            ];
+            const MAX_STR_LEN = 128;
+            const sanitized = {};
+            for (const key of ALLOWED_TELEMETRY_KEYS) {
+                if (body[key] === undefined) continue;
+                const val = body[key];
+                if (typeof val === 'string') {
+                    sanitized[key] = val.trim().replace(/[\x00-\x1F\x7F]/g, '').slice(0, MAX_STR_LEN);
+                } else if (typeof val === 'number' || typeof val === 'boolean') {
+                    sanitized[key] = val;
+                }
+            }
+
+            if (!sanitized.device_id) {
+                res.status(400).json({ error: 'device_id must be a non-empty string' });
+                return;
+            }
+
+            await db.upsertTelemetryRecord(sanitized);
             res.status(200).json({ success: true, timestamp: new Date().toISOString() });
             return;
         }

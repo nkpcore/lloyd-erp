@@ -14,7 +14,7 @@ import java.util.Locale
  */
 class TimetableRepository(
     private val context: Context,
-    private val prefs: AppPreferences = AppPreferences(context),
+    private val prefs: AppPreferences = AppPreferences.getInstance(context),
     private val gson: Gson = Gson()
 ) {
 
@@ -49,9 +49,9 @@ class TimetableRepository(
         }
 
         // Find matching DayItem
-        val matchedDay = weeklyData!!.days.firstOrNull { dayItem ->
+        val matchedDay = weeklyData!!.days!!.firstOrNull { dayItem ->
             dayItem.day.equals(dayName, ignoreCase = true) ||
-            dayItem.day.startsWith(dayName.take(3), ignoreCase = true)
+            dayItem.day?.startsWith(dayName.take(3), ignoreCase = true) == true
         }
 
         if (matchedDay == null || matchedDay.periods.isNullOrEmpty()) {
@@ -92,7 +92,7 @@ class TimetableRepository(
         }
 
         return DayScheduleResult.Success(
-            dayName = matchedDay.day,
+            dayName = matchedDay.day ?: dayName,
             dateString = matchedDay.date,
             section = studentSection.ifBlank { null },
             periods = mappedPeriods,

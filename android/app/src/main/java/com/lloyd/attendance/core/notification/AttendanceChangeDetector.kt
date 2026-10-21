@@ -48,8 +48,9 @@ object AttendanceChangeDetector {
 
                 // ONLY notify if faculty explicitly marked Present or Absent
                 if (isPresent || isAbsent) {
-                    val lectureStr = if (!item.classLecture.isNullOrBlank()) {
-                        "Lecture #${item.classLecture.trim()}"
+                    val lecture = item.classLecture
+                    val lectureStr = if (!lecture.isNullOrBlank()) {
+                        "Lecture #${lecture.trim()}"
                     } else {
                         ""
                     }

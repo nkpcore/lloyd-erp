@@ -2183,4 +2183,47 @@ body {
     }
 }
 
+/* ─── Feedback Panel ──────────────────────────────────────────────────────────── */
+
+.nav-badge {
+    display: inline-block;
+    background: var(--brand-light-coral, #F28482);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 2px 5px;
+    border-radius: 20px;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
+.filter-select {
+    background: var(--bg-surface-elevated, #24282E);
+    border: 1px solid var(--border-color, rgba(255,255,255,.08));
+    color: var(--text-primary, #F7EDE2);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.filter-select:focus {
+    outline: none;
+    border-color: var(--brand-honey-bronze, #F6BD60);
+}
+
+.fb-card:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.spinning {
+    animation: spin 0.8s linear infinite;
+}
+
+
 

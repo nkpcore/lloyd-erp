@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.EventNote
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
@@ -29,6 +30,8 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ElevatedCard
@@ -54,6 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lloyd.attendance.api.Models
@@ -361,55 +365,105 @@ private fun DaySectionHeader(
 
     val formattedHeader = try {
         val inFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val outFormat = SimpleDateFormat("EEEE, dd MMM yyyy", Locale.US)
+        val outFormat = SimpleDateFormat("EEEE, dd MMMM yyyy", Locale.US)
         val d = inFormat.parse(dateStr)
         if (d != null) outFormat.format(d) else dateStr
     } catch (e: Exception) {
         dateStr
     }
 
-    Row(
+    val isToday = try {
+        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(java.util.Date())
+        dateStr == todayStr
+    } catch (_: Exception) { false }
+
+    val isYesterday = try {
+        val cal = java.util.Calendar.getInstance()
+        cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
+        val yestStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time)
+        dateStr == yestStr
+    } catch (_: Exception) { false }
+
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(top = 10.dp, bottom = 4.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
     ) {
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary)
-            )
-            Text(
-                text = formattedHeader,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CalendarToday,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = formattedHeader,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (isToday) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.primary
+                    ) {
+                        Text(
+                            text = "TODAY",
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                } else if (isYesterday) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.secondary
+                    ) {
+                        Text(
+                            text = "YESTERDAY",
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSecondary
+                        )
+                    }
+                }
+            }
 
-        val isDark = isSystemInDarkTheme()
-        val healthyContainer = if (isDark) AttendanceColors.HealthyContainerDark else AttendanceColors.HealthyContainerLight
-        val onHealthyContainer = if (isDark) AttendanceColors.OnHealthyContainerDark else AttendanceColors.OnHealthyContainerLight
+            val isDark = isSystemInDarkTheme()
+            val healthyContainer = if (isDark) AttendanceColors.HealthyContainerDark else AttendanceColors.HealthyContainerLight
+            val onHealthyContainer = if (isDark) AttendanceColors.OnHealthyContainerDark else AttendanceColors.OnHealthyContainerLight
 
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = if (presentCount == totalCount) healthyContainer
-            else MaterialTheme.colorScheme.surfaceVariant
-        ) {
-            Text(
-                text = "$presentCount / $totalCount Present",
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = if (presentCount == totalCount) onHealthyContainer
-                else MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = if (presentCount == totalCount) healthyContainer else MaterialTheme.colorScheme.surfaceVariant
+            ) {
+                Text(
+                    text = "$presentCount / $totalCount Present",
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (presentCount == totalCount) onHealthyContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -433,7 +487,7 @@ private fun PerTeacherAttendanceCard(
 
     OutlinedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp)
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column(
             modifier = Modifier
@@ -500,39 +554,80 @@ private fun PerTeacherAttendanceCard(
                 )
             }
 
-            // Lecture Details & Time
+            // Dedicated, Crystal-Clear Date & Time Badges Row
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val lectureText = if (!item.classLecture.isNullOrBlank()) {
-                    "Lecture #${item.classLecture.trim()}"
-                } else {
-                    "Class Lecture"
+                // Formatted Time Pill (12-hour AM/PM e.g. 11:42 AM or class slot)
+                val timeStr = item.displayTime
+                if (timeStr.isNotBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Schedule,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = timeStr,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    }
                 }
 
-                Text(
-                    text = lectureText,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                if (!item.createdAt.isNullOrBlank()) {
+                // Clean Date Pill (e.g. "14 Feb 2025")
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
                     Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Schedule,
+                            imageVector = Icons.Default.CalendarToday,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(12.dp)
                         )
                         Text(
-                            text = item.createdAt,
+                            text = item.displayDate,
                             style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Lecture Slot / Number Pill
+                val lectureSlot = item.lectureSlotDisplay
+                if (lectureSlot.isNotBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ) {
+                        Text(
+                            text = lectureSlot,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.outline
                         )
                     }
                 }

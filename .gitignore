@@ -50,3 +50,10 @@ node_modules/
 scratch/
 *.jpeg
 *.jpg
+
+# Fleet server runtime data — student data, never commit
+feedback_store.json
+fleet_telemetry.json
+
+erp-bundle/
+

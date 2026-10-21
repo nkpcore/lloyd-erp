@@ -82,6 +82,11 @@ object AttendanceColors {
     val Unrecorded = Color(0xFF94A3B8)
     val UnrecordedContainer = LinenSurface
     val UnrecordedContainerDark = Color(0xFF1E2633)
+
+    // Direct semantic color aliases
+    val Present = HealthyLight
+    val Absent = CriticalLight
+    val Borderline = BorderlineLight
 }
 
 // Light Color Scheme

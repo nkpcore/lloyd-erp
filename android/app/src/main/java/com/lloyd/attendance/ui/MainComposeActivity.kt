@@ -99,6 +99,19 @@ import com.lloyd.attendance.feature.simulation.SimulationScreen
 import com.lloyd.attendance.feature.simulation.SimulationViewModel
 import com.lloyd.attendance.feature.subject.SubjectDetailScreen
 import com.lloyd.attendance.feature.subject.SubjectDetailViewModel
+import com.lloyd.attendance.feature.calendar.AttendanceCalendarScreen
+import com.lloyd.attendance.feature.calendar.AttendanceCalendarViewModel
+import com.lloyd.attendance.feature.latest.LatestAttendanceScreen
+import com.lloyd.attendance.feature.latest.LatestAttendanceViewModel
+import com.lloyd.attendance.feature.syllabus.SyllabusBrowserScreen
+import com.lloyd.attendance.feature.syllabus.SyllabusDetailScreen
+import com.lloyd.attendance.feature.syllabus.SyllabusPdfViewerScreen
+import com.lloyd.attendance.feature.syllabus.SyllabusViewModel
+import com.lloyd.attendance.feature.syllabus.AktuCourse
+import com.lloyd.attendance.feature.feedback.FeedbackScreen
+import com.lloyd.attendance.feature.feedback.FeedbackViewModel
+import com.lloyd.attendance.feature.receipts.FeeReceiptsScreen
+import com.lloyd.attendance.feature.receipts.FeeReceiptsViewModel
 import com.lloyd.attendance.widget.AttendanceSyncWorker
 import com.lloyd.attendance.widget.AttendanceWidgetProvider
 import androidx.lifecycle.lifecycleScope
@@ -107,6 +120,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.widget.Toast
+import com.lloyd.attendance.widget.NotificationHelper
 
 enum class MainTab(
     val title: String,
@@ -125,6 +139,11 @@ class MainComposeActivity : FragmentActivity() {
     private val logsViewModel: AttendanceLogsViewModel by viewModels()
     private val subjectDetailViewModel: SubjectDetailViewModel by viewModels()
     private val simulationViewModel: SimulationViewModel by viewModels()
+    private val calendarViewModel: AttendanceCalendarViewModel by viewModels()
+    private val latestAttendanceViewModel: LatestAttendanceViewModel by viewModels()
+    private val syllabusViewModel: SyllabusViewModel by viewModels()
+    private val feedbackViewModel: FeedbackViewModel by viewModels()
+    private val feeReceiptsViewModel: FeeReceiptsViewModel by viewModels()
 
     private var isScreenOff = false
     private var isAuthenticating = false
@@ -134,6 +153,14 @@ class MainComposeActivity : FragmentActivity() {
     private var isDownloadingUpdate by mutableStateOf(false)
     private var updateDownloadProgress by mutableStateOf(0f)
     private var pendingInstallApk by mutableStateOf<File?>(null)
+    /** Tab to open when the app is launched / resumed from a deep-link notification. */
+    private var deepLinkTab by mutableStateOf<MainTab?>(null)
+
+    private fun handleDeepLinkIntent(intent: Intent?) {
+        when (intent?.getStringExtra(NotificationHelper.EXTRA_NAV_TARGET)) {
+            NotificationHelper.NAV_TARGET_LOGS -> deepLinkTab = MainTab.LOGS
+        }
+    }
 
     private fun performAccessCheck() {
         lifecycleScope.launch(Dispatchers.IO) {
@@ -257,6 +284,8 @@ class MainComposeActivity : FragmentActivity() {
         performAccessCheck()
         checkForAppUpdate()
 
+        handleDeepLinkIntent(intent)
+
         // Wire auto-logout on session expiration
         val repository = com.lloyd.attendance.core.data.AttendanceRepository.getInstance(applicationContext)
         lifecycleScope.launch {
@@ -303,10 +332,17 @@ class MainComposeActivity : FragmentActivity() {
                 } else {
                     MainAppShell(
                         prefs = prefs,
+                        initialTab = deepLinkTab?.also { deepLinkTab = null } ?: MainTab.DASHBOARD,
                         dashboardViewModel = dashboardViewModel,
                         logsViewModel = logsViewModel,
                         subjectDetailViewModel = subjectDetailViewModel,
                         simulationViewModel = simulationViewModel,
+                        calendarViewModel = calendarViewModel,
+                        latestAttendanceViewModel = latestAttendanceViewModel,
+                        syllabusViewModel = syllabusViewModel,
+                        feedbackViewModel = feedbackViewModel,
+                        feeReceiptsViewModel = feeReceiptsViewModel,
+                        onCheckForUpdates = { checkManualUpdate() },
                         onLogout = {
                             handleAutoLogout("Signed out")
                         }
@@ -347,11 +383,43 @@ class MainComposeActivity : FragmentActivity() {
         }
     }
 
+    private fun checkManualUpdate() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val result = OtaUpdateManager.checkForUpdates(
+                currentVersion = BuildConfig.VERSION_NAME,
+                fleetEndpoint = prefs.telemetryEndpoint
+            )
+            withContext(Dispatchers.Main) {
+                result.onSuccess { info ->
+                    if (info.hasUpdate) {
+                        pendingUpdateInfo = info
+                    } else {
+                        Toast.makeText(
+                            this@MainComposeActivity,
+                            "You are using the latest version (${BuildConfig.VERSION_NAME})",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }.onFailure { err ->
+                    Toast.makeText(
+                        this@MainComposeActivity,
+                        "Update check failed: ${err.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
     private fun performDownloadAndInstall(updateInfo: OtaReleaseInfo) {
         val downloadUrl = updateInfo.downloadUrl ?: return
         isDownloadingUpdate = true
         lifecycleScope.launch(Dispatchers.IO) {
-            val result = OtaUpdateManager.downloadApkWithProgress(this@MainComposeActivity, downloadUrl) { progress ->
+            val result = OtaUpdateManager.downloadApkWithProgress(
+                this@MainComposeActivity,
+                downloadUrl,
+                expectedSha256 = updateInfo.expectedSha256
+            ) { progress ->
                 updateDownloadProgress = progress
             }
             withContext(Dispatchers.Main) {
@@ -374,6 +442,12 @@ class MainComposeActivity : FragmentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleDeepLinkIntent(intent)
     }
 
     override fun onResume() {
@@ -450,22 +524,43 @@ sealed interface ScreenDestination {
     data object Main : ScreenDestination
     data class SubjectDetail(val subject: SubjectAttendance) : ScreenDestination
     data object OverallSimulation : ScreenDestination
+    data object Calendar : ScreenDestination
+    data object LatestAttendance : ScreenDestination
+    data object SyllabusBrowser : ScreenDestination
+    data class SyllabusDetail(val course: AktuCourse) : ScreenDestination
+    data class SyllabusPdf(
+        val initialPage: Int = 0,
+        val returnTo: ScreenDestination = ScreenDestination.Main
+    ) : ScreenDestination
+    data object Feedback : ScreenDestination
+    data object FeeReceipts : ScreenDestination
 }
 
 @Composable
 fun MainAppShell(
     prefs: AppPreferences,
+    initialTab: MainTab = MainTab.DASHBOARD,
     dashboardViewModel: DashboardViewModel,
     logsViewModel: AttendanceLogsViewModel,
     subjectDetailViewModel: SubjectDetailViewModel,
     simulationViewModel: SimulationViewModel,
+    calendarViewModel: AttendanceCalendarViewModel,
+    latestAttendanceViewModel: LatestAttendanceViewModel,
+    syllabusViewModel: SyllabusViewModel,
+    feedbackViewModel: FeedbackViewModel,
+    feeReceiptsViewModel: FeeReceiptsViewModel,
+    onCheckForUpdates: () -> Unit = {},
     onLogout: () -> Unit
 ) {
-    var selectedTab by remember { mutableStateOf(MainTab.DASHBOARD) }
+    var selectedTab by remember { mutableStateOf(initialTab) }
     var destination by remember { mutableStateOf<ScreenDestination>(ScreenDestination.Main) }
 
     BackHandler(enabled = destination != ScreenDestination.Main) {
-        destination = ScreenDestination.Main
+        destination = when (val d = destination) {
+            is ScreenDestination.SyllabusPdf -> d.returnTo
+            is ScreenDestination.SyllabusDetail -> ScreenDestination.SyllabusBrowser
+            else -> ScreenDestination.Main
+        }
     }
 
     AnimatedContent(
@@ -508,13 +603,78 @@ fun MainAppShell(
                 SubjectDetailScreen(
                     subject = currentDestination.subject,
                     onBack = { destination = ScreenDestination.Main },
-                    viewModel = subjectDetailViewModel
+                    viewModel = subjectDetailViewModel,
+                    onOpenPdfAtPage = { page ->
+                        destination = ScreenDestination.SyllabusPdf(initialPage = page, returnTo = currentDestination)
+                    }
                 )
             }
 
             is ScreenDestination.OverallSimulation -> {
                 SimulationScreen(
                     viewModel = simulationViewModel,
+                    onNavigateBack = { destination = ScreenDestination.Main }
+                )
+            }
+
+            is ScreenDestination.Calendar -> {
+                AttendanceCalendarScreen(
+                    viewModel = calendarViewModel,
+                    onNavigateBack = { destination = ScreenDestination.Main },
+                    onDateSelected = { _ ->
+                        selectedTab = MainTab.LOGS
+                        destination = ScreenDestination.Main
+                    }
+                )
+            }
+
+            is ScreenDestination.LatestAttendance -> {
+                LatestAttendanceScreen(
+                    viewModel = latestAttendanceViewModel,
+                    onNavigateBack = { destination = ScreenDestination.Main }
+                )
+            }
+
+            is ScreenDestination.SyllabusBrowser -> {
+                SyllabusBrowserScreen(
+                    viewModel = syllabusViewModel,
+                    onNavigateBack = { destination = ScreenDestination.Main },
+                    onSelectCourse = { course ->
+                        destination = ScreenDestination.SyllabusDetail(course)
+                    },
+                    onOpenPdf = {
+                        destination = ScreenDestination.SyllabusPdf(initialPage = 0, returnTo = ScreenDestination.SyllabusBrowser)
+                    }
+                )
+            }
+
+            is ScreenDestination.SyllabusDetail -> {
+                SyllabusDetailScreen(
+                    course = currentDestination.course,
+                    onNavigateBack = { destination = ScreenDestination.SyllabusBrowser },
+                    onOpenPdfAtPage = { page ->
+                        destination = ScreenDestination.SyllabusPdf(initialPage = page, returnTo = currentDestination)
+                    }
+                )
+            }
+
+            is ScreenDestination.SyllabusPdf -> {
+                SyllabusPdfViewerScreen(
+                    initialPage = currentDestination.initialPage,
+                    onNavigateBack = { destination = currentDestination.returnTo }
+                )
+            }
+
+            is ScreenDestination.Feedback -> {
+                FeedbackScreen(
+                    viewModel = feedbackViewModel,
+                    onNavigateBack = { destination = ScreenDestination.Main }
+                )
+            }
+
+            is ScreenDestination.FeeReceipts -> {
+                FeeReceiptsScreen(
+                    viewModel = feeReceiptsViewModel,
                     onNavigateBack = { destination = ScreenDestination.Main }
                 )
             }
@@ -549,7 +709,26 @@ fun MainAppShell(
                                             total = t
                                         )
                                         destination = ScreenDestination.OverallSimulation
-                                    }
+                                    },
+                                    onNavigateToCalendar = {
+                                        destination = ScreenDestination.Calendar
+                                    },
+                                    onNavigateToLatestAttendance = {
+                                        destination = ScreenDestination.LatestAttendance
+                                    },
+                                    onNavigateToSyllabus = {
+                                        destination = ScreenDestination.SyllabusBrowser
+                                    },
+                                    onNavigateToSyllabusPdf = { page ->
+                                        destination = ScreenDestination.SyllabusPdf(initialPage = page, returnTo = ScreenDestination.Main)
+                                    },
+                                    onNavigateToFeedback = {
+                                        destination = ScreenDestination.Feedback
+                                    },
+                                    onNavigateToFeeReceipts = {
+                                        destination = ScreenDestination.FeeReceipts
+                                    },
+                                    onCheckForUpdates = onCheckForUpdates
                                 )
                             }
 

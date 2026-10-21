@@ -42,7 +42,16 @@ object AttendanceLogsProcessor {
     }
 
     fun groupByDate(logs: List<Models.StudentAttendanceItem?>): Map<String, List<Models.StudentAttendanceItem>> {
-        return logs.filterNotNull().groupBy { it.attendanceDate ?: "Unknown Date" }
+        val nonNull = logs.filterNotNull()
+        val grouped = LinkedHashMap<String, MutableList<Models.StudentAttendanceItem>>()
+        for (item in nonNull) {
+            val raw = item.attendanceDate?.trim().takeUnless { it.isNullOrEmpty() }
+                ?: item.createdAt?.trim().takeUnless { it.isNullOrEmpty() }
+                ?: "Unknown Date"
+            val dateKey = if (raw.contains("T")) raw.substringBefore("T") else raw
+            grouped.getOrPut(dateKey) { mutableListOf() }.add(item)
+        }
+        return grouped
     }
 
     fun computeSummary(logs: List<Models.StudentAttendanceItem?>): AttendanceLogsSummary {
@@ -69,7 +78,7 @@ object AttendanceLogsProcessor {
             val total = items.size
             val firstItem = items.firstOrNull()
             val subCode = firstItem?.subjectId?.toString().orEmpty()
-            val teacher = firstItem?.getFacultyDisplayName() ?: firstItem?.createdByName
+            val teacher = firstItem?.facultyDisplayName ?: firstItem?.createdByName
             SubjectAttendance(
                 subjectCode = subCode,
                 subjectName = name,

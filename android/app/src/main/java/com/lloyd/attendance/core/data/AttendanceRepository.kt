@@ -47,7 +47,8 @@ class AttendanceRepository(
         val records: List<Models.StudentAttendanceItem> = if (!cachedLogsJson.isNullOrBlank()) {
             try {
                 val type = object : TypeToken<List<Models.StudentAttendanceItem>>() {}.type
-                gson.fromJson<List<Models.StudentAttendanceItem>>(cachedLogsJson, type) ?: emptyList()
+                val parsed: List<Models.StudentAttendanceItem>? = gson.fromJson(cachedLogsJson, type)
+                parsed ?: emptyList()
             } catch (e: Exception) {
                 emptyList()
             }

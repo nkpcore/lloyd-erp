@@ -29,9 +29,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Share
+import com.lloyd.attendance.feature.syllabus.getPdfPageForCourse
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -78,6 +80,7 @@ fun SubjectDetailScreen(
     subject: SubjectAttendance,
     onBack: () -> Unit,
     viewModel: SubjectDetailViewModel,
+    onOpenPdfAtPage: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     BackHandler { onBack() }
@@ -124,6 +127,18 @@ fun SubjectDetailScreen(
                     }
                 },
                 actions = {
+                    if (onOpenPdfAtPage != null) {
+                        IconButton(onClick = {
+                            val page = getPdfPageForCourse(currentSubject.subjectCode, currentSubject.subjectName)
+                            onOpenPdfAtPage(page)
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.PictureAsPdf,
+                                contentDescription = "Open Subject Syllabus PDF",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                     IconButton(onClick = {
                         val shareText = buildString {
                             appendLine("📊 Lloyd Attendance — ${currentSubject.subjectName}")
@@ -172,7 +187,17 @@ fun SubjectDetailScreen(
                 )
             }
 
-            // 2. Faculty Info Pill Card
+            // 2. Syllabus PDF Quick Access Card
+            if (onOpenPdfAtPage != null) {
+                item {
+                    val page = getPdfPageForCourse(currentSubject.subjectCode, currentSubject.subjectName)
+                    SubjectSyllabusCard(
+                        onOpenPdf = { onOpenPdfAtPage(page) }
+                    )
+                }
+            }
+
+            // 3. Faculty Info Pill Card
             if (!currentSubject.teacherName.isNullOrBlank()) {
                 item {
                     FacultyInfoCard(teacherName = currentSubject.teacherName!!)
@@ -693,6 +718,68 @@ private fun LectureLogItemCard(logItem: Models.StudentAttendanceItem) {
                 containerColor = statusBg,
                 contentColor = statusColor
             )
+        }
+    }
+}
+
+@Composable
+private fun SubjectSyllabusCard(
+    onOpenPdf: () -> Unit
+) {
+    ElevatedCard(
+        onClick = onOpenPdf,
+        modifier = Modifier.fillMaxWidth(),
+        shape = ExpressiveShapes.largeIncreased,
+        colors = androidx.compose.material3.CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(42.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.PictureAsPdf,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+                Column {
+                    Text(
+                        text = "Subject Syllabus",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Open official curriculum in PDF viewer",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            FilledTonalButton(
+                onClick = onOpenPdf,
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("View PDF")
+            }
         }
     }
 }

@@ -13,6 +13,8 @@
     { "source": "/api/ota", "destination": "/api/ota" },
     { "source": "/ban", "destination": "/api/ban" },
     { "source": "/api/ban", "destination": "/api/ban" },
+    { "source": "/feedback", "destination": "/api/feedback" },
+    { "source": "/api/feedback", "destination": "/api/feedback" },
     { "source": "/downloads/(.*)", "destination": "/web/downloads/$1" },
     { "source": "/", "destination": "/web/admin/index.html" },
     { "source": "/admin", "destination": "/web/admin/index.html" },

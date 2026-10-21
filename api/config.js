@@ -10,6 +10,7 @@ function setCors(res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-admin-key, Accept');
+    res.setHeader('Cache-Control', 'no-store');
 }
 
 let cachedGhRelease = null;
@@ -65,7 +66,7 @@ module.exports = async function handler(req, res) {
     try {
         if (req.method === 'GET') {
             const config = await db.getConfig();
-            
+
             // Prioritize live GitHub Release dynamically (strictly no hardcoded fallback)
             const gh = await getLiveGitHubRelease();
             if (gh && gh.version) {
@@ -80,7 +81,11 @@ module.exports = async function handler(req, res) {
                 }
             }
 
-            res.status(200).json(config);
+            // SECURITY: Strip ban lists from public response.
+            // Devices must call POST /api/ban to check their own status — never enumerate all bans.
+            const { banned_devices, banned_students, ...publicConfig } = config;
+            void banned_devices; void banned_students; // explicitly excluded
+            res.status(200).json(publicConfig);
             return;
         }
 
@@ -97,22 +102,65 @@ module.exports = async function handler(req, res) {
             }
 
             const current = await db.getConfig();
-            const updated = {
-                ...current,
-                ...body,
-                min_version_code: body.min_version_code !== undefined ? parseInt(body.min_version_code) : current.min_version_code,
-                latest_version_name: body.latest_version_name !== undefined ? (body.latest_version_name || null) : current.latest_version_name,
-                download_url: body.download_url !== undefined ? body.download_url : current.download_url,
-                banned_devices: Array.isArray(body.banned_devices) ? [...new Set(body.banned_devices)] : current.banned_devices,
-                banned_students: Array.isArray(body.banned_students) ? [...new Set(body.banned_students.map(s => parseInt(s)).filter(Boolean))] : current.banned_students,
-                maintenance_mode: typeof body.maintenance_mode === 'boolean' ? body.maintenance_mode : current.maintenance_mode,
-                maintenance_message: body.maintenance_message !== undefined ? body.maintenance_message : current.maintenance_message,
-                broadcast_notice: body.broadcast_notice !== undefined ? body.broadcast_notice : current.broadcast_notice,
-                pause_updates: typeof body.pause_updates === 'boolean' ? body.pause_updates : (body.pause_updates === 'true' ? true : (body.pause_updates === 'false' ? false : (current.pause_updates || false)))
-            };
+
+            // Phase 1.2: Strict field allowlist — unknown/extra body properties are silently dropped
+            const ALLOWED_CONFIG_KEYS = [
+                'latest_version_code', 'latest_version_name', 'min_version_code',
+                'download_url', 'broadcast_notice', 'mandatory_update', 'sha256',
+                'maintenance_mode', 'maintenance_message', 'pause_updates'
+            ];
+
+            const update = {};
+            for (const key of ALLOWED_CONFIG_KEYS) {
+                if (body[key] === undefined) continue;
+                update[key] = body[key];
+            }
+
+            // Type-safety gates
+            if (update.latest_version_code !== undefined) {
+                const vc = parseInt(update.latest_version_code);
+                if (!Number.isInteger(vc) || vc <= 0) {
+                    res.status(400).json({ error: 'latest_version_code must be a positive integer' });
+                    return;
+                }
+                update.latest_version_code = vc;
+            }
+            if (update.min_version_code !== undefined) {
+                const mvc = parseInt(update.min_version_code);
+                if (!Number.isInteger(mvc) || mvc < 0) {
+                    res.status(400).json({ error: 'min_version_code must be a non-negative integer' });
+                    return;
+                }
+                update.min_version_code = mvc;
+            }
+            if (update.download_url !== undefined) {
+                if (typeof update.download_url !== 'string' || !update.download_url.startsWith('https://')) {
+                    res.status(400).json({ error: 'download_url must be an HTTPS URL' });
+                    return;
+                }
+            }
+            if (update.maintenance_mode !== undefined) {
+                update.maintenance_mode = Boolean(update.maintenance_mode);
+            }
+            if (update.mandatory_update !== undefined) {
+                update.mandatory_update = Boolean(update.mandatory_update);
+            }
+            if (update.pause_updates !== undefined) {
+                update.pause_updates = Boolean(update.pause_updates);
+            }
+
+            // Merge: only persist allowed/type-checked fields on top of current
+            const updated = { ...current, ...update };
+
+            // Preserve ban arrays from db — body cannot mutate them via this endpoint (use /api/ban)
+            updated.banned_devices = current.banned_devices;
+            updated.banned_students = current.banned_students;
 
             await db.saveConfig(updated);
-            res.status(200).json({ success: true, config: updated });
+
+            // Strip bans from POST response as well
+            const { banned_devices: _bd, banned_students: _bs, ...safeUpdated } = updated;
+            res.status(200).json({ success: true, config: safeUpdated });
             return;
         }
 

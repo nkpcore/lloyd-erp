@@ -165,21 +165,22 @@ class TelemetryDashboard {
     }
 
     getStoredPass() {
-        return sessionStorage.getItem('lloyd_admin_pass') || localStorage.getItem('lloyd_admin_pass') || '';
+        // Key: lloyd_admin_token — stores opaque session token issued by /api/auth, NOT the raw password.
+        return sessionStorage.getItem('lloyd_admin_token') || localStorage.getItem('lloyd_admin_token') || '';
     }
 
-    setStoredPass(pass, remember = true) {
-        sessionStorage.setItem('lloyd_admin_pass', pass);
+    setStoredPass(token, remember = true) {
+        sessionStorage.setItem('lloyd_admin_token', token);
         if (remember) {
-            localStorage.setItem('lloyd_admin_pass', pass);
+            localStorage.setItem('lloyd_admin_token', token);
         } else {
-            localStorage.removeItem('lloyd_admin_pass');
+            localStorage.removeItem('lloyd_admin_token');
         }
     }
 
     clearStoredPass() {
-        sessionStorage.removeItem('lloyd_admin_pass');
-        localStorage.removeItem('lloyd_admin_pass');
+        sessionStorage.removeItem('lloyd_admin_token');
+        localStorage.removeItem('lloyd_admin_token');
     }
 
     getAuthHeaders() {
@@ -236,8 +237,10 @@ class TelemetryDashboard {
             });
 
             if (res.ok) {
+                const data = await res.json();
+                const token = data.token; // opaque session token, NOT the raw password
                 const remember = this.rememberAdminPass ? this.rememberAdminPass.checked : true;
-                this.setStoredPass(pass, remember);
+                this.setStoredPass(token, remember);
                 this.hideAuthOverlay();
                 this.showToast('Admin access verified. Welcome!', 'success');
                 this.loadTelemetry();
@@ -245,16 +248,10 @@ class TelemetryDashboard {
                 this.showAuthError();
             }
         } catch (err) {
-            // Local fallback check if server is offline or unreachable
-            if (pass === 'loyderp') {
-                const remember = this.rememberAdminPass ? this.rememberAdminPass.checked : true;
-                this.setStoredPass(pass, remember);
-                this.hideAuthOverlay();
-                this.showToast('Admin access verified (offline)', 'success');
-                this.loadTelemetry();
-            } else {
-                this.showAuthError();
-            }
+            // Server unreachable — do NOT fall back to a hardcoded password.
+            // Show error and require the user to resolve connectivity.
+            console.error('[Auth] Server unreachable:', err);
+            this.showAuthError();
         } finally {
             if (this.unlockPortalBtn) {
                 this.unlockPortalBtn.disabled = false;
@@ -1694,4 +1691,292 @@ class TelemetryDashboard {
 // Initialize on DOM load
 document.addEventListener('DOMContentLoaded', () => {
     window.telemetryDashboard = new TelemetryDashboard();
+    window.feedbackPanel = new FeedbackPanel(window.telemetryDashboard);
+    initSectionNav();
 });
+
+// ─── Section Navigation ───────────────────────────────────────────────────────
+
+function initSectionNav() {
+    const SECTIONS = ['overview', 'users', 'governance', 'releases', 'feedback'];
+    const navLinks = document.querySelectorAll('.nav-item');
+    const sections = {};
+    SECTIONS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) sections[id] = el;
+    });
+
+    function showSection(targetId) {
+        if (!SECTIONS.includes(targetId)) targetId = 'overview';
+        SECTIONS.forEach(id => {
+            if (sections[id]) {
+                sections[id].style.display = (id === targetId) ? '' : 'none';
+            }
+        });
+        navLinks.forEach(link => {
+            const href = (link.getAttribute('href') || '').replace('#', '');
+            link.classList.toggle('active', href === targetId);
+        });
+        if (targetId === 'feedback') {
+            window.feedbackPanel && window.feedbackPanel.loadIfNeeded();
+        }
+    }
+
+    navLinks.forEach(link => {
+        link.addEventListener('click', e => {
+            const href = link.getAttribute('href');
+            if (href && href.startsWith('#')) {
+                e.preventDefault();
+                showSection(href.replace('#', ''));
+                // Close sidebar on mobile
+                const sidebar = document.getElementById('sidebar');
+                if (sidebar) sidebar.classList.remove('open');
+                const overlay = document.getElementById('sidebarOverlay');
+                if (overlay) overlay.style.display = 'none';
+            }
+        });
+    });
+
+    // Handle initial hash
+    const hash = window.location.hash.replace('#', '');
+    if (hash && SECTIONS.includes(hash)) showSection(hash);
+}
+
+// ─── FeedbackPanel ────────────────────────────────────────────────────────────
+
+class FeedbackPanel {
+    constructor(dashboard) {
+        this.dashboard = dashboard; // reference for auth headers & toast
+        this.items = [];
+        this.loaded = false;
+        this.currentItem = null;
+
+        this.cardsEl    = document.getElementById('fbCards');
+        this.emptyEl    = document.getElementById('fbEmpty');
+        this.totalEl    = document.getElementById('fbTotal');
+        this.newCountEl = document.getElementById('fbNewCount');
+        this.actEl      = document.getElementById('fbActionedCount');
+        this.closedEl   = document.getElementById('fbClosedCount');
+        this.badgeEl    = document.getElementById('feedbackBadge');
+        this.modalEl    = document.getElementById('fbModal');
+        this.modalBody  = document.getElementById('fbModalContent');
+        this.statusSel  = document.getElementById('fbStatusFilter');
+        this.categorySel= document.getElementById('fbCategoryFilter');
+        this.refreshBtn = document.getElementById('fbRefreshBtn');
+
+        if (this.refreshBtn) this.refreshBtn.addEventListener('click', () => this.load());
+        if (this.statusSel)  this.statusSel.addEventListener('change', () => this.render());
+        if (this.categorySel)this.categorySel.addEventListener('change', () => this.render());
+        if (this.modalEl) {
+            this.modalEl.addEventListener('click', e => {
+                if (e.target === this.modalEl) this.closeModal();
+            });
+        }
+    }
+
+    loadIfNeeded() {
+        if (!this.loaded) this.load();
+    }
+
+    async load() {
+        if (!this.dashboard) return;
+        const headers = this.dashboard.getAuthHeaders();
+        const url = this.dashboard.getApiUrl('/feedback') + '?limit=200';
+        try {
+            if (this.refreshBtn) {
+                this.refreshBtn.disabled = true;
+                this.refreshBtn.querySelector('svg').classList.add('spinning');
+            }
+            const res = await fetch(url, { headers });
+            if (res.status === 401) {
+                this.dashboard.lockPortal();
+                return;
+            }
+            const data = await res.json();
+            this.items = Array.isArray(data.feedback) ? data.feedback : [];
+            this.loaded = true;
+            this.render();
+        } catch (err) {
+            console.error('[FeedbackPanel] load error:', err);
+            this.dashboard.showToast('Failed to load feedback', 'error');
+        } finally {
+            if (this.refreshBtn) {
+                this.refreshBtn.disabled = false;
+                this.refreshBtn.querySelector('svg').classList.remove('spinning');
+            }
+        }
+    }
+
+    render() {
+        let filtered = [...this.items];
+        const statusF = this.statusSel ? this.statusSel.value : '';
+        const catF    = this.categorySel ? this.categorySel.value : '';
+        if (statusF)  filtered = filtered.filter(f => f.status === statusF);
+        if (catF)     filtered = filtered.filter(f => f.category === catF);
+
+        // Stats (always from full list)
+        const newC     = this.items.filter(f => f.status === 'new').length;
+        const actC     = this.items.filter(f => f.status === 'actioned').length;
+        const closedC  = this.items.filter(f => f.status === 'closed').length;
+        if (this.totalEl)    this.totalEl.textContent  = this.items.length;
+        if (this.newCountEl) this.newCountEl.textContent = newC;
+        if (this.actEl)      this.actEl.textContent     = actC;
+        if (this.closedEl)   this.closedEl.textContent  = closedC;
+
+        // Badge in nav
+        if (this.badgeEl) {
+            if (newC > 0) { this.badgeEl.textContent = newC; this.badgeEl.style.display = 'inline-block'; }
+            else { this.badgeEl.style.display = 'none'; }
+        }
+
+        if (!this.cardsEl) return;
+        if (filtered.length === 0) {
+            this.cardsEl.innerHTML = '';
+            if (this.emptyEl) this.emptyEl.style.display = 'block';
+            return;
+        }
+        if (this.emptyEl) this.emptyEl.style.display = 'none';
+
+        this.cardsEl.innerHTML = filtered.map(f => this._cardHtml(f)).join('');
+    }
+
+    _statusBadge(status) {
+        const map = {
+            new:      'background:#ff6b35;color:#fff',
+            read:     'background:#6c757d;color:#fff',
+            actioned: 'background:#0d6efd;color:#fff',
+            closed:   'background:#198754;color:#fff'
+        };
+        return `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;${map[status]||''}">${escapeHtml(status)}</span>`;
+    }
+
+    _catBadge(cat) {
+        return `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:rgba(255,255,255,.08);color:var(--text-muted)">${escapeHtml(cat)}</span>`;
+    }
+
+    _cardHtml(f) {
+        const date = f.submitted_at ? new Date(f.submitted_at).toLocaleString() : '—';
+        const sid  = f.student_id   ? `<span style="font-size:11px;color:var(--text-muted)">Student: ${escapeHtml(f.student_id)}</span>` : '';
+        const ver  = f.app_version  ? `<span style="font-size:11px;color:var(--text-muted)">v${escapeHtml(f.app_version)}</span>` : '';
+        const msg  = escapeHtml(f.message || '').slice(0, 180) + (f.message && f.message.length > 180 ? '…' : '');
+        return `
+<div class="fb-card" style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;"
+     onclick="window.feedbackPanel.openModal('${escapeHtml(f.id)}')">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+        ${this._statusBadge(f.status)}
+        ${this._catBadge(f.category)}
+        ${sid}${ver}
+        <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">${date}</span>
+    </div>
+    <div style="font-size:14px;line-height:1.5;color:var(--text)">${msg}</div>
+    ${f.admin_notes ? `<div style="margin-top:6px;font-size:12px;color:var(--text-muted);font-style:italic">Note: ${escapeHtml(f.admin_notes)}</div>` : ''}
+</div>`;
+    }
+
+    openModal(id) {
+        this.currentItem = this.items.find(f => f.id === id);
+        if (!this.currentItem || !this.modalEl || !this.modalBody) return;
+        this._renderModal();
+        this.modalEl.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+
+    closeModal() {
+        if (this.modalEl) this.modalEl.style.display = 'none';
+        document.body.style.overflow = '';
+        this.currentItem = null;
+    }
+
+    _renderModal() {
+        const f = this.currentItem;
+        const date = f.submitted_at ? new Date(f.submitted_at).toLocaleString() : '—';
+        const resolvedAt = f.resolved_at ? new Date(f.resolved_at).toLocaleString() : null;
+        this.modalBody.innerHTML = `
+<h3 style="margin:0 0 14px;font-size:17px;">Feedback Detail</h3>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+    ${this._statusBadge(f.status)} ${this._catBadge(f.category)}
+</div>
+<div style="margin-bottom:12px;">
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">Submitted: ${date}</div>
+    ${f.student_id  ? `<div style="font-size:12px;color:var(--text-muted)">Student ID: ${escapeHtml(f.student_id)}</div>` : ''}
+    ${f.app_version ? `<div style="font-size:12px;color:var(--text-muted)">Version: ${escapeHtml(f.app_version)}</div>` : ''}
+    ${f.device_model? `<div style="font-size:12px;color:var(--text-muted)">Device: ${escapeHtml(f.device_model)}</div>` : ''}
+    ${resolvedAt    ? `<div style="font-size:12px;color:var(--text-muted)">Resolved: ${resolvedAt}</div>` : ''}
+</div>
+<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:14px;margin-bottom:16px;font-size:14px;line-height:1.6;white-space:pre-wrap;">
+${escapeHtml(f.message)}
+</div>
+
+<label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Update Status</label>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+    ${['new','read','actioned','closed'].map(s =>
+        `<button class="btn btn-secondary" style="font-size:12px;padding:4px 12px;${f.status===s?'outline:2px solid var(--accent);':''}"
+            onclick="window.feedbackPanel.updateStatus('${f.id}','${s}')">${s}</button>`
+    ).join('')}
+</div>
+
+<label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Admin Notes</label>
+<textarea id="fbModalNotes" rows="3" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:10px;color:var(--text);font-size:13px;resize:vertical;box-sizing:border-box;"
+>${escapeHtml(f.admin_notes || '')}</textarea>
+
+<div style="display:flex;gap:8px;margin-top:14px;">
+    <button class="btn btn-primary" style="flex:1" onclick="window.feedbackPanel.saveNotes('${f.id}')">Save Notes</button>
+    <button class="btn btn-secondary" style="color:#e74c3c;border-color:#e74c3c" onclick="window.feedbackPanel.deleteFeedback('${f.id}')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        Delete
+    </button>
+</div>`;
+    }
+
+    async updateStatus(id, status) {
+        await this._patch(id, { status });
+    }
+
+    async saveNotes(id) {
+        const textarea = document.getElementById('fbModalNotes');
+        if (!textarea) return;
+        await this._patch(id, { admin_notes: textarea.value });
+    }
+
+    async _patch(id, body) {
+        const url = this.dashboard.getApiUrl(`/feedback?id=${encodeURIComponent(id)}`);
+        try {
+            const res = await fetch(url, {
+                method: 'PATCH',
+                headers: this.dashboard.getAuthHeaders(),
+                body: JSON.stringify(body)
+            });
+            if (res.status === 401) { this.dashboard.lockPortal(); return; }
+            const data = await res.json();
+            if (data.success) {
+                const idx = this.items.findIndex(f => f.id === id);
+                if (idx !== -1) this.items[idx] = data.feedback;
+                this.currentItem = data.feedback;
+                this._renderModal();
+                this.render();
+                this.dashboard.showToast('Feedback updated', 'success');
+            }
+        } catch (err) {
+            this.dashboard.showToast('Update failed', 'error');
+        }
+    }
+
+    async deleteFeedback(id) {
+        if (!confirm('Delete this feedback entry? This cannot be undone.')) return;
+        const url = this.dashboard.getApiUrl(`/feedback?id=${encodeURIComponent(id)}`);
+        try {
+            const res = await fetch(url, { method: 'DELETE', headers: this.dashboard.getAuthHeaders() });
+            if (res.status === 401) { this.dashboard.lockPortal(); return; }
+            const data = await res.json();
+            if (data.success) {
+                this.items = this.items.filter(f => f.id !== id);
+                this.closeModal();
+                this.render();
+                this.dashboard.showToast('Feedback deleted', 'success');
+            }
+        } catch (err) {
+            this.dashboard.showToast('Delete failed', 'error');
+        }
+    }
+}
+

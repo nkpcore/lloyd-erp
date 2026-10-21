@@ -131,7 +131,11 @@ class LoginActivity : FragmentActivity() {
         val downloadUrl = updateInfo.downloadUrl ?: return
         isDownloadingUpdate = true
         lifecycleScope.launch(Dispatchers.IO) {
-            val result = OtaUpdateManager.downloadApkWithProgress(this@LoginActivity, downloadUrl) { progress ->
+            val result = OtaUpdateManager.downloadApkWithProgress(
+                this@LoginActivity,
+                downloadUrl,
+                expectedSha256 = updateInfo.expectedSha256
+            ) { progress ->
                 updateDownloadProgress = progress
             }
             withContext(Dispatchers.Main) {

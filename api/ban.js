@@ -45,28 +45,27 @@ module.exports = async function handler(req, res) {
             return;
         }
 
+        // Phase 1.3: Require explicit action — reject ambiguous 'toggle'
+        const action = (body.action || '').toLowerCase();
+        if (action !== 'ban' && action !== 'unban') {
+            res.status(400).json({
+                error: "action must be explicitly 'ban' or 'unban'. 'toggle' is not permitted."
+            });
+            return;
+        }
+
         const config = await db.getConfig();
         let isDeviceBanned = false;
         let isStudentBanned = false;
-
-        const action = (body.action || 'toggle').toLowerCase();
 
         if (deviceId) {
             const bans = new Set((config.banned_devices || []).map(d => String(d).trim()));
             if (action === 'ban') {
                 bans.add(deviceId);
                 isDeviceBanned = true;
-            } else if (action === 'unban') {
+            } else {
                 bans.delete(deviceId);
                 isDeviceBanned = false;
-            } else { // toggle
-                if (bans.has(deviceId)) {
-                    bans.delete(deviceId);
-                    isDeviceBanned = false;
-                } else {
-                    bans.add(deviceId);
-                    isDeviceBanned = true;
-                }
             }
             config.banned_devices = Array.from(bans);
         }
@@ -76,17 +75,9 @@ module.exports = async function handler(req, res) {
             if (action === 'ban') {
                 studentBans.add(studentId);
                 isStudentBanned = true;
-            } else if (action === 'unban') {
+            } else {
                 studentBans.delete(studentId);
                 isStudentBanned = false;
-            } else { // toggle
-                if (studentBans.has(studentId)) {
-                    studentBans.delete(studentId);
-                    isStudentBanned = false;
-                } else {
-                    studentBans.add(studentId);
-                    isStudentBanned = true;
-                }
             }
             config.banned_students = Array.from(studentBans);
         }
