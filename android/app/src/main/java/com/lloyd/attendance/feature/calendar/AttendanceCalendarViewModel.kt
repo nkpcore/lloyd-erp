@@ -26,7 +26,7 @@ data class CalendarUiState(
     val isRefreshing: Boolean = false
 )
 
-class AttendanceCalendarViewModel(
+class AttendanceCalendarViewModel @JvmOverloads constructor(
     application: Application,
     private val repository: AttendanceRepository = AttendanceRepository.getInstance(application)
 ) : AndroidViewModel(application) {

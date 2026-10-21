@@ -278,8 +278,11 @@ class MainComposeActivity : FragmentActivity() {
         checkNotificationPermission()
         AttendanceSyncWorker.schedulePeriodicSync(this)
 
-        val screenFilter = IntentFilter(Intent.ACTION_SCREEN_OFF)
-        registerReceiver(screenOffReceiver, screenFilter)
+        try {
+            val screenFilter = IntentFilter(Intent.ACTION_SCREEN_OFF)
+            registerReceiver(screenOffReceiver, screenFilter)
+        } catch (ignored: Exception) {
+        }
 
         performAccessCheck()
         checkForAppUpdate()

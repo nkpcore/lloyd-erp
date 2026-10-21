@@ -21,7 +21,7 @@ data class LatestAttendanceUiState(
     val searchQuery: String = ""
 )
 
-class LatestAttendanceViewModel(
+class LatestAttendanceViewModel @JvmOverloads constructor(
     application: Application,
     private val repository: AttendanceRepository = AttendanceRepository.getInstance(application)
 ) : AndroidViewModel(application) {
