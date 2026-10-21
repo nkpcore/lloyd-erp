@@ -6,6 +6,7 @@
 -keep class com.lloyd.attendance.core.data.** { *; }
 -keep class com.lloyd.attendance.core.access.** { *; }
 -keep class com.lloyd.attendance.feature.logs.AttendanceLogsSummary { <fields>; }
+-keep class com.lloyd.attendance.feature.syllabus.** { *; }
 -keepclassmembers class * {
     @com.google.gson.annotations.SerializedName <fields>;
 }

@@ -144,7 +144,7 @@ fun SyllabusDetailScreen(
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
                             }
-                            course.semesters.forEach { s ->
+                            (course.semesters ?: emptyList()).forEach { s ->
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
                                     color = MaterialTheme.colorScheme.secondaryContainer
@@ -183,7 +183,8 @@ fun SyllabusDetailScreen(
             }
 
             // Course Objectives
-            if (course.objectives.isNotEmpty()) {
+            val safeObjectives = course.objectives ?: emptyList()
+            if (safeObjectives.isNotEmpty()) {
                 item {
                     Text(
                         text = "Course Objectives",
@@ -200,7 +201,7 @@ fun SyllabusDetailScreen(
                         )
                     ) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            course.objectives.forEachIndexed { idx, obj ->
+                            safeObjectives.forEachIndexed { idx, obj ->
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Text(
                                         text = "${idx + 1}.",
@@ -231,12 +232,14 @@ fun SyllabusDetailScreen(
             }
 
             // 5 Units
-            items(course.units) { unit ->
+            val safeUnits = course.units ?: emptyList()
+            items(safeUnits, key = { it.unitNumber }) { unit ->
                 ExpandableUnitCard(unit = unit)
             }
 
             // Course Outcomes
-            if (course.outcomes.isNotEmpty()) {
+            val safeOutcomes = course.outcomes ?: emptyList()
+            if (safeOutcomes.isNotEmpty()) {
                 item {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -254,7 +257,7 @@ fun SyllabusDetailScreen(
                         )
                     ) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            course.outcomes.forEach { co ->
+                            safeOutcomes.forEach { co ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -286,7 +289,8 @@ fun SyllabusDetailScreen(
             }
 
             // Textbooks & References
-            if (course.books.isNotEmpty()) {
+            val safeBooks = course.books ?: emptyList()
+            if (safeBooks.isNotEmpty()) {
                 item {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -304,7 +308,7 @@ fun SyllabusDetailScreen(
                         )
                     ) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            course.books.forEachIndexed { i, book ->
+                            safeBooks.forEachIndexed { i, book ->
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Text(
                                         text = "[${i + 1}]",
@@ -373,7 +377,7 @@ fun ExpandableUnitCard(
                     }
 
                     Text(
-                        text = unit.title,
+                        text = unit.title ?: "",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -389,7 +393,7 @@ fun ExpandableUnitCard(
                         color = MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         Text(
-                            text = unit.weightage,
+                            text = unit.weightage ?: "",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -417,32 +421,36 @@ fun ExpandableUnitCard(
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    Text(
-                        text = "Topics:",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    val safeTopics = unit.topics ?: emptyList()
+                    if (safeTopics.isNotEmpty()) {
+                        Text(
+                            text = "Topics:",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
 
-                    unit.topics.forEach { topic ->
-                        Row(
-                            modifier = Modifier.padding(start = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = "•",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = topic,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                        safeTopics.forEach { topic ->
+                            Row(
+                                modifier = Modifier.padding(start = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "•",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = topic,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
                     }
 
-                    if (unit.applications.isNotEmpty()) {
+                    val safeApplications = unit.applications ?: emptyList()
+                    if (safeApplications.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "Real-world Applications:",
@@ -454,7 +462,7 @@ fun ExpandableUnitCard(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            unit.applications.forEach { app ->
+                            safeApplications.forEach { app ->
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
                                     color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)

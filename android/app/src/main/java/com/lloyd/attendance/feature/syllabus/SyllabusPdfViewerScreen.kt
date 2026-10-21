@@ -95,7 +95,7 @@ fun SyllabusPdfViewerScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var currentPageIndex by remember { mutableIntStateOf(initialPage.coerceAtLeast(0)) }
+    var currentPageIndex by remember(initialPage) { mutableIntStateOf(initialPage.coerceIn(0, 32)) }
     var totalPages by remember { mutableIntStateOf(33) }
     var currentBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -114,61 +114,87 @@ fun SyllabusPdfViewerScreen(
         offsetY = 0f
     }
 
-    // Render PDF page
+    // Render PDF page with strict memory guarding and resource finalization
     LaunchedEffect(currentPageIndex) {
         isLoading = true
         errorMessage = null
         withContext(Dispatchers.IO) {
+            var pfd: ParcelFileDescriptor? = null
+            var renderer: PdfRenderer? = null
+            var page: PdfRenderer.Page? = null
             try {
                 val assetName = "aktu_syllabus_2026_27.pdf"
-                val cacheFile = File(context.cacheDir, "aktu_syllabus_2026_27.pdf")
-                if (!cacheFile.exists() || cacheFile.length() == 0L) {
+                val cacheFile = File(context.cacheDir, assetName)
+                val tempFile = File(context.cacheDir, "$assetName.tmp")
+
+                if (!cacheFile.exists() || cacheFile.length() < 1000L) {
                     context.assets.open(assetName).use { input ->
-                        cacheFile.outputStream().use { output ->
+                        tempFile.outputStream().use { output ->
                             input.copyTo(output)
+                        }
+                    }
+                    if (tempFile.exists() && tempFile.length() > 0L) {
+                        if (cacheFile.exists()) {
+                            cacheFile.delete()
+                        }
+                        if (!tempFile.renameTo(cacheFile)) {
+                            tempFile.copyTo(cacheFile, overwrite = true)
+                            tempFile.delete()
                         }
                     }
                 }
 
-                val pfd = ParcelFileDescriptor.open(cacheFile, ParcelFileDescriptor.MODE_READ_ONLY)
-                val renderer = PdfRenderer(pfd)
+                if (!cacheFile.exists() || cacheFile.length() == 0L) {
+                    throw IllegalStateException("Syllabus PDF file could not be extracted.")
+                }
+
+                pfd = ParcelFileDescriptor.open(cacheFile, ParcelFileDescriptor.MODE_READ_ONLY)
+                renderer = PdfRenderer(pfd)
                 val count = renderer.pageCount
                 withContext(Dispatchers.Main) {
                     totalPages = count
+                    if (currentPageIndex >= count && count > 0) {
+                        currentPageIndex = count - 1
+                    }
                 }
 
                 val safeIndex = currentPageIndex.coerceIn(0, max(0, count - 1))
-                val page = renderer.openPage(safeIndex)
+                page = renderer.openPage(safeIndex)
 
-                // High-resolution rendering (1080 width base scaled)
-                val targetWidth = 1080
-                val targetHeight = ((page.height.toFloat() / page.width.toFloat()) * targetWidth).toInt()
+                // Optimal resolution: balance high-dpi clarity with strict memory safety
+                val displayWidth = context.resources.displayMetrics.widthPixels
+                val targetWidth = displayWidth.coerceIn(540, 1080)
+                val pageW = if (page.width > 0) page.width else 478
+                val pageH = if (page.height > 0) page.height else 680
+                val targetHeight = max(1, ((pageH.toFloat() / pageW.toFloat()) * targetWidth).toInt())
 
                 val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
                 bitmap.eraseColor(android.graphics.Color.WHITE)
                 page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                page.close()
-                renderer.close()
-                pfd.close()
 
                 withContext(Dispatchers.Main) {
                     currentBitmap = bitmap
                     isLoading = false
                 }
-            } catch (e: Exception) {
+            } catch (t: Throwable) {
                 withContext(Dispatchers.Main) {
-                    errorMessage = e.localizedMessage ?: "Failed to render PDF page"
+                    errorMessage = t.localizedMessage ?: "Failed to render PDF page"
                     isLoading = false
                 }
+            } finally {
+                try { page?.close() } catch (ignored: Throwable) {}
+                try { renderer?.close() } catch (ignored: Throwable) {}
+                try { pfd?.close() } catch (ignored: Throwable) {}
             }
         }
     }
 
     fun openInExternalApp() {
         try {
-            val cacheFile = File(context.cacheDir, "aktu_syllabus_2026_27.pdf")
-            if (!cacheFile.exists() || cacheFile.length() == 0L) {
-                context.assets.open("aktu_syllabus_2026_27.pdf").use { input ->
+            val assetName = "aktu_syllabus_2026_27.pdf"
+            val cacheFile = File(context.cacheDir, assetName)
+            if (!cacheFile.exists() || cacheFile.length() < 1000L) {
+                context.assets.open(assetName).use { input ->
                     cacheFile.outputStream().use { output ->
                         input.copyTo(output)
                     }
@@ -178,10 +204,14 @@ fun SyllabusPdfViewerScreen(
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "application/pdf")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            context.startActivity(Intent.createChooser(intent, "Open AKTU Syllabus PDF with..."))
-        } catch (e: Exception) {
-            Toast.makeText(context, "No external PDF viewer found: ${e.message}", Toast.LENGTH_SHORT).show()
+            val chooser = Intent.createChooser(intent, "Open AKTU Syllabus PDF with...").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(chooser)
+        } catch (t: Throwable) {
+            Toast.makeText(context, "Cannot open external PDF viewer: ${t.localizedMessage}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -262,15 +292,20 @@ fun SyllabusPdfViewerScreen(
                     }
 
                     // Page Quick Slider / Selector
-                    Slider(
-                        value = currentPageIndex.toFloat(),
-                        onValueChange = { currentPageIndex = it.toInt() },
-                        valueRange = 0f..max(0f, (totalPages - 1).toFloat()),
-                        steps = max(0, totalPages - 2),
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 12.dp)
-                    )
+                    val maxPageFloat = max(0f, (totalPages - 1).toFloat())
+                    if (maxPageFloat > 0f) {
+                        Slider(
+                            value = currentPageIndex.toFloat().coerceIn(0f, maxPageFloat),
+                            onValueChange = { currentPageIndex = it.toInt().coerceIn(0, totalPages - 1) },
+                            valueRange = 0f..maxPageFloat,
+                            steps = max(0, totalPages - 2),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 12.dp)
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
 
                     FilledTonalButton(
                         onClick = {
@@ -348,20 +383,23 @@ fun SyllabusPdfViewerScreen(
                         }
                     }
                 }
-                currentBitmap != null -> {
-                    Image(
-                        bitmap = currentBitmap!!.asImageBitmap(),
-                        contentDescription = "PDF Page ${currentPageIndex + 1}",
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(8.dp)
-                            .graphicsLayer(
-                                scaleX = scale,
-                                scaleY = scale,
-                                translationX = offsetX,
-                                translationY = offsetY
-                            )
-                    )
+                currentBitmap != null && !currentBitmap!!.isRecycled -> {
+                    val bmp = currentBitmap
+                    if (bmp != null && !bmp.isRecycled) {
+                        Image(
+                            bitmap = bmp.asImageBitmap(),
+                            contentDescription = "PDF Page ${currentPageIndex + 1}",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(8.dp)
+                                .graphicsLayer(
+                                    scaleX = scale,
+                                    scaleY = scale,
+                                    translationX = offsetX,
+                                    translationY = offsetY
+                                )
+                        )
+                    }
                 }
             }
 
