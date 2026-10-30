@@ -38,7 +38,7 @@ if (!process.env.ADMIN_PASSWORD) {
 }
 
 const db                      = require('./api/lib/db');
-const { verifyAdminAuth }     = require('./api/lib/auth');
+const { verifyAdminAuth, issueToken } = require('./api/lib/auth');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -337,7 +337,8 @@ const server = http.createServer(async (req, res) => {
         try {
             const body = await parseBody(req);
             if (verifyAdminAuth(req, body)) {
-                json(res, 200, { success: true, authenticated: true });
+                const token = issueToken();
+                json(res, 200, { success: true, authenticated: true, token, message: 'Admin access authorized' });
             } else {
                 json(res, 401, { success: false, error: 'Incorrect admin password' });
             }
