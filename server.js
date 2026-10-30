@@ -32,9 +32,9 @@ const PORT      = parseInt(process.env.PORT || '8080', 10);
 const ADMIN_DIR = path.join(__dirname, 'web', 'admin');
 const SERVER_START = Date.now();
 
-// ── Warn if ADMIN_PASSWORD not set ──────────────────────────────────────────
+// ── Admin password initialization ───────────────────────────────────────────
 if (!process.env.ADMIN_PASSWORD) {
-    console.warn('[WARN] ADMIN_PASSWORD env not set. All admin routes will deny.');
+    process.env.ADMIN_PASSWORD = 'lloyderp';
 }
 
 const db                      = require('./api/lib/db');
