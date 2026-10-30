@@ -1262,16 +1262,22 @@ class TelemetryDashboard {
                         this.populateGovernanceFields();
                         this.renderMaintenanceBanner();
                         this.renderActiveBanChips();
+                        connectedUrl = candidate;
                     }
                 } catch (e) {}
 
                 // Fetch telemetry heartbeats
                 const telUrl = candidate + (candidate.includes('/api') ? '/telemetry' : '/api/telemetry');
-                const res = await fetch(telUrl, { signal: AbortSignal.timeout(2500) });
+                const res = await fetch(telUrl, {
+                    headers: this.getAuthHeaders(),
+                    signal: AbortSignal.timeout(2500)
+                });
                 if (res.ok) {
                     this.records = await res.json();
                     connectedUrl = candidate;
                     break;
+                } else if (res.status === 401) {
+                    connectedUrl = candidate;
                 }
             } catch (err) {}
         }
