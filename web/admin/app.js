@@ -39,7 +39,12 @@ class TelemetryDashboard {
         // Auto-connect to origin or local node server without prompting
         const isHttp = typeof window !== 'undefined' && window.location.protocol.startsWith('http');
         const defaultOrigin = isHttp ? window.location.origin : 'http://localhost:8080';
-        this.endpointUrl = localStorage.getItem('telemetry_api_url') || defaultOrigin;
+        let storedUrl = localStorage.getItem('telemetry_api_url');
+        if (typeof window !== 'undefined' && window.location.protocol === 'https:' && storedUrl && storedUrl.startsWith('http://')) {
+            storedUrl = null;
+            localStorage.removeItem('telemetry_api_url');
+        }
+        this.endpointUrl = storedUrl || defaultOrigin;
         this.fleetConfig = this.loadStoredConfig();
 
         this.initDOMElements();
@@ -230,11 +235,26 @@ class TelemetryDashboard {
         }
 
         try {
-            const res = await fetch(this.getApiUrl('/auth'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password: pass })
-            });
+            let apiUrl = this.getApiUrl('/auth');
+            let res;
+            try {
+                res = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: pass })
+                });
+            } catch (networkErr) {
+                if (typeof window !== 'undefined' && window.location.origin && window.location.origin.startsWith('http') && apiUrl.indexOf(window.location.origin) === -1) {
+                    apiUrl = `${window.location.origin}/api/auth`;
+                    res = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password: pass })
+                    });
+                } else {
+                    throw networkErr;
+                }
+            }
 
             if (res.ok) {
                 const data = await res.json();
@@ -245,13 +265,11 @@ class TelemetryDashboard {
                 this.showToast('Admin access verified. Welcome!', 'success');
                 this.loadTelemetry();
             } else {
-                this.showAuthError();
+                this.showAuthError('Incorrect passkey. Access denied.');
             }
         } catch (err) {
-            // Server unreachable — do NOT fall back to a hardcoded password.
-            // Show error and require the user to resolve connectivity.
             console.error('[Auth] Server unreachable:', err);
-            this.showAuthError();
+            this.showAuthError('Connection error: cannot reach server. Check network connection.');
         } finally {
             if (this.unlockPortalBtn) {
                 this.unlockPortalBtn.disabled = false;
@@ -263,8 +281,12 @@ class TelemetryDashboard {
         }
     }
 
-    showAuthError() {
-        if (this.authErrorMsg) this.authErrorMsg.style.display = 'block';
+    showAuthError(msg = null) {
+        if (this.authErrorMsg) {
+            const span = this.authErrorMsg.querySelector('span');
+            if (span && msg) span.textContent = msg;
+            this.authErrorMsg.style.display = 'block';
+        }
         if (this.authCard) {
             this.authCard.classList.remove('shake');
             void this.authCard.offsetWidth;
