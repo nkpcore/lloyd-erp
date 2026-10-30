@@ -3,6 +3,10 @@ package com.lloyd.attendance.widget
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Dedicated internal BroadcastReceiver for home screen widget manual refresh triggers.
@@ -19,10 +23,18 @@ class AttendanceWidgetRefreshReceiver : BroadcastReceiver() {
         if (context == null || intent == null) return
 
         if (intent.action == AttendanceWidgetProvider.ACTION_REFRESH_WIDGET) {
-            // Strict defense-in-depth: reject if sender package is explicitly set and doesn't match
-            val pkg = intent.`package`
-            if (pkg != null && pkg != context.packageName) return
-            AttendanceWidgetProvider.handleRefreshRequest(context)
+            // Strict defense-in-depth: reject null package or sender package mismatch
+            val callerPkg = intent.`package` ?: return
+            if (callerPkg != context.packageName) return
+
+            val pendingResult = goAsync()
+            CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+                try {
+                    AttendanceWidgetProvider.handleRefreshRequest(context)
+                } finally {
+                    pendingResult.finish()
+                }
+            }
         }
     }
 }

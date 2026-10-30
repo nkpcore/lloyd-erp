@@ -144,24 +144,25 @@ object AccessControlManager {
                 .get()
                 .build()
 
-            val response = httpClient.newCall(request).execute()
-            if (response.isSuccessful) {
-                val bodyStr = response.body?.string()?.trim()
-                if (!bodyStr.isNullOrBlank() && !bodyStr.startsWith("<")) {
-                    val config = parseFleetConfig(bodyStr)
+            httpClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val bodyStr = response.body?.string()?.trim()
+                    if (!bodyStr.isNullOrBlank() && !bodyStr.startsWith("<")) {
+                        val config = parseFleetConfig(bodyStr)
 
-                    // Persist cache
-                    prefs.edit().putString(KEY_CACHED_CONFIG, bodyStr).apply()
+                        // Persist cache
+                        prefs.edit().putString(KEY_CACHED_CONFIG, bodyStr).apply()
 
-                    // Update local device ban set
-                    val updatedBans = config.bannedDevices.map { it.trim() }.filter { it.isNotBlank() }.toSet()
-                    val updatedStudentBans = config.bannedStudents.map { it.toString().trim() }.filter { it.isNotBlank() }.toSet()
-                    prefs.edit()
-                        .putStringSet(KEY_LOCAL_BANS, updatedBans)
-                        .putStringSet(KEY_LOCAL_STUDENT_BANS, updatedStudentBans)
-                        .apply()
+                        // Update local device ban set
+                        val updatedBans = config.bannedDevices.map { it.trim() }.filter { it.isNotBlank() }.toSet()
+                        val updatedStudentBans = config.bannedStudents.map { it.toString().trim() }.filter { it.isNotBlank() }.toSet()
+                        prefs.edit()
+                            .putStringSet(KEY_LOCAL_BANS, updatedBans)
+                            .putStringSet(KEY_LOCAL_STUDENT_BANS, updatedStudentBans)
+                            .apply()
 
-                    return@withContext evaluateAccess(config, studentId, deviceId, currentVersionCode)
+                        return@withContext evaluateAccess(config, studentId, deviceId, currentVersionCode)
+                    }
                 }
             }
         } catch (ignored: Exception) {

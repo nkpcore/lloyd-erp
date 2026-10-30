@@ -25,6 +25,9 @@ class FeeReceiptsViewModel(application: Application) : AndroidViewModel(applicat
     private val _isPrinting = MutableStateFlow(false)
     val isPrinting: StateFlow<Boolean> = _isPrinting.asStateFlow()
 
+    private val _printError = MutableStateFlow<String?>(null)
+    val printError: StateFlow<String?> = _printError.asStateFlow()
+
     init {
         loadData()
     }
@@ -69,8 +72,18 @@ class FeeReceiptsViewModel(application: Application) : AndroidViewModel(applicat
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     _isPrinting.value = false
+                    _printError.value = when {
+                        e.message?.contains("404") == true -> "Receipt not found. It may not be processed yet."
+                        e.message?.contains("401") == true || e.message?.contains("Session expired") == true ->
+                            "Session expired. Please sign in again."
+                        else -> "Could not print receipt: ${e.message ?: "Unknown error"}"
+                    }
                 }
             }
         }
+    }
+
+    fun clearPrintError() {
+        _printError.value = null
     }
 }

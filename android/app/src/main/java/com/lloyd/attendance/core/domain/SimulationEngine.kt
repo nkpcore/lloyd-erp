@@ -5,6 +5,8 @@ package com.lloyd.attendance.core.domain
  */
 object SimulationEngine {
 
+    const val BORDERLINE_THRESHOLD = 70.0
+
     data class SimulationResult(
         val baselinePresent: Int,
         val baselineTotal: Int,
@@ -25,13 +27,15 @@ object SimulationEngine {
         additionalPresent: Int,
         additionalAbsent: Int
     ): SimulationResult {
+        val safeTotalIn = total.coerceAtLeast(0)
+        val safePresentIn = present.coerceIn(0, safeTotalIn)
         val clampedAddP = additionalPresent.coerceAtLeast(0)
         val clampedAddA = additionalAbsent.coerceAtLeast(0)
 
-        val newP = present + clampedAddP
-        val newTotal = total + clampedAddP + clampedAddA
+        val newP = safePresentIn + clampedAddP
+        val newTotal = safeTotalIn + clampedAddP + clampedAddA
 
-        val basePct = AttendancePercentage.of(present, total)
+        val basePct = AttendancePercentage.of(safePresentIn, safeTotalIn)
         val projPct = AttendancePercentage.of(newP, newTotal)
 
         val baseNumeric = basePct.numericValue ?: 0.0
@@ -41,14 +45,14 @@ object SimulationEngine {
             is AttendancePercentage.NoData -> AttendanceHealth.UNRECORDED
             is AttendancePercentage.Value -> when {
                 projPct.percentage >= 75.0 -> AttendanceHealth.HEALTHY
-                projPct.percentage >= 70.0 -> AttendanceHealth.BORDERLINE
+                projPct.percentage >= BORDERLINE_THRESHOLD -> AttendanceHealth.BORDERLINE
                 else -> AttendanceHealth.CRITICAL
             }
         }
 
         return SimulationResult(
-            baselinePresent = present,
-            baselineTotal = total,
+            baselinePresent = safePresentIn,
+            baselineTotal = safeTotalIn,
             baselinePercentage = basePct,
             addedPresent = clampedAddP,
             addedAbsent = clampedAddA,

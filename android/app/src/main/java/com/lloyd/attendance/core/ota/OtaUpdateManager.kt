@@ -12,6 +12,8 @@ import com.google.gson.annotations.SerializedName
 import com.lloyd.attendance.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -31,7 +33,8 @@ private val ALLOWED_OTA_HOSTS = setOf(
     "github.com",
     "objects.githubusercontent.com",
     "objects.githubassets.com",
-    "releases.githubusercontent.com"
+    "releases.githubusercontent.com",
+    "github-releases.githubusercontent.com"
 )
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -50,9 +53,20 @@ object OtaUpdateManager {
     private const val GITHUB_API_URL =
         "https://api.github.com/repos/nkpcore/lloyd-erp/releases/latest"
 
+    /** Maximum allowed APK download size: 50 MB */
+    const val MAX_APK_BYTES = 50L * 1024 * 1024
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
+        .build()
+
+    private val downloadClient = client.newBuilder()
+        .addNetworkInterceptor { chain ->
+            val request = chain.request()
+            enforceAllowedOtaUrl(request.url.toString())
+            chain.proceed(request)
+        }
         .build()
     private val gson = Gson()
 
@@ -156,12 +170,13 @@ object OtaUpdateManager {
                 .header("User-Agent", "LloydERP-Android/${BuildConfig.VERSION_NAME}")
                 .build()
 
-            val otaResp = client.newCall(otaReq).execute()
-            if (!otaResp.isSuccessful) {
-                throw IOException("Fleet /ota responded HTTP ${otaResp.code}")
+            val body = client.newCall(otaReq).execute().use { otaResp ->
+                if (!otaResp.isSuccessful) {
+                    throw IOException("Fleet /ota responded HTTP ${otaResp.code}")
+                }
+                otaResp.body?.string()
+                    ?: throw IOException("Fleet /ota returned empty body")
             }
-            val body = otaResp.body?.string()
-                ?: throw IOException("Fleet /ota returned empty body")
 
             val otaJson = gson.fromJson(body, com.google.gson.JsonObject::class.java)
             val hasUpdate = otaJson.get("has_update")?.asBoolean ?: false
@@ -206,12 +221,13 @@ object OtaUpdateManager {
                 .header("User-Agent", "LloydERP-Android/${BuildConfig.VERSION_NAME}")
                 .build()
 
-            val cfgResp = client.newCall(cfgReq).execute()
-            if (!cfgResp.isSuccessful) {
-                throw IOException("Fleet /config responded HTTP ${cfgResp.code}")
+            val cfgBody = client.newCall(cfgReq).execute().use { cfgResp ->
+                if (!cfgResp.isSuccessful) {
+                    throw IOException("Fleet /config responded HTTP ${cfgResp.code}")
+                }
+                cfgResp.body?.string()
+                    ?: throw IOException("Fleet /config returned empty body")
             }
-            val cfgBody = cfgResp.body?.string()
-                ?: throw IOException("Fleet /config returned empty body")
 
             val config = gson.fromJson(cfgBody, com.google.gson.JsonObject::class.java)
             val latestName = config.get("latest_version_name")?.asString
@@ -252,12 +268,13 @@ object OtaUpdateManager {
                 .header("User-Agent", "LloydERP-Android/${BuildConfig.VERSION_NAME}")
                 .build()
 
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) {
-                throw IOException("GitHub Releases API responded HTTP ${response.code}")
+            val bodyStr = client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IOException("GitHub Releases API responded HTTP ${response.code}")
+                }
+                response.body?.string()
+                    ?: throw IOException("GitHub Releases API returned empty body")
             }
-            val bodyStr = response.body?.string()
-                ?: throw IOException("GitHub Releases API returned empty body")
 
             val release = gson.fromJson(bodyStr, GitHubRelease::class.java)
             val tagName = release.tagName.orEmpty()
@@ -333,17 +350,6 @@ object OtaUpdateManager {
                 .header("User-Agent", "LloydERP-Android/${BuildConfig.VERSION_NAME}")
                 .build()
 
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) {
-                return@withContext Result.failure(
-                    IOException("Download failed: HTTP ${response.code} from $safeUrl")
-                )
-            }
-
-            val body = response.body
-                ?: return@withContext Result.failure(IOException("Download returned empty body"))
-
-            val contentLength = body.contentLength()
             val destinationFile = getDownloadedUpdateApk(context)
             destinationFile.parentFile?.mkdirs()
 
@@ -351,59 +357,85 @@ object OtaUpdateManager {
             val partFile = File(destinationFile.parent, "${destinationFile.name}.part")
             if (partFile.exists()) partFile.delete()
 
-            val digest = if (!expectedSha256.isNullOrBlank()) {
-                MessageDigest.getInstance("SHA-256")
-            } else null
-
-            body.byteStream().use { input ->
-                partFile.outputStream().use { output ->
-                    val buffer = ByteArray(16 * 1024)
-                    var totalRead = 0L
-
-                    while (true) {
-                        val bytesRead = input.read(buffer)
-                        if (bytesRead == -1) break
-                        output.write(buffer, 0, bytesRead)
-                        digest?.update(buffer, 0, bytesRead)
-                        totalRead += bytesRead
-                        val progress = if (contentLength > 0) {
-                            (totalRead.toFloat() / contentLength.toFloat()).coerceIn(0f, 0.99f)
-                        } else {
-                            ((totalRead % (4 * 1024 * 1024)).toFloat() / (4 * 1024 * 1024).toFloat())
-                                .coerceIn(0.1f, 0.95f)
-                        }
-                        withContext(Dispatchers.Main) { onProgress(progress) }
-                    }
-                    output.flush()
-                }
-            }
-
-            // SHA-256 integrity check (if server advertised a hash)
-            if (digest != null && !expectedSha256.isNullOrBlank()) {
-                val actualHex = digest.digest().joinToString("") { "%02x".format(it) }
-                if (!actualHex.equals(expectedSha256.trim().lowercase(), ignoreCase = true)) {
-                    partFile.delete()
-                    return@withContext Result.failure(
-                        SecurityException(
-                            "APK integrity check failed. " +
-                            "Expected SHA-256: $expectedSha256, got: $actualHex. " +
-                            "The download may be corrupted or tampered with."
+            try {
+                downloadClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        return@withContext Result.failure(
+                            IOException("Download failed: HTTP ${response.code} from $safeUrl")
                         )
-                    )
+                    }
+
+                    val body = response.body
+                        ?: return@withContext Result.failure(IOException("Download returned empty body"))
+
+                    val contentLength = body.contentLength()
+                    if (contentLength > MAX_APK_BYTES) {
+                        return@withContext Result.failure(
+                            IOException("APK too large: $contentLength bytes (limit: $MAX_APK_BYTES)")
+                        )
+                    }
+
+                    val digest = if (!expectedSha256.isNullOrBlank()) {
+                        MessageDigest.getInstance("SHA-256")
+                    } else null
+
+                    body.byteStream().use { input ->
+                        partFile.outputStream().use { output ->
+                            val buffer = ByteArray(16 * 1024)
+                            var totalRead = 0L
+
+                            while (true) {
+                                val bytesRead = input.read(buffer)
+                                if (bytesRead == -1) break
+                                totalRead += bytesRead
+                                if (totalRead > MAX_APK_BYTES) {
+                                    throw IOException("Download exceeded size limit of $MAX_APK_BYTES bytes")
+                                }
+                                output.write(buffer, 0, bytesRead)
+                                digest?.update(buffer, 0, bytesRead)
+                                val progress = if (contentLength > 0) {
+                                    (totalRead.toFloat() / contentLength.toFloat()).coerceIn(0f, 0.99f)
+                                } else {
+                                    ((totalRead % (4 * 1024 * 1024)).toFloat() / (4 * 1024 * 1024).toFloat())
+                                        .coerceIn(0.1f, 0.95f)
+                                }
+                                withContext(Dispatchers.Main) { onProgress(progress) }
+                            }
+                            output.flush()
+                        }
+                    }
+
+                    // SHA-256 integrity check (if server advertised a hash)
+                    if (digest != null && !expectedSha256.isNullOrBlank()) {
+                        val actualHex = digest.digest().joinToString("") { "%02x".format(it) }
+                        if (!actualHex.equals(expectedSha256.trim().lowercase(), ignoreCase = true)) {
+                            partFile.delete()
+                            return@withContext Result.failure(
+                                SecurityException(
+                                    "APK integrity check failed. " +
+                                    "Expected SHA-256: $expectedSha256, got: $actualHex. " +
+                                    "The download may be corrupted or tampered with."
+                                )
+                            )
+                        }
+                    }
+
+                    // Atomic rename from .part to final destination
+                    if (destinationFile.exists()) destinationFile.delete()
+                    if (!partFile.renameTo(destinationFile)) {
+                        // renameTo can fail across filesystems — copy + delete as fallback
+                        partFile.copyTo(destinationFile, overwrite = true)
+                        partFile.delete()
+                    }
+                    destinationFile.setReadable(true, false)
+
+                    withContext(Dispatchers.Main) { onProgress(1f) }
+                    Result.success(destinationFile)
                 }
+            } catch (e: Exception) {
+                if (partFile.exists()) partFile.delete()
+                throw e
             }
-
-            // Atomic rename from .part to final destination
-            if (destinationFile.exists()) destinationFile.delete()
-            if (!partFile.renameTo(destinationFile)) {
-                // renameTo can fail across filesystems — copy + delete as fallback
-                partFile.copyTo(destinationFile, overwrite = true)
-                partFile.delete()
-            }
-            destinationFile.setReadable(true, false)
-
-            withContext(Dispatchers.Main) { onProgress(1f) }
-            Result.success(destinationFile)
         } catch (e: SecurityException) {
             Result.failure(e)
         } catch (e: Exception) {
@@ -555,27 +587,36 @@ object OtaUpdateManager {
         expectedSha256: String? = null
     ) {
         Toast.makeText(context, "Downloading update…", Toast.LENGTH_SHORT).show()
-        CoroutineScope(Dispatchers.IO).launch {
-            val result = downloadApkWithProgress(
-                context = context,
-                downloadUrl = downloadUrl,
-                expectedSha256 = expectedSha256
-            )
-            withContext(Dispatchers.Main) {
-                result.onSuccess { apkFile ->
-                    if (!canInstallApk(context)) {
-                        Toast.makeText(
-                            context,
-                            "Please allow Lloyd Attendance to install updates",
-                            Toast.LENGTH_LONG
-                        ).show()
-                        openInstallPermissionSettings(context)
-                    } else {
-                        promptInstallApk(context, apkFile)
+        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        scope.launch {
+            try {
+                val result = downloadApkWithProgress(
+                    context = context,
+                    downloadUrl = downloadUrl,
+                    expectedSha256 = expectedSha256
+                )
+                withContext(Dispatchers.Main) {
+                    result.onSuccess { apkFile ->
+                        if (!canInstallApk(context)) {
+                            Toast.makeText(
+                                context,
+                                "Please allow Lloyd Attendance to install updates",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            openInstallPermissionSettings(context)
+                        } else {
+                            promptInstallApk(context, apkFile)
+                        }
+                    }.onFailure { err ->
+                        Toast.makeText(context, "Update failed: ${err.message}", Toast.LENGTH_LONG).show()
                     }
-                }.onFailure { err ->
-                    Toast.makeText(context, "Update failed: ${err.message}", Toast.LENGTH_LONG).show()
                 }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Update failed: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            } finally {
+                scope.cancel()
             }
         }
     }

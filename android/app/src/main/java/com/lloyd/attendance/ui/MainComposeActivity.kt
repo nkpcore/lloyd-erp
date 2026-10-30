@@ -14,13 +14,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.IntentFilter
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.EaseOutCubic
@@ -43,8 +41,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.automirrored.outlined.EventNote
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Icon
@@ -53,16 +53,13 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.core.content.ContextCompat
@@ -107,11 +104,12 @@ import com.lloyd.attendance.feature.syllabus.SyllabusBrowserScreen
 import com.lloyd.attendance.feature.syllabus.SyllabusDetailScreen
 import com.lloyd.attendance.feature.syllabus.SyllabusPdfViewerScreen
 import com.lloyd.attendance.feature.syllabus.SyllabusViewModel
-import com.lloyd.attendance.feature.syllabus.AktuCourse
+import com.lloyd.attendance.feature.syllabus.SyllabusCourse
 import com.lloyd.attendance.feature.feedback.FeedbackScreen
 import com.lloyd.attendance.feature.feedback.FeedbackViewModel
 import com.lloyd.attendance.feature.receipts.FeeReceiptsScreen
 import com.lloyd.attendance.feature.receipts.FeeReceiptsViewModel
+import com.lloyd.attendance.feature.services.ServicesHubScreen
 import com.lloyd.attendance.widget.AttendanceSyncWorker
 import com.lloyd.attendance.widget.AttendanceWidgetProvider
 import androidx.lifecycle.lifecycleScope
@@ -129,6 +127,7 @@ enum class MainTab(
 ) {
     DASHBOARD("Attendance", Icons.Filled.BarChart, Icons.Outlined.BarChart),
     LOGS("Daily Logs", Icons.AutoMirrored.Filled.EventNote, Icons.AutoMirrored.Outlined.EventNote),
+    SERVICES("Services", Icons.Filled.Apps, Icons.Outlined.Apps),
     PROFILE("Profile", Icons.Filled.Person, Icons.Outlined.Person)
 }
 
@@ -530,7 +529,7 @@ sealed interface ScreenDestination {
     data object Calendar : ScreenDestination
     data object LatestAttendance : ScreenDestination
     data object SyllabusBrowser : ScreenDestination
-    data class SyllabusDetail(val course: AktuCourse) : ScreenDestination
+    data class SyllabusDetail(val course: SyllabusCourse) : ScreenDestination
     data class SyllabusPdf(
         val initialPage: Int = 0,
         val returnTo: ScreenDestination = ScreenDestination.Main
@@ -683,7 +682,7 @@ fun MainAppShell(
             }
 
             is ScreenDestination.Main -> {
-                Box(
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(MaterialTheme.colorScheme.background)
@@ -696,7 +695,8 @@ fun MainAppShell(
                              scaleIn(initialScale = 0.98f, animationSpec = tween(220, easing = FastOutSlowInEasing))) togetherWith
                             (fadeOut(animationSpec = tween(150, easing = FastOutSlowInEasing)))
                         },
-                        label = "tab_fade_through_animation"
+                        label = "tab_fade_through_animation",
+                        modifier = Modifier.weight(1f)
                     ) { currentTab ->
                         when (currentTab) {
                             MainTab.DASHBOARD -> {
@@ -741,6 +741,30 @@ fun MainAppShell(
                                 )
                             }
 
+                            MainTab.SERVICES -> {
+                                ServicesHubScreen(
+                                    onNavigateToSyllabus = {
+                                        destination = ScreenDestination.SyllabusBrowser
+                                    },
+                                    onNavigateToCalendar = {
+                                        destination = ScreenDestination.Calendar
+                                    },
+                                    onNavigateToLatestAttendance = {
+                                        destination = ScreenDestination.LatestAttendance
+                                    },
+                                    onNavigateToFeeReceipts = {
+                                        destination = ScreenDestination.FeeReceipts
+                                    },
+                                    onNavigateToSimulation = {
+                                        simulationViewModel.initialize("Overall Attendance", 0, 0)
+                                        destination = ScreenDestination.OverallSimulation
+                                    },
+                                    onNavigateToFeedback = {
+                                        destination = ScreenDestination.Feedback
+                                    }
+                                )
+                            }
+
                             MainTab.PROFILE -> {
                                 ProfileScreen(
                                     userProfile = prefs.userProfile,
@@ -752,65 +776,45 @@ fun MainAppShell(
                         }
                     }
 
-                    // Floating Navigation Pill Overlay
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .navigationBarsPadding()
-                            .padding(start = 24.dp, end = 24.dp, bottom = 12.dp)
+                    // Standard M3 NavigationBar
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        tonalElevation = 0.dp,
+                        windowInsets = WindowInsets(0, 0, 0, 0),
+                        modifier = Modifier.navigationBarsPadding()
                     ) {
-                        Surface(
-                            shape = RoundedCornerShape(32.dp),
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                            tonalElevation = 3.dp,
-                            shadowElevation = 8.dp,
-                            border = BorderStroke(
-                                width = 1.dp,
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.40f)
+                        MainTab.entries.forEach { tab ->
+                            val selected = selectedTab == tab
+                            val iconScale by animateFloatAsState(
+                                targetValue = if (selected) 1.10f else 1.0f,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                label = "tabIconScale"
                             )
-                        ) {
-                            NavigationBar(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(64.dp),
-                                containerColor = Color.Transparent,
-                                tonalElevation = 0.dp,
-                                windowInsets = WindowInsets(0, 0, 0, 0)
-                            ) {
-                                MainTab.entries.forEach { tab ->
-                                    val selected = selectedTab == tab
-                                    val iconScale by animateFloatAsState(
-                                        targetValue = if (selected) 1.10f else 1.0f,
-                                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-                                        label = "tabIconScale"
+                            NavigationBarItem(
+                                selected = selected,
+                                onClick = { selectedTab = tab },
+                                icon = {
+                                    Icon(
+                                        imageVector = if (selected) tab.activeIcon else tab.inactiveIcon,
+                                        contentDescription = tab.title,
+                                        modifier = Modifier.scale(iconScale)
                                     )
-                                    NavigationBarItem(
-                                        selected = selected,
-                                        onClick = { selectedTab = tab },
-                                        icon = {
-                                            Icon(
-                                                imageVector = if (selected) tab.activeIcon else tab.inactiveIcon,
-                                                contentDescription = tab.title,
-                                                modifier = Modifier.scale(iconScale)
-                                            )
-                                        },
-                                        label = {
-                                            Text(
-                                                text = tab.title,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                                            )
-                                        },
-                                        colors = NavigationBarItemDefaults.colors(
-                                            indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                                            selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                                },
+                                label = {
+                                    Text(
+                                        text = tab.title,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                                     )
-                                }
-                            }
+                                },
+                                colors = NavigationBarItemDefaults.colors(
+                                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
                         }
                     }
                 }

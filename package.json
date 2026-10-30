@@ -1,8 +1,8 @@
 {
   "name": "erpwidgit",
   "version": "1.0.0",
-  "description": "A modern, high-performance Android client and companion web admin portal built for students at Lloyd College (`erp.lloydcollege.in`). Completely modernized with **Kotlin**, **Jetpack Compose**, **Material 3 Expressive**, and an in-app **OTA GitHub Releases Updater**.",
-  "main": "LloydWidget.scriptable.js",
+  "description": "Lloyd ERP — Student Attendance & Fleet Management for Lloyd Institute",
+  "main": "server.js",
   "directories": {
     "doc": "docs",
     "test": "tests"
@@ -17,7 +17,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "commonjs",
   "bugs": {
     "url": "https://github.com/nkpcore/lloyd-erp/issues"

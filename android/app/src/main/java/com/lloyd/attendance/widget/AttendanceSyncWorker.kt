@@ -73,9 +73,9 @@ class AttendanceSyncWorker(
 
             val snapshot = repository.snapshot.value
             if (snapshot.error is SyncError.AuthExpired) {
-                WorkManager.getInstance(context).cancelAllWork()
+                prefs.setAuthExpired(true)
                 AttendanceWidgetProvider.updateAllWidgets(context, null, false, "Session expired")
-                return Result.failure()
+                return Result.retry()
             }
 
             val freshStats: Models.CalculatedStats? = prefs.getCachedStats()
@@ -115,26 +115,29 @@ class AttendanceSyncWorker(
         notifyUser: Boolean
     ) {
         try {
-            if (logs.isNullOrEmpty()) return
-
-            val seenIds = prefs.getSeenAttendanceIds()
-            val isInitialBootstrap = !prefs.hasInitializedAttendanceHistory() || seenIds.isEmpty()
+            val isInitialBootstrap = !prefs.hasInitializedAttendanceHistory()
 
             if (isInitialBootstrap) {
                 // First run: bootstrap history with existing records so we NEVER alert for past historical lectures
-                val currentIds = mutableSetOf<Long>()
-                var maxId = 0L
-                logs.forEach { item ->
-                    if (item.id > 0) {
-                        currentIds.add(item.id)
-                        if (item.id > maxId) maxId = item.id
+                if (!logs.isNullOrEmpty()) {
+                    val currentIds = mutableSetOf<Long>()
+                    var maxId = 0L
+                    logs.forEach { item ->
+                        if (item.id > 0) {
+                            currentIds.add(item.id)
+                            if (item.id > maxId) maxId = item.id
+                        }
                     }
+                    prefs.addSeenAttendanceIds(currentIds)
+                    if (maxId > 0) prefs.saveLastSeenAttendanceId(maxId)
                 }
-                prefs.addSeenAttendanceIds(currentIds)
-                if (maxId > 0) prefs.saveLastSeenAttendanceId(maxId)
                 prefs.setInitializedAttendanceHistory(true)
                 return
             }
+
+            if (logs.isNullOrEmpty()) return
+
+            val seenIds = prefs.getSeenAttendanceIds()
 
             // Subsequent sync: identify genuine newly marked records via pure domain detector
             val newlyMarkedItems: List<AttendanceMarkEvent.Marked> =

@@ -1,12 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Allow cleartext HTTP for local captive portal gateway redirects and connectivity probes -->
-    <base-config cleartextTrafficPermitted="true">
+    <!-- Strictly disallow cleartext HTTP traffic across all domains by default -->
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <!-- Only trust verified system CAs; ignore untrusted/user-installed proxies -->
             <certificates src="system" />
         </trust-anchors>
     </base-config>
+
+    <!-- Allow cleartext only for campus captive portal detection and connectivity probes -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">connectivitycheck.gstatic.com</domain>
+        <domain includeSubdomains="true">clients3.google.com</domain>
+    </domain-config>
 
     <!-- Strictly disallow any cleartext traffic to the official ERP domain and APIs -->
     <domain-config cleartextTrafficPermitted="false">

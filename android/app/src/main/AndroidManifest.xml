@@ -46,6 +46,7 @@
         <receiver
             android:name=".widget.AttendanceWidgetProvider"
             android:exported="true"
+            android:permission="android.permission.BIND_APPWIDGET"
             android:label="@string/widget_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

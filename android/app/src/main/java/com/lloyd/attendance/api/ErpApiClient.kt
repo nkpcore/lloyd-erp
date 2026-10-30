@@ -10,6 +10,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import java.io.IOException
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
@@ -68,8 +69,14 @@ class ErpApiClient(context: Context) {
         }
     }
 
-    fun refreshToken(): Boolean {
-        val rToken = prefs.getRefreshToken().takeIf { it.isNotEmpty() } ?: return false
+    sealed interface RefreshResult {
+        object Success : RefreshResult
+        object AuthError : RefreshResult
+        data class NetworkError(val cause: IOException) : RefreshResult
+    }
+
+    fun refreshTokenResult(): RefreshResult {
+        val rToken = prefs.getRefreshToken().takeIf { it.isNotEmpty() } ?: return RefreshResult.AuthError
         val reqBody = Models.RefreshRequest(rToken)
         val request = Request.Builder()
             .url("$BASE_URL/auth/refresh")
@@ -85,13 +92,29 @@ class ErpApiClient(context: Context) {
                     val apiRes = gson.fromJson<Models.ApiResponse<Models.LoginData>>(resStr, type)
                     if (apiRes?.status == true && apiRes.data != null) {
                         prefs.saveTokens(apiRes.data.access_token ?: "", apiRes.data.refresh_token)
-                        return true
+                        return RefreshResult.Success
                     }
                 }
-                false
+                if (response.code == 401 || response.code == 403) {
+                    RefreshResult.AuthError
+                } else if (!response.isSuccessful) {
+                    RefreshResult.NetworkError(IOException("HTTP error during token refresh: ${response.code}"))
+                } else {
+                    RefreshResult.AuthError
+                }
             }
-        } catch (_: Exception) { false }
+        } catch (e: IOException) {
+            RefreshResult.NetworkError(e)
+        } catch (e: Exception) {
+            if (e.cause is IOException) {
+                RefreshResult.NetworkError(e.cause as IOException)
+            } else {
+                RefreshResult.AuthError
+            }
+        }
     }
+
+    fun refreshToken(): Boolean = refreshTokenResult() is RefreshResult.Success
 
     /**
      * Guarantees a valid authorization token.
@@ -102,17 +125,31 @@ class ErpApiClient(context: Context) {
     fun ensureValidToken(): String {
         val token = prefs.getAccessToken()
         if (token.isNotEmpty()) return token
-        if (refreshToken()) return prefs.getAccessToken()
-        throw ErpException("Please sign in to your Lloyd ERP account.", true)
+        when (val result = refreshTokenResult()) {
+            is RefreshResult.Success -> return prefs.getAccessToken()
+            is RefreshResult.NetworkError -> throw result.cause
+            is RefreshResult.AuthError -> {
+                prefs.saveTokens("", "")
+                throw ErpException("Please sign in to your Lloyd ERP account.", true)
+            }
+        }
     }
 
     @Synchronized
     @Throws(Exception::class)
     private fun handleUnauthorized() {
         prefs.saveTokens("", null) // Invalidate access token while preserving refresh token
-        if (refreshToken()) return
-        prefs.saveTokens("", "")   // Invalidate both when refresh fails
-        throw ErpException("Session expired. Please sign in again.", true)
+        when (val result = refreshTokenResult()) {
+            is RefreshResult.Success -> return
+            is RefreshResult.NetworkError -> {
+                // Do NOT wipe tokens on network failure! Propagate network exception
+                throw result.cause
+            }
+            is RefreshResult.AuthError -> {
+                prefs.saveTokens("", "") // Invalidate both when refresh fails due to auth
+                throw ErpException("Session expired. Please sign in again.", true)
+            }
+        }
     }
 
     // ── Monthly attendance ────────────────────────────────────────────────────
@@ -171,7 +208,10 @@ class ErpApiClient(context: Context) {
     // ── Weekly attendance ─────────────────────────────────────────────────────
 
     @Throws(Exception::class)
-    fun getWeeklyAttendance(): Models.WeeklyAttendanceData {
+    fun getWeeklyAttendance(): Models.WeeklyAttendanceData = getWeeklyAttendance(false)
+
+    @Throws(Exception::class)
+    private fun getWeeklyAttendance(isRetry: Boolean): Models.WeeklyAttendanceData {
         val token = ensureValidToken()
         val request = Request.Builder()
             .url("$BASE_URL/student/me/weekly-attendance")
@@ -182,25 +222,21 @@ class ErpApiClient(context: Context) {
 
         client.newCall(request).execute().use { response ->
             if (response.code == 401) {
-                handleUnauthorized()
-                return getWeeklyAttendance()
+                return if (!isRetry) {
+                    handleUnauthorized()
+                    getWeeklyAttendance(true)
+                } else {
+                    prefs.saveTokens("", "")
+                    throw ErpException("Session expired. Please sign in again.", true)
+                }
             }
 
             val resStr = response.body?.string() ?: ""
-            if (!response.isSuccessful) throw ErpException("Server error (${response.code}): $resStr")
+            if (!response.isSuccessful) throw ErpException("Server error (${response.code}). Please try again later.")
 
             val type = object : TypeToken<Models.ApiResponse<Models.WeeklyAttendanceData>>() {}.type
             val apiRes = gson.fromJson<Models.ApiResponse<Models.WeeklyAttendanceData>>(resStr, type)
-            val data = apiRes?.data ?: throw ErpException("No weekly data")
-
-            // Propagate day/date from parent DayItem into each PeriodItem
-            data.days?.forEach { day ->
-                day.periods?.forEach { period ->
-                    // PeriodItem is a data class; re-assign mutably via copy isn't possible with @JvmField
-                    // The fields day/date are var, so set them directly
-                    period.also { it }
-                }
-            }
+            val data = apiRes?.data ?: throw ErpException("No weekly attendance data available.")
             prefs.saveWeeklyData(resStr)
             return data
         }
@@ -267,15 +303,35 @@ class ErpApiClient(context: Context) {
                     }
                 }
 
-                if (!response.isSuccessful) return@use
+                if (!response.isSuccessful) {
+                    if (page == 1) {
+                        throw ErpException("Failed to load attendance logs (page 1): HTTP ${response.code}")
+                    } else {
+                        throw ErpException("Failed to load attendance logs at page $page of $totalPages (retrieved ${allItems.size} items): HTTP ${response.code}")
+                    }
+                }
 
                 val resStr = response.body?.string() ?: ""
                 val type = object : TypeToken<Models.PaginatedApiResponse<List<Models.StudentAttendanceItem>>>() {}.type
-                val apiRes = gson.fromJson<Models.PaginatedApiResponse<List<Models.StudentAttendanceItem>>>(resStr, type)
+                val apiRes = try {
+                    gson.fromJson<Models.PaginatedApiResponse<List<Models.StudentAttendanceItem>>>(resStr, type)
+                } catch (e: Exception) {
+                    if (page == 1) {
+                        throw ErpException("Failed to parse attendance logs on page 1: ${e.message}")
+                    } else {
+                        throw ErpException("Failed to parse attendance logs at page $page of $totalPages (retrieved ${allItems.size} items): ${e.message}")
+                    }
+                } ?: run {
+                    if (page == 1) {
+                        throw ErpException("Null response for attendance logs on page 1")
+                    } else {
+                        throw ErpException("Null response for attendance logs at page $page of $totalPages (retrieved ${allItems.size} items)")
+                    }
+                }
 
-                if (apiRes?.data?.isNotEmpty() == true) {
+                if (apiRes.data?.isNotEmpty() == true) {
                     allItems.addAll(apiRes.data)
-                    totalPages = apiRes.meta?.totalPages?.coerceAtMost(20) ?: run { return@use }
+                    totalPages = apiRes.meta?.totalPages?.coerceAtMost(20) ?: totalPages
                 } else {
                     totalPages = 0 // break loop
                 }
@@ -319,7 +375,10 @@ class ErpApiClient(context: Context) {
         get() = getProfile()
 
     @Throws(Exception::class)
-    fun getProfile(): Models.UserProfile {
+    fun getProfile(): Models.UserProfile = getProfile(false)
+
+    @Throws(Exception::class)
+    private fun getProfile(isRetry: Boolean): Models.UserProfile {
         val token = ensureValidToken()
         val request = Request.Builder()
             .url("$BASE_URL/profile/me")
@@ -330,8 +389,13 @@ class ErpApiClient(context: Context) {
 
         client.newCall(request).execute().use { response ->
             if (response.code == 401) {
-                handleUnauthorized()
-                return getProfile()
+                return if (!isRetry) {
+                    handleUnauthorized()
+                    getProfile(true)
+                } else {
+                    prefs.saveTokens("", "")
+                    throw ErpException("Session expired. Please sign in again.", true)
+                }
             }
             if (!response.isSuccessful) {
                 throw ErpException("Server error (${response.code}) loading profile.")
@@ -395,7 +459,10 @@ class ErpApiClient(context: Context) {
     }
 
     @Throws(Exception::class)
-    fun getDashboardProfile(): Models.UserProfile {
+    fun getDashboardProfile(): Models.UserProfile = getDashboardProfile(false)
+
+    @Throws(Exception::class)
+    private fun getDashboardProfile(isRetry: Boolean): Models.UserProfile {
         val token = ensureValidToken()
         val request = Request.Builder()
             .url("$BASE_URL/dashboard")
@@ -406,8 +473,13 @@ class ErpApiClient(context: Context) {
 
         client.newCall(request).execute().use { response ->
             if (response.code == 401) {
-                handleUnauthorized()
-                return getDashboardProfile()
+                return if (!isRetry) {
+                    handleUnauthorized()
+                    getDashboardProfile(true)
+                } else {
+                    prefs.saveTokens("", "")
+                    throw ErpException("Session expired. Please sign in again.", true)
+                }
             }
             if (!response.isSuccessful) {
                 throw ErpException("Server error (${response.code}) loading dashboard profile.")
@@ -433,9 +505,12 @@ class ErpApiClient(context: Context) {
     // ── Internet credentials ──────────────────────────────────────────────────
 
     @Throws(Exception::class)
-    fun fetchInternetCredentials(): Models.InternetResourceItem? {
+    fun fetchInternetCredentials(): Models.InternetResourceItem? = fetchInternetCredentials(false)
+
+    @Throws(Exception::class)
+    private fun fetchInternetCredentials(isRetry: Boolean): Models.InternetResourceItem? {
         val token = ensureValidToken()
-        val verifiedId = prefs.getStudentId()
+        val verifiedId = prefs.getStudentId().takeIf { it > 0 } ?: (prefs.getUserProfile()?.id ?: 0)
         var verifiedAdmissionNo = prefs.getUsername().trim()
         if (verifiedAdmissionNo.isEmpty()) {
             verifiedAdmissionNo = prefs.getUserProfile()?.admission_no ?: ""
@@ -457,8 +532,13 @@ class ErpApiClient(context: Context) {
 
         client.newCall(request).execute().use { response ->
             if (response.code == 401) {
-                handleUnauthorized()
-                return fetchInternetCredentials()
+                return if (!isRetry) {
+                    handleUnauthorized()
+                    fetchInternetCredentials(true)
+                } else {
+                    prefs.saveTokens("", "")
+                    throw ErpException("Session expired. Please sign in again.", true)
+                }
             }
             if (!response.isSuccessful) {
                 throw ErpException("Server error (${response.code}) loading internet credentials.")
@@ -466,11 +546,39 @@ class ErpApiClient(context: Context) {
 
             val resStr = response.body?.string() ?: ""
 
-            fun findItem(items: List<Models.InternetResourceItem>?): Models.InternetResourceItem? =
-                items?.firstOrNull { item ->
-                    (verifiedId <= 0 || item.studentId == null || item.studentId == verifiedId) &&
-                            !item.userId.isNullOrEmpty()
+            fun findItem(items: List<Models.InternetResourceItem>?): Models.InternetResourceItem? {
+                if (items.isNullOrEmpty()) return null
+
+                // 1. Prioritize exact match by authenticated student ID
+                if (verifiedId > 0) {
+                    val exactMatch = items.firstOrNull { item ->
+                        item.studentId != null && item.studentId == verifiedId && !item.userId.isNullOrEmpty()
+                    }
+                    if (exactMatch != null) return exactMatch
                 }
+
+                // 2. Prioritize match by admission number / user ID
+                if (verifiedAdmissionNo.isNotEmpty()) {
+                    val userMatch = items.firstOrNull { item ->
+                        item.userId?.equals(verifiedAdmissionNo, ignoreCase = true) == true &&
+                                (item.studentId == null || (verifiedId > 0 && item.studentId == verifiedId))
+                    }
+                    if (userMatch != null) return userMatch
+                }
+
+                // 3. Candidate entry: must not belong to a different student
+                val candidate = items.firstOrNull { item ->
+                    !item.userId.isNullOrEmpty() &&
+                            (item.studentId == null || (verifiedId > 0 && item.studentId == verifiedId))
+                }
+
+                // Reject entries where studentId is explicitly set and doesn't match the authenticated user
+                if (candidate != null && candidate.studentId != null && verifiedId > 0 && candidate.studentId != verifiedId) {
+                    return null
+                }
+
+                return candidate
+            }
 
             // Try ApiResponse<List<...>>
             try {
@@ -493,7 +601,11 @@ class ErpApiClient(context: Context) {
     // ── Fee Payments & Receipts ───────────────────────────────────────────────
 
     @Throws(Exception::class)
-    fun getFeeTransactions(page: Int = 1, size: Int = 20): List<Models.FeeTransactionItem> {
+    fun getFeeTransactions(page: Int = 1, size: Int = 20): List<Models.FeeTransactionItem> =
+        getFeeTransactions(page, size, false)
+
+    @Throws(Exception::class)
+    private fun getFeeTransactions(page: Int, size: Int, isRetry: Boolean): List<Models.FeeTransactionItem> {
         val token = ensureValidToken()
         val url = "$BASE_URL/account/payments/self/transactions?page=$page&size=$size"
         val request = Request.Builder()
@@ -505,8 +617,13 @@ class ErpApiClient(context: Context) {
 
         client.newCall(request).execute().use { response ->
             if (response.code == 401) {
-                handleUnauthorized()
-                return getFeeTransactions(page, size)
+                return if (!isRetry) {
+                    handleUnauthorized()
+                    getFeeTransactions(page, size, true)
+                } else {
+                    prefs.saveTokens("", "")
+                    throw ErpException("Session expired. Please sign in again.", true)
+                }
             }
             if (!response.isSuccessful) {
                 throw ErpException("Failed to fetch transactions (${response.code})")
@@ -529,7 +646,11 @@ class ErpApiClient(context: Context) {
     }
 
     @Throws(Exception::class)
-    fun getFeeReceipts(page: Int = 1, size: Int = 20, slipStatus: String = "YES"): List<Models.FeeReceiptItem> {
+    fun getFeeReceipts(page: Int = 1, size: Int = 20, slipStatus: String = "YES"): List<Models.FeeReceiptItem> =
+        getFeeReceipts(page, size, slipStatus, false)
+
+    @Throws(Exception::class)
+    private fun getFeeReceipts(page: Int, size: Int, slipStatus: String, isRetry: Boolean): List<Models.FeeReceiptItem> {
         val token = ensureValidToken()
         val url = "$BASE_URL/account/payments/self/fee-receipts?page=$page&size=$size&slip_status=$slipStatus"
         val request = Request.Builder()
@@ -541,8 +662,13 @@ class ErpApiClient(context: Context) {
 
         client.newCall(request).execute().use { response ->
             if (response.code == 401) {
-                handleUnauthorized()
-                return getFeeReceipts(page, size, slipStatus)
+                return if (!isRetry) {
+                    handleUnauthorized()
+                    getFeeReceipts(page, size, slipStatus, true)
+                } else {
+                    prefs.saveTokens("", "")
+                    throw ErpException("Session expired. Please sign in again.", true)
+                }
             }
             if (!response.isSuccessful) {
                 throw ErpException("Failed to fetch fee receipts (${response.code})")
@@ -565,7 +691,10 @@ class ErpApiClient(context: Context) {
     }
 
     @Throws(Exception::class)
-    fun getReceiptPrintHtml(paidLogId: Long): String {
+    fun getReceiptPrintHtml(paidLogId: Long): String = getReceiptPrintHtml(paidLogId, false)
+
+    @Throws(Exception::class)
+    private fun getReceiptPrintHtml(paidLogId: Long, isRetry: Boolean): String {
         val token = ensureValidToken()
         val url = "$BASE_URL/account/receipts/paid-log/$paidLogId/print"
         val request = Request.Builder()
@@ -577,8 +706,13 @@ class ErpApiClient(context: Context) {
 
         client.newCall(request).execute().use { response ->
             if (response.code == 401) {
-                handleUnauthorized()
-                return getReceiptPrintHtml(paidLogId)
+                return if (!isRetry) {
+                    handleUnauthorized()
+                    getReceiptPrintHtml(paidLogId, true)
+                } else {
+                    prefs.saveTokens("", "")
+                    throw ErpException("Session expired. Please sign in again.", true)
+                }
             }
             if (!response.isSuccessful) {
                 throw ErpException("Failed to fetch receipt print view (${response.code})")

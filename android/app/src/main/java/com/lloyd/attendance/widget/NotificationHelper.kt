@@ -1,15 +1,18 @@
 package com.lloyd.attendance.widget
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.media.RingtoneManager
 import android.os.Build
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.lloyd.attendance.R
 import com.lloyd.attendance.ui.MainComposeActivity
 import java.util.Locale
@@ -111,7 +114,6 @@ object NotificationHelper {
      * @param subjectId  Subject identifier to pre-filter the Logs screen.
      */
     @JvmStatic
-    @JvmOverloads
     fun showAttendanceMarkedNotification(
         context: Context,
         attendanceId: Long,
@@ -188,13 +190,26 @@ object NotificationHelper {
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_EVENT)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(
+                NotificationCompat.Builder(context, CHANNEL_ID)
+                    .setSmallIcon(R.drawable.ic_school)
+                    .setContentTitle("Lloyd Attendance")
+                    .setContentText("New attendance update")
+                    .build()
+            )
             .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))
             .setVibrate(longArrayOf(0, 200, 100, 200))
             .setAutoCancel(true)
             .build()
 
-        val notifId = if (attendanceId > 0) (attendanceId % 100_000).toInt()
-                      else (System.currentTimeMillis() % 100_000).toInt()
+        val rawId = if (attendanceId > 0) attendanceId else System.currentTimeMillis()
+        val notifId = (abs(rawId.hashCode().toLong()) % (Int.MAX_VALUE / 2)).toInt()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) return
+        }
 
         manager.notify(notifId, notification)
     }

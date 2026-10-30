@@ -20,6 +20,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class AttendanceWidgetProvider : AppWidgetProvider() {
 
@@ -42,6 +46,7 @@ class AttendanceWidgetProvider : AppWidgetProvider() {
             return true
         }
 
+        @androidx.annotation.VisibleForTesting(otherwise = androidx.annotation.VisibleForTesting.PRIVATE)
         @Synchronized
         fun resetThrottleForTesting() {
             lastRefreshTimeMillis = 0L
@@ -66,47 +71,50 @@ class AttendanceWidgetProvider : AppWidgetProvider() {
             }
 
             // Perform network update
-            triggerRefresh(context)
+            performRefresh(context)
+        }
+
+        fun performRefresh(context: Context) {
+            val appContext = context.applicationContext
+            val prefs = AppPreferences.getInstance(appContext)
+            if (!prefs.isLoggedIn()) {
+                updateAllWidgets(appContext, stats = null, isRefreshing = false, customStatus = "Tap to sign in")
+                return
+            }
+
+            try {
+                val repository = AttendanceRepository.getInstance(appContext)
+                repository.refreshBlocking(false)
+
+                val snapshot = repository.snapshot.value
+                if (snapshot?.error is SyncError.AuthExpired) {
+                    Handler(Looper.getMainLooper()).post {
+                        updateAllWidgets(appContext, stats = null, isRefreshing = false, customStatus = "Session expired")
+                    }
+                    return
+                }
+
+                val freshStats = prefs.getCachedStats()
+                Handler(Looper.getMainLooper()).post {
+                    updateAllWidgets(appContext, freshStats, isRefreshing = false, customStatus = null)
+                }
+            } catch (e: Exception) {
+                // If network failed, fall back to cached data
+                val fallback = prefs.getCachedStats()
+                Handler(Looper.getMainLooper()).post {
+                    updateAllWidgets(
+                        appContext,
+                        fallback,
+                        isRefreshing = false,
+                        customStatus = "Offline: ${e.message ?: "Sync failed"}"
+                    )
+                }
+            }
         }
 
         fun triggerRefresh(context: Context) {
-            val appContext = context.applicationContext
-
             backgroundExecutor.execute {
-                val prefs = AppPreferences.getInstance(appContext)
-                if (!prefs.isLoggedIn()) {
-                    updateAllWidgets(appContext, stats = null, isRefreshing = false, customStatus = "Tap to sign in")
-                    return@execute
-                }
-
-                try {
-                    val repository = AttendanceRepository.getInstance(appContext)
-                    repository.refreshBlocking(false)
-
-                    val snapshot = repository.snapshot.value
-                    if (snapshot?.error is SyncError.AuthExpired) {
-                        Handler(Looper.getMainLooper()).post {
-                            updateAllWidgets(appContext, stats = null, isRefreshing = false, customStatus = "Session expired")
-                        }
-                        return@execute
-                    }
-
-                    val freshStats = prefs.getCachedStats()
-                    Handler(Looper.getMainLooper()).post {
-                        updateAllWidgets(appContext, freshStats, isRefreshing = false, customStatus = null)
-                    }
-                } catch (e: Exception) {
-                    // If network failed, fall back to cached data
-                    val fallback = prefs.getCachedStats()
-                    Handler(Looper.getMainLooper()).post {
-                        updateAllWidgets(
-                            appContext,
-                            fallback,
-                            isRefreshing = false,
-                            customStatus = "Offline: ${e.message ?: "Sync failed"}"
-                        )
-                    }
-                }
+                performRefresh(context)
             }
         }
 
@@ -253,7 +261,17 @@ class AttendanceWidgetProvider : AppWidgetProvider() {
         super.onReceive(context, intent)
 
         if (intent?.action == ACTION_REFRESH_WIDGET) {
-            handleRefreshRequest(context)
+            val callingPkg = context.packageManager.getNameForUid(android.os.Binder.getCallingUid())
+            if (callingPkg != context.packageName) return
+
+            val pendingResult = goAsync()
+            CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+                try {
+                    handleRefreshRequest(context)
+                } finally {
+                    pendingResult.finish()
+                }
+            }
         }
     }
 }

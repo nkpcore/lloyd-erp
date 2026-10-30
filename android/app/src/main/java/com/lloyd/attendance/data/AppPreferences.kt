@@ -41,6 +41,7 @@ class AppPreferences private constructor(context: Context) {
     fun saveTokens(accessToken: String, refreshToken: String?) {
         tokenStore.setAccessToken(accessToken)
         if (refreshToken != null) tokenStore.setRefreshToken(refreshToken)
+        if (accessToken.isNotEmpty()) setAuthExpired(false)
     }
 
     fun getAccessToken(): String = tokenStore.getAccessToken() ?: ""
@@ -160,20 +161,28 @@ class AppPreferences private constructor(context: Context) {
 
     fun getSeenAttendanceIds(): MutableSet<String> {
         val set = prefs.getStringSet(KEY_SEEN_ATTENDANCE_IDS, null)
-        return if (set != null) HashSet(set) else HashSet()
+        return if (set != null) LinkedHashSet(set) else LinkedHashSet()
     }
 
     fun addSeenAttendanceIds(ids: Collection<Long>) {
         if (ids.isEmpty()) return
-        val current = getSeenAttendanceIds()
-        ids.forEach { id -> if (id > 0) current.add(id.toString()) }
-        // Limit cache to last 200 IDs to keep SharedPreferences fast and compact
-        val trimmed: Set<String> = if (current.size > 200) {
-            val list = current.toList()
-            list.subList(list.size - 200, list.size).toHashSet()
-        } else current
-        prefs.edit().putStringSet(KEY_SEEN_ATTENDANCE_IDS, trimmed).apply()
+        val updated = LinkedHashSet(getSeenAttendanceIds())
+        ids.forEach { id -> if (id > 0) updated.add(id.toString()) }
+        val iterator = updated.iterator()
+        while (updated.size > 200 && iterator.hasNext()) {
+            iterator.next()
+            iterator.remove()
+        }
+        prefs.edit().putStringSet(KEY_SEEN_ATTENDANCE_IDS, updated).apply()
     }
+
+    // ── Auth Expiration ───────────────────────────────────────────────────────
+
+    fun setAuthExpired(expired: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTH_EXPIRED, expired).apply()
+    }
+
+    fun isAuthExpired(): Boolean = prefs.getBoolean(KEY_AUTH_EXPIRED, false)
 
     // ── Notifications ────────────────────────────────────────────────────────
 
@@ -252,6 +261,10 @@ class AppPreferences private constructor(context: Context) {
         @JvmName("getLastDismissedUpdateVersionProperty") get() = getLastDismissedUpdateVersion()
         @JvmName("setLastDismissedUpdateVersionProperty") set(value) { setLastDismissedUpdateVersion(value) }
 
+    var isAuthExpired: Boolean
+        @JvmName("isAuthExpiredProperty") get() = isAuthExpired()
+        @JvmName("setAuthExpiredProperty") set(value) { setAuthExpired(value) }
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     fun clearAll() {
@@ -281,6 +294,7 @@ class AppPreferences private constructor(context: Context) {
         private const val KEY_TELEMETRY_ENDPOINT = "telemetry_endpoint"
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
         private const val KEY_LAST_DISMISSED_UPDATE = "last_dismissed_update_version"
+        private const val KEY_AUTH_EXPIRED = "pref_auth_expired"
 
         @Volatile private var instance: AppPreferences? = null
 

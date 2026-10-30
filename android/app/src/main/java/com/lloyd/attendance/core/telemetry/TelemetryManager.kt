@@ -108,11 +108,12 @@ object TelemetryManager {
                     .post(body)
                     .build()
 
-                val response = client.newCall(request).execute()
-                if (response.isSuccessful) {
-                    Result.success(Unit)
-                } else {
-                    Result.failure(Exception("Telemetry HTTP error: ${response.code}"))
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        Result.success(Unit)
+                    } else {
+                        Result.failure(Exception("Telemetry HTTP error: ${response.code}"))
+                    }
                 }
             } catch (e: Exception) {
                 Result.failure(e)

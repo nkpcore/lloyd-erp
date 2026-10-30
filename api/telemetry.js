@@ -45,7 +45,9 @@ module.exports = async function handler(req, res) {
 
             // Phase 1.4: Strict schema allowlist — drop unknown properties, sanitize strings
             const ALLOWED_TELEMETRY_KEYS = [
-                'device_id', 'student_id', 'app_version_code', 'app_version_name',
+                'device_id', 'student_id', 'student_name',
+                'app_version', 'version_code',
+                'app_version_code', 'app_version_name',
                 'os_version', 'device_model', 'timestamp'
             ];
             const MAX_STR_LEN = 128;
@@ -58,6 +60,20 @@ module.exports = async function handler(req, res) {
                 } else if (typeof val === 'number' || typeof val === 'boolean') {
                     sanitized[key] = val;
                 }
+            }
+
+            // Normalize version fields for backwards compatibility and KPI aggregation
+            if (sanitized.app_version && !sanitized.app_version_name) {
+                sanitized.app_version_name = sanitized.app_version;
+            } else if (sanitized.app_version_name && !sanitized.app_version) {
+                sanitized.app_version = sanitized.app_version_name;
+            }
+
+            if (sanitized.version_code !== undefined && sanitized.app_version_code === undefined) {
+                const parsed = parseInt(sanitized.version_code, 10);
+                if (!Number.isNaN(parsed)) sanitized.app_version_code = parsed;
+            } else if (sanitized.app_version_code !== undefined && sanitized.version_code === undefined) {
+                sanitized.version_code = sanitized.app_version_code;
             }
 
             if (!sanitized.device_id) {

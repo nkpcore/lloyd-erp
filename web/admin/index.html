@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#0A0D1A">
     <title>Lloyd ERP — Student Fleet & Telemetry Admin</title>
+    <link rel="icon" href="../favicon.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -64,8 +67,10 @@
             </div>
         </aside>
 
-        <!-- Main Content Area -->
-        <main class="main-content" id="overview">
+        <!-- Content Wrapper -->
+        <div class="content-wrapper">
+            <!-- Main Content Area -->
+            <main class="main-content" id="overview">
             <!-- Mobile Sticky Top App Bar -->
             <div class="mobile-top-bar">
                 <button class="mobile-menu-btn" id="mobileMenuToggle" aria-label="Open Navigation Menu">
@@ -450,141 +455,142 @@
                 </div>
             </section>
         </main>
-    </div>
 
-    <!-- Admin Security Passkey Gate Overlay -->
-    <div class="admin-auth-overlay" id="adminAuthOverlay" style="display: none;">
-        <div class="auth-card" id="authCard">
-            <div class="auth-brand">
-                <div class="brand-emblem">
-                    <svg viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect width="256" height="256" rx="56" fill="#FFFFFF"/>
-                        <circle cx="158" cy="128" r="58" fill="#FF6B35"/>
-                        <circle cx="98" cy="128" r="52" fill="none" stroke="#111111" stroke-width="14"/>
-                    </svg>
+        <!-- ══════════════════════════════════════════════════════════════════ -->
+        <!-- Feedback Section                                                  -->
+        <!-- ══════════════════════════════════════════════════════════════════ -->
+        <section class="content-section" id="feedback" style="display:none;">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">Student Feedback</h2>
+                    <p class="section-subtitle">Direct feedback from the student fleet — stored securely on fleet server.</p>
                 </div>
-                <h2>Lloyd Admin Portal</h2>
-                <p>Authentication required to manage student fleet, OTA updates, and security governance.</p>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <select id="fbStatusFilter" class="filter-select" style="min-width:110px;">
+                        <option value="">All</option>
+                        <option value="new">New</option>
+                        <option value="read">Read</option>
+                        <option value="actioned">Actioned</option>
+                        <option value="closed">Closed</option>
+                    </select>
+                    <select id="fbCategoryFilter" class="filter-select" style="min-width:110px;">
+                        <option value="">All Categories</option>
+                        <option value="general">General</option>
+                        <option value="bug">Bug</option>
+                        <option value="feature">Feature</option>
+                        <option value="attendance">Attendance</option>
+                        <option value="marks">Marks</option>
+                        <option value="ui">UI</option>
+                        <option value="other">Other</option>
+                    </select>
+                    <button class="btn btn-secondary" id="fbRefreshBtn" title="Refresh feedback" aria-label="Refresh feedback">
+                        <svg class="refresh-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                        Refresh
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats row -->
+            <div class="kpi-grid" style="margin-bottom:20px;">
+                <div class="kpi-card">
+                    <div class="kpi-label">Total</div>
+                    <div class="kpi-value" id="fbTotal">—</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">New</div>
+                    <div class="kpi-value" id="fbNewCount" style="color:var(--accent)">—</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Actioned</div>
+                    <div class="kpi-value" id="fbActionedCount">—</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Closed</div>
+                    <div class="kpi-value" id="fbClosedCount">—</div>
+                </div>
+            </div>
+
+            <!-- Feedback list -->
+            <div class="card" style="padding:0;overflow:hidden;">
+                <div id="fbList" style="min-height:120px;">
+                    <div class="empty-state" id="fbEmpty" style="display:none;">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        <p>No feedback yet</p>
+                    </div>
+                    <div id="fbCards"></div>
+                </div>
+            </div>
+
+            <!-- Feedback detail modal -->
+            <div id="fbModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:900;align-items:center;justify-content:center;">
+                <div class="card" style="max-width:560px;width:92%;max-height:90vh;overflow-y:auto;position:relative;padding:28px 24px 24px;">
+                    <button onclick="window.feedbackPanel.closeModal()" aria-label="Close modal" style="position:absolute;top:14px;right:14px;background:none;border:none;cursor:pointer;color:var(--text-muted);">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                    <div id="fbModalContent"></div>
+                </div>
+            </div>
+        </section>
+    </div> <!-- /.content-wrapper -->
+</div> <!-- /.app-layout -->
+
+<!-- Admin Security Passkey Gate Overlay -->
+<div class="admin-auth-overlay" id="adminAuthOverlay" style="display: none;">
+    <div class="auth-card" id="authCard">
+        <div class="auth-brand">
+            <div class="brand-emblem">
+                <svg viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="256" height="256" rx="56" fill="#FFFFFF"/>
+                    <circle cx="158" cy="128" r="58" fill="#FF6B35"/>
+                    <circle cx="98" cy="128" r="52" fill="none" stroke="#111111" stroke-width="14"/>
+                </svg>
+            </div>
+            <h2>Lloyd Admin Portal</h2>
+            <p>Authentication required to manage student fleet, OTA updates, and security governance.</p>
+        </div>
+        
+        <form id="adminAuthForm" class="auth-form">
+            <div class="auth-input-group">
+                <label for="adminPassInput">Admin Passkey</label>
+                <div class="password-wrapper">
+                    <input type="password" id="adminPassInput" placeholder="Enter admin password..." autocomplete="current-password" required>
+                    <button type="button" id="togglePassVisibility" class="btn-toggle-eye" title="Show or hide password" aria-label="Toggle password visibility">
+                        <span id="eyeIcon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </span>
+                    </button>
+                </div>
             </div>
             
-            <form id="adminAuthForm" class="auth-form">
-                <div class="auth-input-group">
-                    <label for="adminPassInput">Admin Passkey</label>
-                    <div class="password-wrapper">
-                        <input type="password" id="adminPassInput" placeholder="Enter admin password..." autocomplete="current-password" required>
-                        <button type="button" id="togglePassVisibility" class="btn-toggle-eye" title="Show or hide password" aria-label="Toggle password visibility">
-                            <span id="eyeIcon">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                            </span>
-                        </button>
-                    </div>
+            <div class="auth-error-msg" id="authErrorMsg" style="display: none;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    <span>Incorrect passkey. Access denied.</span>
                 </div>
-                
-                <div class="auth-error-msg" id="authErrorMsg" style="display: none;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                        <span>Incorrect passkey. Access denied.</span>
-                    </div>
-                </div>
-
-                <div class="auth-options">
-                    <label class="remember-label">
-                        <input type="checkbox" id="rememberAdminPass" checked>
-                        <span>Stay signed in on this device</span>
-                    </label>
-                </div>
-
-                <button type="submit" class="btn btn-primary btn-unlock" id="unlockPortalBtn">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
-                    <span>Unlock Admin Portal</span>
-                </button>
-            </form>
-
-            <div class="auth-footer-note">
-                <span>Fleet Governance Console • Authorized Staff Only</span>
             </div>
+
+            <div class="auth-options">
+                <label class="remember-label">
+                    <input type="checkbox" id="rememberAdminPass" checked>
+                    <span>Stay signed in on this device</span>
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-unlock" id="unlockPortalBtn">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+                <span>Unlock Admin Portal</span>
+            </button>
+        </form>
+
+        <div class="auth-footer-note">
+            <span>Fleet Governance Console • Authorized Staff Only</span>
         </div>
     </div>
+</div>
 
-    <!-- ══════════════════════════════════════════════════════════════════ -->
-    <!-- Feedback Section                                                  -->
-    <!-- ══════════════════════════════════════════════════════════════════ -->
-    <section class="content-section" id="feedback" style="display:none;">
-        <div class="section-header">
-            <div>
-                <h2 class="section-title">Student Feedback</h2>
-                <p class="section-subtitle">Direct feedback from the student fleet — stored securely on fleet server.</p>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;">
-                <select id="fbStatusFilter" class="filter-select" style="min-width:110px;">
-                    <option value="">All</option>
-                    <option value="new">New</option>
-                    <option value="read">Read</option>
-                    <option value="actioned">Actioned</option>
-                    <option value="closed">Closed</option>
-                </select>
-                <select id="fbCategoryFilter" class="filter-select" style="min-width:110px;">
-                    <option value="">All Categories</option>
-                    <option value="general">General</option>
-                    <option value="bug">Bug</option>
-                    <option value="feature">Feature</option>
-                    <option value="attendance">Attendance</option>
-                    <option value="marks">Marks</option>
-                    <option value="ui">UI</option>
-                    <option value="other">Other</option>
-                </select>
-                <button class="btn btn-secondary" id="fbRefreshBtn" title="Refresh feedback">
-                    <svg class="refresh-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-                    Refresh
-                </button>
-            </div>
-        </div>
+<!-- Floating Toast Notification Container -->
+<div class="toast-container" id="toastContainer"></div>
 
-        <!-- Stats row -->
-        <div class="kpi-grid" style="margin-bottom:20px;">
-            <div class="kpi-card">
-                <div class="kpi-label">Total</div>
-                <div class="kpi-value" id="fbTotal">—</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-label">New</div>
-                <div class="kpi-value" id="fbNewCount" style="color:var(--accent)">—</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-label">Actioned</div>
-                <div class="kpi-value" id="fbActionedCount">—</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-label">Closed</div>
-                <div class="kpi-value" id="fbClosedCount">—</div>
-            </div>
-        </div>
-
-        <!-- Feedback list -->
-        <div class="card" style="padding:0;overflow:hidden;">
-            <div id="fbList" style="min-height:120px;">
-                <div class="empty-state" id="fbEmpty" style="display:none;">
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                    <p>No feedback yet</p>
-                </div>
-                <div id="fbCards"></div>
-            </div>
-        </div>
-
-        <!-- Feedback detail modal -->
-        <div id="fbModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:900;align-items:center;justify-content:center;">
-            <div class="card" style="max-width:560px;width:92%;max-height:90vh;overflow-y:auto;position:relative;padding:28px 24px 24px;">
-                <button onclick="window.feedbackPanel.closeModal()" style="position:absolute;top:14px;right:14px;background:none;border:none;cursor:pointer;color:var(--text-muted);">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-                <div id="fbModalContent"></div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Floating Toast Notification Container -->
-    <div class="toast-container" id="toastContainer"></div>
-
-    <script src="app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

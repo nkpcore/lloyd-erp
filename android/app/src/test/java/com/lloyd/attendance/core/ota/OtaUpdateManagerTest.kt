@@ -21,4 +21,9 @@ class OtaUpdateManagerTest {
         assertTrue(OtaUpdateManager.cleanVersion("  V2.0.0 ") == "2.0.0")
         assertTrue(OtaUpdateManager.cleanVersion("1.0.0") == "1.0.0")
     }
+
+    @Test
+    fun testMaxApkBytesSizeLimit() {
+        assertTrue(OtaUpdateManager.MAX_APK_BYTES == 50L * 1024 * 1024)
+    }
 }

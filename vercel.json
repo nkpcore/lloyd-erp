@@ -1,5 +1,17 @@
 {
   "version": 2,
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-XSS-Protection", "value": "1; mode=block" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Content-Security-Policy", "value": "default-src 'none'; frame-ancestors 'none'" }
+      ]
+    }
+  ],
   "rewrites": [
     { "source": "/auth", "destination": "/api/auth" },
     { "source": "/api/auth", "destination": "/api/auth" },
@@ -9,6 +21,8 @@
     { "source": "/api/telemetry", "destination": "/api/telemetry" },
     { "source": "/ota/download", "destination": "/api/ota?download=latest" },
     { "source": "/api/ota/download", "destination": "/api/ota?download=latest" },
+    { "source": "/ota/sha256", "destination": "/web/downloads/LloydAttendance-latest.apk.sha256" },
+    { "source": "/api/ota/sha256", "destination": "/web/downloads/LloydAttendance-latest.apk.sha256" },
     { "source": "/ota", "destination": "/api/ota" },
     { "source": "/api/ota", "destination": "/api/ota" },
     { "source": "/ban", "destination": "/api/ban" },
