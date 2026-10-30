@@ -193,6 +193,7 @@ class TelemetryDashboard {
         return {
             'Content-Type': 'application/json',
             'x-admin-key': pass,
+            'x-admin-password': pass,
             'Authorization': `Bearer ${pass}`
         };
     }
@@ -237,10 +238,15 @@ class TelemetryDashboard {
         try {
             let apiUrl = this.getApiUrl('/auth');
             let res;
+            const authHeaders = {
+                'Content-Type': 'application/json',
+                'x-admin-password': pass,
+                'x-admin-key': pass
+            };
             try {
                 res = await fetch(apiUrl, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: authHeaders,
                     body: JSON.stringify({ password: pass })
                 });
             } catch (networkErr) {
@@ -248,7 +254,7 @@ class TelemetryDashboard {
                     apiUrl = `${window.location.origin}/api/auth`;
                     res = await fetch(apiUrl, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: authHeaders,
                         body: JSON.stringify({ password: pass })
                     });
                 } else {
@@ -1199,26 +1205,6 @@ class TelemetryDashboard {
             this.versionFilter.addEventListener('change', () => this.applyFilters());
         }
 
-        // Sidebar Navigation links
-        document.querySelectorAll('.nav-menu .nav-item').forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.closeSidebar();
-                document.querySelectorAll('.nav-menu .nav-item').forEach(item => item.classList.remove('active'));
-                link.classList.add('active');
-                const target = link.getAttribute('href');
-                if (target === '#overview') {
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                } else if (target === '#users') {
-                    document.getElementById('users')?.scrollIntoView({ behavior: 'smooth' });
-                } else if (target === '#governance') {
-                    document.getElementById('governance')?.scrollIntoView({ behavior: 'smooth' });
-                } else if (target === '#releases') {
-                    document.getElementById('releases')?.scrollIntoView({ behavior: 'smooth' });
-                }
-            });
-        });
-
         window.addEventListener('resize', () => {
             if (window.innerWidth >= 1024) {
                 this.closeSidebar();
@@ -1248,13 +1234,14 @@ class TelemetryDashboard {
         }
 
         let connectedUrl = null;
+        let isAuthError = false;
 
         for (const candidate of candidates) {
             try {
                 // Synchronize remote config if available
                 try {
                     const cfgUrl = candidate + (candidate.includes('/api') ? '/config' : '/api/config');
-                    const cfgRes = await fetch(cfgUrl, { signal: AbortSignal.timeout(2500) });
+                    const cfgRes = await fetch(cfgUrl, { signal: AbortSignal.timeout(6000) });
                     if (cfgRes.ok) {
                         const remoteCfg = await cfgRes.json();
                         this.fleetConfig = { ...this.fleetConfig, ...remoteCfg };
@@ -1270,7 +1257,7 @@ class TelemetryDashboard {
                 const telUrl = candidate + (candidate.includes('/api') ? '/telemetry' : '/api/telemetry');
                 const res = await fetch(telUrl, {
                     headers: this.getAuthHeaders(),
-                    signal: AbortSignal.timeout(2500)
+                    signal: AbortSignal.timeout(6000)
                 });
                 if (res.ok) {
                     this.records = await res.json();
@@ -1278,11 +1265,29 @@ class TelemetryDashboard {
                     break;
                 } else if (res.status === 401) {
                     connectedUrl = candidate;
+                    isAuthError = true;
+                    break;
                 }
             } catch (err) {}
         }
 
         this.isFetching = false;
+
+        if (isAuthError) {
+            this.clearStoredPass();
+            this.showAuthOverlay();
+            this.showAuthError('Session expired. Enter passkey (lloyderp) to view telemetry.');
+            if (this.syncStatusEl) {
+                this.syncStatusEl.textContent = 'Auth Required';
+                this.syncStatusEl.style.color = '#F6BD60';
+            }
+            if (this.liveDotEl) {
+                this.liveDotEl.style.backgroundColor = '#F6BD60';
+                this.liveDotEl.style.boxShadow = '0 0 8px #F6BD60';
+            }
+            this.syncMobileLiveDot();
+            return;
+        }
 
         if (connectedUrl) {
             this.endpointUrl = connectedUrl;
@@ -1726,36 +1731,47 @@ document.addEventListener('DOMContentLoaded', () => {
 // ─── Section Navigation ───────────────────────────────────────────────────────
 
 function initSectionNav() {
-    const SECTIONS = ['overview', 'users', 'governance', 'releases', 'feedback'];
-    const navLinks = document.querySelectorAll('.nav-item');
-    const sections = {};
-    SECTIONS.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) sections[id] = el;
-    });
+    const navLinks = document.querySelectorAll('.nav-menu .nav-item');
 
-    function showSection(targetId) {
-        if (!SECTIONS.includes(targetId)) targetId = 'overview';
-        SECTIONS.forEach(id => {
-            if (sections[id]) {
-                sections[id].style.display = (id === targetId) ? '' : 'none';
-            }
-        });
+    function setActiveLink(targetId) {
         navLinks.forEach(link => {
             const href = (link.getAttribute('href') || '').replace('#', '');
             link.classList.toggle('active', href === targetId);
         });
-        if (targetId === 'feedback') {
-            window.feedbackPanel && window.feedbackPanel.loadIfNeeded();
+    }
+
+    function navigateTo(targetId, updateHistory = true) {
+        if (!targetId || targetId === 'overview') {
+            document.body.classList.remove('view-feedback');
+            setActiveLink('overview');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else if (targetId === 'feedback') {
+            document.body.classList.add('view-feedback');
+            setActiveLink('feedback');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (window.feedbackPanel) {
+                window.feedbackPanel.loadIfNeeded();
+            }
+        } else if (['users', 'governance', 'releases'].includes(targetId)) {
+            document.body.classList.remove('view-feedback');
+            setActiveLink(targetId);
+            const targetEl = document.getElementById(targetId);
+            if (targetEl) {
+                targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+
+        if (updateHistory && window.history && window.history.pushState) {
+            window.history.pushState(null, '', `#${targetId}`);
         }
     }
 
     navLinks.forEach(link => {
         link.addEventListener('click', e => {
-            const href = link.getAttribute('href');
-            if (href && href.startsWith('#')) {
+            const href = (link.getAttribute('href') || '').replace('#', '');
+            if (href) {
                 e.preventDefault();
-                showSection(href.replace('#', ''));
+                navigateTo(href);
                 // Close sidebar on mobile
                 const sidebar = document.getElementById('sidebar');
                 if (sidebar) sidebar.classList.remove('open');
@@ -1765,9 +1781,29 @@ function initSectionNav() {
         });
     });
 
-    // Handle initial hash
+    // Update active nav link on scroll when on dashboard view
+    const observerSections = ['releases', 'governance', 'users'];
+    if (typeof IntersectionObserver !== 'undefined') {
+        const scrollObserver = new IntersectionObserver((entries) => {
+            if (document.body.classList.contains('view-feedback')) return;
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    setActiveLink(entry.target.id);
+                }
+            });
+        }, { rootMargin: '-20% 0px -70% 0px' });
+
+        observerSections.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) scrollObserver.observe(el);
+        });
+    }
+
+    // Handle initial hash on load
     const hash = window.location.hash.replace('#', '');
-    if (hash && SECTIONS.includes(hash)) showSection(hash);
+    if (hash && ['overview', 'users', 'governance', 'releases', 'feedback'].includes(hash)) {
+        navigateTo(hash, false);
+    }
 }
 
 // ─── FeedbackPanel ────────────────────────────────────────────────────────────

@@ -141,21 +141,20 @@ body {
     min-width: 0;
 }
 
-/* ─── Section Navigation Architecture (CSS :has Support) ─────────────────── */
-/* When overview is active, ensure all child dashboard cards stay visible */
-body:has(.nav-menu a[href="#overview"].active) #users,
-body:has(.nav-menu a[href="#overview"].active) #governance,
-body:has(.nav-menu a[href="#overview"].active) #releases {
-    display: block !important;
+/* ─── View Switching Architecture ─────────────────────────────────────────── */
+.main-content {
+    display: block;
 }
 
-/* When feedback tab is active, hide main dashboard */
-body:has(#feedback:not([style*="display: none"])) main#overview {
+#feedback {
+    display: none;
+}
+
+body.view-feedback .main-content {
     display: none !important;
 }
 
-/* When main overview is active, force display block even if app.js toggles inline */
-body:not(:has(#feedback:not([style*="display: none"]))) main#overview {
+body.view-feedback #feedback {
     display: block !important;
 }
 
