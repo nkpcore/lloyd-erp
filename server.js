@@ -68,7 +68,7 @@ function setSecurityHeaders(res) {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https: http://localhost:8080; frame-ancestors 'none'");
     res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
 }
 
