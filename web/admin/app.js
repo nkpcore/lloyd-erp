@@ -35,7 +35,7 @@ class TelemetryDashboard {
         this.sortColumn = 'timestamp';
         this.sortDirection = 'desc';
         this.viewMode = (typeof window !== 'undefined' && window.innerWidth < 768) ? 'card' : 'table';
-        
+
         // Auto-connect to origin or local node server without prompting
         const isHttp = typeof window !== 'undefined' && window.location.protocol.startsWith('http');
         const defaultOrigin = isHttp ? window.location.origin : 'http://localhost:8080';
@@ -57,7 +57,7 @@ class TelemetryDashboard {
         this.renderActiveBanChips();
         this.updateSortIcons();
         this.setViewMode(this.viewMode);
-        
+
         if (this.checkAuthStatus()) {
             this.loadTelemetry();
         }
@@ -68,7 +68,7 @@ class TelemetryDashboard {
         if (stored) {
             try {
                 return JSON.parse(stored);
-            } catch (e) {}
+            } catch (e) { }
         }
         return {
             min_version_code: 1,
@@ -306,6 +306,12 @@ class TelemetryDashboard {
 
     lockPortal() {
         this.clearStoredPass();
+        // Always navigate back to overview when locking so main-content is
+        // visible (not feedback view) once the user re-authenticates.
+        document.body.classList.remove('view-feedback');
+        if (window.history && window.history.replaceState) {
+            window.history.replaceState(null, '', '#overview');
+        }
         this.showAuthOverlay();
         this.showToast('Admin portal locked', 'info');
     }
@@ -529,7 +535,10 @@ class TelemetryDashboard {
         if (!this.toastContainer) return;
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
-        toast.innerHTML = `<span>${message}</span>`;
+        // Use textContent to avoid XSS from any user-controlled message content
+        const span = document.createElement('span');
+        span.textContent = String(message || '');
+        toast.appendChild(span);
         this.toastContainer.appendChild(toast);
 
         requestAnimationFrame(() => toast.classList.add('show'));
@@ -553,7 +562,7 @@ class TelemetryDashboard {
         const latestVer = this.cfgLatestVersion ? (this.cfgLatestVersion.value || '').trim() : '';
         const dlUrl = (this.cfgDownloadUrl ? this.cfgDownloadUrl.value : '').trim();
         const notice = (this.cfgBroadcastNotice ? this.cfgBroadcastNotice.value : '').trim();
-        
+
         const bannedDevStr = (this.cfgBannedDevices ? this.cfgBannedDevices.value : '').trim();
         const bannedDevList = bannedDevStr
             ? bannedDevStr.split(',').map(s => s.trim()).filter(Boolean)
@@ -1251,7 +1260,7 @@ class TelemetryDashboard {
                         this.renderActiveBanChips();
                         connectedUrl = candidate;
                     }
-                } catch (e) {}
+                } catch (e) { }
 
                 // Fetch telemetry heartbeats
                 const telUrl = candidate + (candidate.includes('/api') ? '/telemetry' : '/api/telemetry');
@@ -1268,7 +1277,7 @@ class TelemetryDashboard {
                     isAuthError = true;
                     break;
                 }
-            } catch (err) {}
+            } catch (err) { }
         }
 
         this.isFetching = false;
@@ -1276,7 +1285,7 @@ class TelemetryDashboard {
         if (isAuthError) {
             this.clearStoredPass();
             this.showAuthOverlay();
-            this.showAuthError('Session expired. Enter passkey (lloyderp) to view telemetry.');
+            this.showAuthError('Session expired. Please re-enter your admin passkey.');
             if (this.syncStatusEl) {
                 this.syncStatusEl.textContent = 'Auth Required';
                 this.syncStatusEl.style.color = '#F6BD60';
@@ -1374,7 +1383,7 @@ class TelemetryDashboard {
         const modernCount = this.records.filter(r => {
             const os = r.os_version || '';
             return os.includes('API 34') || os.includes('API 35') || os.includes('API 36') ||
-                   os.includes('Android 14') || os.includes('Android 15') || os.includes('Android 16');
+                os.includes('Android 14') || os.includes('Android 15') || os.includes('Android 16');
         }).length;
         const modernPercent = total > 0 ? Math.round((modernCount / total) * 100) : 0;
         if (this.osDominanceEl) this.osDominanceEl.textContent = total > 0 ? `${modernPercent}%` : '--';
@@ -1525,7 +1534,7 @@ class TelemetryDashboard {
             const isOnline = lastActiveTime >= oneDayAgo;
             const timeAgoStr = lastActiveTime > 0 ? this.formatTimeAgo(lastActiveTime) : 'Never';
             const fullDateStr = lastActiveTime > 0 ? new Date(lastActiveTime).toLocaleString() : 'N/A';
-            
+
             const isDevBanned = r.device_id && bannedDevSet.has(String(r.device_id).trim());
             const isStudentBanned = r.student_id && bannedStudentSet.has(String(r.student_id).trim());
             const isOutdated = r.version_code && (parseInt(r.version_code) < minVerCode);
@@ -1567,24 +1576,24 @@ class TelemetryDashboard {
                     <td>
                         <div class="badges-wrap">
                             ${isDevBanned
-                                ? '<span class="status-badge status-revoked">● Device Revoked</span>'
-                                : `<span class="status-badge ${isOnline ? 'status-online' : 'status-offline'}">● ${isOnline ? 'Active' : 'Idle'}</span>`
-                            }
+                    ? '<span class="status-badge status-revoked">● Device Revoked</span>'
+                    : `<span class="status-badge ${isOnline ? 'status-online' : 'status-offline'}">● ${isOnline ? 'Active' : 'Idle'}</span>`
+                }
                             ${isStudentBanned ? '<span class="status-badge status-banned">● Account Banned</span>' : ''}
                         </div>
                     </td>
                     <td>
                         <div class="actions-cluster">
                             ${deviceId ? (
-                                isDevBanned
-                                    ? `<button class="btn-action btn-restore" onclick="window.telemetryDashboard.toggleDeviceBan('${safeAttr(deviceId)}', 'unban')">Restore Device</button>`
-                                    : `<button class="btn-action btn-revoke" onclick="window.telemetryDashboard.toggleDeviceBan('${safeAttr(deviceId)}', 'ban')">Revoke Device</button>`
-                            ) : ''}
+                    isDevBanned
+                        ? `<button class="btn-action btn-restore" onclick="window.telemetryDashboard.toggleDeviceBan('${safeAttr(deviceId)}', 'unban')">Restore Device</button>`
+                        : `<button class="btn-action btn-revoke" onclick="window.telemetryDashboard.toggleDeviceBan('${safeAttr(deviceId)}', 'ban')">Revoke Device</button>`
+                ) : ''}
                             ${studentId ? (
-                                isStudentBanned
-                                    ? `<button class="btn-action btn-unban-student" onclick="window.telemetryDashboard.toggleStudentBan(${studentId}, 'unban')">Unban Account</button>`
-                                    : `<button class="btn-action btn-ban-student" onclick="window.telemetryDashboard.toggleStudentBan(${studentId}, 'ban')">Ban Account</button>`
-                            ) : ''}
+                    isStudentBanned
+                        ? `<button class="btn-action btn-unban-student" onclick="window.telemetryDashboard.toggleStudentBan(${studentId}, 'unban')">Unban Account</button>`
+                        : `<button class="btn-action btn-ban-student" onclick="window.telemetryDashboard.toggleStudentBan(${studentId}, 'ban')">Ban Account</button>`
+                ) : ''}
                             ${deviceId ? `<button class="btn-action btn-delete-row" title="Delete record from telemetry" aria-label="Delete record" onclick="window.telemetryDashboard.deleteTelemetry('${safeAttr(deviceId)}')">${ICON_TRASH}</button>` : ''}
                         </div>
                     </td>
@@ -1626,7 +1635,7 @@ class TelemetryDashboard {
             const isOnline = lastActiveTime >= oneDayAgo;
             const timeAgoStr = lastActiveTime > 0 ? this.formatTimeAgo(lastActiveTime) : 'Never';
             const fullDateStr = lastActiveTime > 0 ? new Date(lastActiveTime).toLocaleString() : 'N/A';
-            
+
             const isDevBanned = r.device_id && bannedDevSet.has(String(r.device_id).trim());
             const isStudentBanned = r.student_id && bannedStudentSet.has(String(r.student_id).trim());
             const isOutdated = r.version_code && (parseInt(r.version_code) < minVerCode);
@@ -1655,9 +1664,9 @@ class TelemetryDashboard {
                         </div>
                         <div class="student-card-badges">
                             ${isDevBanned
-                                ? '<span class="status-badge status-revoked">● Device Revoked</span>'
-                                : `<span class="status-badge ${isOnline ? 'status-online' : 'status-offline'}">● ${isOnline ? 'Active' : 'Idle'}</span>`
-                            }
+                    ? '<span class="status-badge status-revoked">● Device Revoked</span>'
+                    : `<span class="status-badge ${isOnline ? 'status-online' : 'status-offline'}">● ${isOnline ? 'Active' : 'Idle'}</span>`
+                }
                             ${isStudentBanned ? '<span class="status-badge status-banned">● Account Banned</span>' : ''}
                         </div>
                     </div>
@@ -1693,15 +1702,15 @@ class TelemetryDashboard {
 
                     <div class="student-card-actions">
                         ${deviceId ? (
-                            isDevBanned
-                                ? `<button class="btn-action btn-restore" onclick="window.telemetryDashboard.toggleDeviceBan('${safeAttr(deviceId)}', 'unban')">Restore Device</button>`
-                                : `<button class="btn-action btn-revoke" onclick="window.telemetryDashboard.toggleDeviceBan('${safeAttr(deviceId)}', 'ban')">Revoke Device</button>`
-                        ) : ''}
+                    isDevBanned
+                        ? `<button class="btn-action btn-restore" onclick="window.telemetryDashboard.toggleDeviceBan('${safeAttr(deviceId)}', 'unban')">Restore Device</button>`
+                        : `<button class="btn-action btn-revoke" onclick="window.telemetryDashboard.toggleDeviceBan('${safeAttr(deviceId)}', 'ban')">Revoke Device</button>`
+                ) : ''}
                         ${studentId ? (
-                            isStudentBanned
-                                ? `<button class="btn-action btn-unban-student" onclick="window.telemetryDashboard.toggleStudentBan(${studentId}, 'unban')">Unban Account</button>`
-                                : `<button class="btn-action btn-ban-student" onclick="window.telemetryDashboard.toggleStudentBan(${studentId}, 'ban')">Ban Account</button>`
-                        ) : ''}
+                    isStudentBanned
+                        ? `<button class="btn-action btn-unban-student" onclick="window.telemetryDashboard.toggleStudentBan(${studentId}, 'unban')">Unban Account</button>`
+                        : `<button class="btn-action btn-ban-student" onclick="window.telemetryDashboard.toggleStudentBan(${studentId}, 'ban')">Ban Account</button>`
+                ) : ''}
                         ${deviceId ? `<button class="btn-action btn-delete-row" title="Delete record from telemetry" aria-label="Delete record" onclick="window.telemetryDashboard.deleteTelemetry('${safeAttr(deviceId)}')">${ICON_TRASH}</button>` : ''}
                     </div>
                 </div>
@@ -1799,10 +1808,15 @@ function initSectionNav() {
         });
     }
 
-    // Handle initial hash on load
+    // Handle initial hash on load — always start on overview/main view
+    // (avoids blank screen if hash=#feedback was left from a previous session)
     const hash = window.location.hash.replace('#', '');
-    if (hash && ['overview', 'users', 'governance', 'releases', 'feedback'].includes(hash)) {
+    if (hash && ['users', 'governance', 'releases'].includes(hash)) {
         navigateTo(hash, false);
+    } else {
+        // Default: ensure main-content is always visible on fresh load
+        document.body.classList.remove('view-feedback');
+        setActiveLink('overview');
     }
 }
 
@@ -1815,22 +1829,22 @@ class FeedbackPanel {
         this.loaded = false;
         this.currentItem = null;
 
-        this.cardsEl    = document.getElementById('fbCards');
-        this.emptyEl    = document.getElementById('fbEmpty');
-        this.totalEl    = document.getElementById('fbTotal');
+        this.cardsEl = document.getElementById('fbCards');
+        this.emptyEl = document.getElementById('fbEmpty');
+        this.totalEl = document.getElementById('fbTotal');
         this.newCountEl = document.getElementById('fbNewCount');
-        this.actEl      = document.getElementById('fbActionedCount');
-        this.closedEl   = document.getElementById('fbClosedCount');
-        this.badgeEl    = document.getElementById('feedbackBadge');
-        this.modalEl    = document.getElementById('fbModal');
-        this.modalBody  = document.getElementById('fbModalContent');
-        this.statusSel  = document.getElementById('fbStatusFilter');
-        this.categorySel= document.getElementById('fbCategoryFilter');
+        this.actEl = document.getElementById('fbActionedCount');
+        this.closedEl = document.getElementById('fbClosedCount');
+        this.badgeEl = document.getElementById('feedbackBadge');
+        this.modalEl = document.getElementById('fbModal');
+        this.modalBody = document.getElementById('fbModalContent');
+        this.statusSel = document.getElementById('fbStatusFilter');
+        this.categorySel = document.getElementById('fbCategoryFilter');
         this.refreshBtn = document.getElementById('fbRefreshBtn');
 
         if (this.refreshBtn) this.refreshBtn.addEventListener('click', () => this.load());
-        if (this.statusSel)  this.statusSel.addEventListener('change', () => this.render());
-        if (this.categorySel)this.categorySel.addEventListener('change', () => this.render());
+        if (this.statusSel) this.statusSel.addEventListener('change', () => this.render());
+        if (this.categorySel) this.categorySel.addEventListener('change', () => this.render());
         if (this.modalEl) {
             this.modalEl.addEventListener('click', e => {
                 if (e.target === this.modalEl) this.closeModal();
@@ -1874,18 +1888,18 @@ class FeedbackPanel {
     render() {
         let filtered = [...this.items];
         const statusF = this.statusSel ? this.statusSel.value : '';
-        const catF    = this.categorySel ? this.categorySel.value : '';
-        if (statusF)  filtered = filtered.filter(f => f.status === statusF);
-        if (catF)     filtered = filtered.filter(f => f.category === catF);
+        const catF = this.categorySel ? this.categorySel.value : '';
+        if (statusF) filtered = filtered.filter(f => f.status === statusF);
+        if (catF) filtered = filtered.filter(f => f.category === catF);
 
         // Stats (always from full list)
-        const newC     = this.items.filter(f => f.status === 'new').length;
-        const actC     = this.items.filter(f => f.status === 'actioned').length;
-        const closedC  = this.items.filter(f => f.status === 'closed').length;
-        if (this.totalEl)    this.totalEl.textContent  = this.items.length;
+        const newC = this.items.filter(f => f.status === 'new').length;
+        const actC = this.items.filter(f => f.status === 'actioned').length;
+        const closedC = this.items.filter(f => f.status === 'closed').length;
+        if (this.totalEl) this.totalEl.textContent = this.items.length;
         if (this.newCountEl) this.newCountEl.textContent = newC;
-        if (this.actEl)      this.actEl.textContent     = actC;
-        if (this.closedEl)   this.closedEl.textContent  = closedC;
+        if (this.actEl) this.actEl.textContent = actC;
+        if (this.closedEl) this.closedEl.textContent = closedC;
 
         // Badge in nav
         if (this.badgeEl) {
@@ -1906,12 +1920,12 @@ class FeedbackPanel {
 
     _statusBadge(status) {
         const map = {
-            new:      'background:#ff6b35;color:#fff',
-            read:     'background:#6c757d;color:#fff',
+            new: 'background:#ff6b35;color:#fff',
+            read: 'background:#6c757d;color:#fff',
             actioned: 'background:#0d6efd;color:#fff',
-            closed:   'background:#198754;color:#fff'
+            closed: 'background:#198754;color:#fff'
         };
-        return `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;${map[status]||''}">${escapeHtml(status)}</span>`;
+        return `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;${map[status] || ''}">${escapeHtml(status)}</span>`;
     }
 
     _catBadge(cat) {
@@ -1920,9 +1934,9 @@ class FeedbackPanel {
 
     _cardHtml(f) {
         const date = f.submitted_at ? new Date(f.submitted_at).toLocaleString() : '—';
-        const sid  = f.student_id   ? `<span style="font-size:11px;color:var(--text-muted)">Student: ${escapeHtml(f.student_id)}</span>` : '';
-        const ver  = f.app_version  ? `<span style="font-size:11px;color:var(--text-muted)">v${escapeHtml(f.app_version)}</span>` : '';
-        const msg  = escapeHtml(f.message || '').slice(0, 180) + (f.message && f.message.length > 180 ? '…' : '');
+        const sid = f.student_id ? `<span style="font-size:11px;color:var(--text-muted)">Student: ${escapeHtml(f.student_id)}</span>` : '';
+        const ver = f.app_version ? `<span style="font-size:11px;color:var(--text-muted)">v${escapeHtml(f.app_version)}</span>` : '';
+        const msg = escapeHtml(f.message || '').slice(0, 180) + (f.message && f.message.length > 180 ? '…' : '');
         return `
 <div class="fb-card" style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;"
      onclick="window.feedbackPanel.openModal('${escapeHtml(f.id)}')">
@@ -1962,10 +1976,10 @@ class FeedbackPanel {
 </div>
 <div style="margin-bottom:12px;">
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">Submitted: ${date}</div>
-    ${f.student_id  ? `<div style="font-size:12px;color:var(--text-muted)">Student ID: ${escapeHtml(f.student_id)}</div>` : ''}
+    ${f.student_id ? `<div style="font-size:12px;color:var(--text-muted)">Student ID: ${escapeHtml(f.student_id)}</div>` : ''}
     ${f.app_version ? `<div style="font-size:12px;color:var(--text-muted)">Version: ${escapeHtml(f.app_version)}</div>` : ''}
-    ${f.device_model? `<div style="font-size:12px;color:var(--text-muted)">Device: ${escapeHtml(f.device_model)}</div>` : ''}
-    ${resolvedAt    ? `<div style="font-size:12px;color:var(--text-muted)">Resolved: ${resolvedAt}</div>` : ''}
+    ${f.device_model ? `<div style="font-size:12px;color:var(--text-muted)">Device: ${escapeHtml(f.device_model)}</div>` : ''}
+    ${resolvedAt ? `<div style="font-size:12px;color:var(--text-muted)">Resolved: ${resolvedAt}</div>` : ''}
 </div>
 <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:14px;margin-bottom:16px;font-size:14px;line-height:1.6;white-space:pre-wrap;">
 ${escapeHtml(f.message)}
@@ -1973,10 +1987,10 @@ ${escapeHtml(f.message)}
 
 <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Update Status</label>
 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
-    ${['new','read','actioned','closed'].map(s =>
-        `<button class="btn btn-secondary" style="font-size:12px;padding:4px 12px;${f.status===s?'outline:2px solid var(--accent);':''}"
+    ${['new', 'read', 'actioned', 'closed'].map(s =>
+            `<button class="btn btn-secondary" style="font-size:12px;padding:4px 12px;${f.status === s ? 'outline:2px solid var(--accent);' : ''}"
             onclick="window.feedbackPanel.updateStatus('${f.id}','${s}')">${s}</button>`
-    ).join('')}
+        ).join('')}
 </div>
 
 <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px;">Admin Notes</label>
