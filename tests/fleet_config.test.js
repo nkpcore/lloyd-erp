@@ -13,7 +13,8 @@ const assert = require('node:assert/strict');
 const ALLOWED_CONFIG_KEYS = [
     'latest_version_code', 'latest_version_name', 'min_version_code',
     'download_url', 'broadcast_notice', 'mandatory_update', 'sha256',
-    'maintenance_mode', 'maintenance_message', 'pause_updates'
+    'maintenance_mode', 'maintenance_message', 'pause_updates',
+    'notifications_enabled'
 ];
 
 /**
@@ -51,6 +52,7 @@ function applyConfigAllowlist(body) {
     if (update.maintenance_mode !== undefined) update.maintenance_mode = Boolean(update.maintenance_mode);
     if (update.mandatory_update !== undefined) update.mandatory_update = Boolean(update.mandatory_update);
     if (update.pause_updates !== undefined) update.pause_updates = Boolean(update.pause_updates);
+    if (update.notifications_enabled !== undefined) update.notifications_enabled = Boolean(update.notifications_enabled);
 
     return { ok: true, update };
 }

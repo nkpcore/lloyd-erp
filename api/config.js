@@ -107,7 +107,8 @@ module.exports = async function handler(req, res) {
             const ALLOWED_CONFIG_KEYS = [
                 'latest_version_code', 'latest_version_name', 'min_version_code',
                 'download_url', 'broadcast_notice', 'mandatory_update', 'sha256',
-                'maintenance_mode', 'maintenance_message', 'pause_updates'
+                'maintenance_mode', 'maintenance_message', 'pause_updates',
+                'notifications_enabled'
             ];
 
             const update = {};
@@ -117,6 +118,9 @@ module.exports = async function handler(req, res) {
             }
 
             // Type-safety gates
+            if (update.notifications_enabled !== undefined) {
+                update.notifications_enabled = Boolean(update.notifications_enabled);
+            }
             if (update.latest_version_code !== undefined) {
                 const vc = parseInt(update.latest_version_code);
                 if (!Number.isInteger(vc) || vc <= 0) {

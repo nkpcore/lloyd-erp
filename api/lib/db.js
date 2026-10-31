@@ -33,7 +33,8 @@ function readDiskConfig() {
         broadcast_notice: null,
         maintenance_mode: false,
         maintenance_message: "Lloyd ERP service is currently undergoing routine maintenance.",
-        pause_updates: false
+        pause_updates: false,
+        notifications_enabled: true
     };
     try {
         const p = getLocalConfigPath();

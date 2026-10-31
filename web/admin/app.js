@@ -79,7 +79,8 @@ class TelemetryDashboard {
             maintenance_mode: false,
             maintenance_message: 'Lloyd ERP service is currently undergoing routine maintenance.',
             broadcast_notice: '',
-            pause_updates: false
+            pause_updates: false,
+            notifications_enabled: true
         };
     }
 
@@ -128,6 +129,7 @@ class TelemetryDashboard {
         this.otaPausedAlertBanner = document.getElementById('otaPausedAlertBanner');
         this.resumeOtaBtn = document.getElementById('resumeOtaBtn');
         this.cfgPauseUpdates = document.getElementById('cfgPauseUpdates');
+        this.cfgNotificationsEnabled = document.getElementById('cfgNotificationsEnabled');
 
         // View Mode Switcher & Card Grid
         this.tableViewBtn = document.getElementById('tableViewBtn');
@@ -368,6 +370,9 @@ class TelemetryDashboard {
         if (this.cfgPauseUpdates) {
             this.cfgPauseUpdates.checked = !!this.fleetConfig.pause_updates;
         }
+        if (this.cfgNotificationsEnabled) {
+            this.cfgNotificationsEnabled.checked = this.fleetConfig.notifications_enabled !== false;
+        }
     }
 
     renderMaintenanceBanner() {
@@ -576,6 +581,7 @@ class TelemetryDashboard {
         const maintMsg = (this.cfgMaintenanceMessage ? this.cfgMaintenanceMessage.value : '').trim();
         const isMaint = this.cfgMaintenanceMode ? this.cfgMaintenanceMode.checked : false;
         const pauseUpdates = this.cfgPauseUpdates ? this.cfgPauseUpdates.checked : false;
+        const notifEnabled = this.cfgNotificationsEnabled ? this.cfgNotificationsEnabled.checked : true;
 
         this.fleetConfig.min_version_code = minVer;
         this.fleetConfig.latest_version_name = latestVer || null;
@@ -585,6 +591,7 @@ class TelemetryDashboard {
         this.fleetConfig.banned_students = [...new Set(bannedStudentsList)];
         this.fleetConfig.maintenance_mode = isMaint;
         this.fleetConfig.pause_updates = pauseUpdates;
+        this.fleetConfig.notifications_enabled = notifEnabled;
         if (maintMsg) {
             this.fleetConfig.maintenance_message = maintMsg;
         }
@@ -1311,7 +1318,8 @@ class TelemetryDashboard {
             }
         } else {
             if (this.syncStatusEl) {
-                this.syncStatusEl.textContent = 'Server Offline (Start server.js)';
+                const isCloud = typeof window !== 'undefined' && window.location.protocol === 'https:';
+                this.syncStatusEl.textContent = isCloud ? 'Connecting to Fleet Server...' : 'Server Offline (Start server.js)';
                 this.syncStatusEl.style.color = '#F28482';
             }
             if (this.liveDotEl) {
@@ -1818,6 +1826,16 @@ function initSectionNav() {
         document.body.classList.remove('view-feedback');
         setActiveLink('overview');
     }
+
+    // Support browser back/forward buttons and direct hash changes safely
+    window.addEventListener('hashchange', () => {
+        const h = (window.location.hash || '').replace('#', '');
+        navigateTo(h || 'overview', false);
+    });
+    window.addEventListener('popstate', () => {
+        const h = (window.location.hash || '').replace('#', '');
+        navigateTo(h || 'overview', false);
+    });
 }
 
 // ─── FeedbackPanel ────────────────────────────────────────────────────────────

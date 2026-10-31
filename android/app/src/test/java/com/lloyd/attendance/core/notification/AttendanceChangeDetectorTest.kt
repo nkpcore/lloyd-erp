@@ -175,4 +175,28 @@ class AttendanceChangeDetectorTest {
 
         assertTrue("Only explicit Present or Absent marks should generate notifications", events.isEmpty())
     }
+
+    @Test
+    fun historicalRecordsWithIdBelowLastSeen_areSuppressed() {
+        val logs = listOf(
+            createItem(1005, "Compiler Design", "Present"),
+            createItem(1004, "Software Engineering", "Present"),
+            createItem(1003, "Web Technologies", "Absent"),
+            createItem(1002, "Cloud Computing", "Present"),
+            createItem(1001, "Operating Systems", "Present")
+        )
+
+        // Simulate scenario where seenIds was truncated/cleared, but lastSeenId is 1004.
+        // Only 1005 (which has id > 1004) should be eligible, all historical records <= 1004 must be suppressed.
+        val events = AttendanceChangeDetector.detectNewMarks(
+            logs = logs,
+            seenIds = emptySet(), // even if seenIds is completely empty
+            isFirstBootstrap = false,
+            lastSeenId = 1004L
+        )
+
+        assertEquals(1, events.size)
+        assertEquals(1005L, events[0].attendanceId)
+        assertEquals("Compiler Design", events[0].subjectName)
+    }
 }

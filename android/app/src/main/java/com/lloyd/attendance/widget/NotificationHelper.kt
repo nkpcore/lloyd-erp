@@ -22,6 +22,7 @@ object NotificationHelper {
 
     const val CHANNEL_ID = "lloyd_attendance_marks"
     private const val CHANNEL_NAME = "Live Attendance Alerts"
+    const val GROUP_ATTENDANCE_MARKS = "com.lloyd.attendance.ATTENDANCE_MARKS"
 
     // Deep-link intent extras — consumed by MainComposeActivity on cold + warm start
     const val EXTRA_NAV_TARGET      = "EXTRA_NAV_TARGET"
@@ -190,6 +191,7 @@ object NotificationHelper {
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_EVENT)
+            .setGroup(GROUP_ATTENDANCE_MARKS)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(
                 NotificationCompat.Builder(context, CHANNEL_ID)

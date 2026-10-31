@@ -225,6 +225,7 @@ const CONFIG_ALLOWLIST = new Set([
     'latest_version_code', 'latest_version_name', 'min_version_code',
     'download_url', 'broadcast_notice', 'mandatory_update', 'sha256',
     'maintenance_mode', 'maintenance_message', 'pause_updates',
+    'notifications_enabled'
 ]);
 
 // ── Fleet stats aggregation ───────────────────────────────────────────────────
@@ -428,6 +429,8 @@ const server = http.createServer(async (req, res) => {
                 update.mandatory_update = Boolean(update.mandatory_update);
             if (update.pause_updates !== undefined)
                 update.pause_updates = Boolean(update.pause_updates);
+            if (update.notifications_enabled !== undefined)
+                update.notifications_enabled = Boolean(update.notifications_enabled);
 
             // Preserve ban arrays — they are immutable via this endpoint
             const saved = await db.saveConfig({

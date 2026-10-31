@@ -168,8 +168,10 @@ class AppPreferences private constructor(context: Context) {
         if (ids.isEmpty()) return
         val updated = LinkedHashSet(getSeenAttendanceIds())
         ids.forEach { id -> if (id > 0) updated.add(id.toString()) }
+        // Capacity of 5,000 historical records safely stores all 4 years of college lectures (~2,400)
+        // so historical records are NEVER dropped and re-alerted as new marks.
         val iterator = updated.iterator()
-        while (updated.size > 200 && iterator.hasNext()) {
+        while (updated.size > 5000 && iterator.hasNext()) {
             iterator.next()
             iterator.remove()
         }

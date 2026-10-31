@@ -138,17 +138,21 @@ class AttendanceSyncWorker(
             if (logs.isNullOrEmpty()) return
 
             val seenIds = prefs.getSeenAttendanceIds()
+            val lastSeenId = prefs.getLastSeenAttendanceId()
 
             // Subsequent sync: identify genuine newly marked records via pure domain detector
             val newlyMarkedItems: List<AttendanceMarkEvent.Marked> =
-                AttendanceChangeDetector.detectNewMarks(logs, seenIds, false)
+                AttendanceChangeDetector.detectNewMarks(logs, seenIds, false, lastSeenId)
 
             if (newlyMarkedItems.isEmpty()) return
 
             val newlySeenIds = mutableSetOf<Long>()
             val currentOverallPct = freshStats?.overallPercentage ?: 0.0
 
-            newlyMarkedItems.forEach { newMark ->
+            // Anti-flood throttle: If multiple records arrive simultaneously,
+            // post notifications for at most the 3 latest to prevent spamming the status bar.
+            val itemsToNotify = if (newlyMarkedItems.size > 3) newlyMarkedItems.takeLast(3) else newlyMarkedItems
+            itemsToNotify.forEach { newMark ->
                 if (notifyUser) {
                     NotificationHelper.showAttendanceMarkedNotification(
                         context = context,
@@ -163,8 +167,9 @@ class AttendanceSyncWorker(
                         subjectId = null
                     )
                 }
-                newlySeenIds.add(newMark.attendanceId)
             }
+            // Record ALL newly seen IDs so historical marks are never re-evaluated
+            newlyMarkedItems.forEach { newlySeenIds.add(it.attendanceId) }
 
             // Persist the newly seen record IDs
             prefs.addSeenAttendanceIds(newlySeenIds)
@@ -201,3 +206,4 @@ class AttendanceSyncWorker(
         }
     }
 }
+ 

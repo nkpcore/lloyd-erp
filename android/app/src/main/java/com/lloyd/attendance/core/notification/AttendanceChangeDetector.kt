@@ -25,12 +25,15 @@ object AttendanceChangeDetector {
      * @param logs The raw list of items from ERP `/attendance/student`.
      * @param seenIds Set of string IDs already seen in prior sync cycles.
      * @param isFirstBootstrap True if the app is performing initial sync after sign in.
+     * @param lastSeenId Highest attendance record ID seen in previous sync cycles (safeguard against historical floods).
      * @return Chronologically ordered list of newly marked attendance events.
      */
+    @JvmOverloads
     fun detectNewMarks(
         logs: List<Models.StudentAttendanceItem>?,
         seenIds: Set<String>,
-        isFirstBootstrap: Boolean
+        isFirstBootstrap: Boolean,
+        lastSeenId: Long = 0L
     ): List<AttendanceMarkEvent.Marked> {
         if (logs.isNullOrEmpty() || isFirstBootstrap) {
             return emptyList()
@@ -40,6 +43,10 @@ object AttendanceChangeDetector {
 
         for (item in logs) {
             if (item.id <= 0) continue
+            // Hard safety boundary: If this record's ID is <= lastSeenId from prior syncs,
+            // it is definitively a historical record and must NEVER trigger a notification.
+            if (lastSeenId > 0L && item.id <= lastSeenId) continue
+
             val idStr = item.id.toString()
             if (!seenIds.contains(idStr)) {
                 val status = item.status?.trim()
