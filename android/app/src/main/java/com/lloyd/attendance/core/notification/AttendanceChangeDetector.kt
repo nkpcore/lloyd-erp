@@ -25,33 +25,45 @@ sealed class AttendanceMarkEvent {
 object AttendanceChangeDetector {
 
     /**
-     * Checks if an attendance record date is recent enough to warrant a live alert.
-     * Prevents false alerts for historical lectures marked days, weeks, or months ago.
-     * Only classes from today, yesterday, or within 48 hours are eligible for live alerts.
+     * Checks if a date string represents today's date in Indian Standard Time (Asia/Kolkata).
      */
     @JvmStatic
-    fun isEligibleNotificationDate(dateStr: String?, referenceDate: Date? = null): Boolean {
-        if (dateStr.isNullOrBlank()) return true // fail-open if date is omitted so we rely on ID dedup
+    fun isTodayRecord(dateStr: String?, referenceDate: Date? = null): Boolean {
+        if (dateStr.isNullOrBlank()) return false
         val cleanDate = dateStr.trim().take(10) // "YYYY-MM-DD"
         return try {
             val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
                 timeZone = TimeZone.getTimeZone("Asia/Kolkata")
             }
-            val recordDate = sdf.parse(cleanDate) ?: return true
-            val cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Kolkata")).apply {
-                time = referenceDate ?: Date()
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-                // Allow today, yesterday, and day before yesterday (48-72h window)
-                add(Calendar.DAY_OF_YEAR, -2)
-            }
-            val cutoff = cal.time
-            !recordDate.before(cutoff)
+            val todayStr = sdf.format(referenceDate ?: Date())
+            cleanDate == todayStr
         } catch (_: Exception) {
-            true // fail-open on parse error so genuine marks are not lost
+            false
         }
+    }
+
+    /**
+     * Checks if an attendance record date is from TODAY.
+     * Restricts alerts strictly to classes marked on the same date/time.
+     * Prevents false alerts for past historical lectures marked days, weeks, or months ago.
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun isEligibleNotificationDate(dateStr: String?, referenceDate: Date? = null): Boolean {
+        if (dateStr.isNullOrBlank()) return true // fail-open if date is omitted so we rely on ID dedup
+        return isTodayRecord(dateStr, referenceDate)
+    }
+
+    /**
+     * Checks if an item was recorded or held today (either class date or submission timestamp is today).
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun isEligibleRecord(item: Models.StudentAttendanceItem, referenceDate: Date? = null): Boolean {
+        if (item.attendanceDate.isNullOrBlank() && item.createdAt.isNullOrBlank()) return true
+        val dateToday = isTodayRecord(item.attendanceDate, referenceDate)
+        val createdToday = isTodayRecord(item.createdAt, referenceDate)
+        return dateToday || createdToday
     }
 
     /**
@@ -72,7 +84,8 @@ object AttendanceChangeDetector {
      * @param seenIds Set of string IDs already seen in prior sync cycles.
      * @param isFirstBootstrap True if the app is performing initial sync after sign in.
      * @param lastSeenId Highest attendance record ID seen in previous sync cycles (safeguard against historical floods).
-     * @param enforceDateFilter When true, strictly restricts alerts to classes from today or yesterday.
+     * @param enforceDateFilter When true, strictly restricts alerts to classes marked on the same date (today).
+     * @param referenceDate Optional reference date for testing.
      * @return Chronologically ordered list of newly marked attendance events.
      */
     @JvmOverloads
@@ -81,7 +94,8 @@ object AttendanceChangeDetector {
         seenIds: Set<String>,
         isFirstBootstrap: Boolean,
         lastSeenId: Long = 0L,
-        enforceDateFilter: Boolean = false
+        enforceDateFilter: Boolean = false,
+        referenceDate: Date? = null
     ): List<AttendanceMarkEvent.Marked> {
         if (logs.isNullOrEmpty() || isFirstBootstrap) {
             return emptyList()
@@ -92,8 +106,8 @@ object AttendanceChangeDetector {
         for (item in logs) {
             if (item.id <= 0) continue
 
-            // 1. Date Eligibility Guard: Historical classes (>48h ago) NEVER trigger notifications
-            if (enforceDateFilter && !isEligibleNotificationDate(item.attendanceDate)) {
+            // 1. Same-Day Eligibility Guard: ONLY classes marked on the same date/time (today) trigger notifications
+            if (enforceDateFilter && !isEligibleRecord(item, referenceDate)) {
                 continue
             }
 

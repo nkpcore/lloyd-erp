@@ -115,41 +115,33 @@ class AttendanceSyncWorker(
         notifyUser: Boolean
     ) {
         try {
+            if (logs.isNullOrEmpty()) return
+
             // Fleet remote kill-switch check: if disabled from admin portal, suppress all alerts
             val remoteConfig = AccessControlManager.getCachedFleetConfig(context)
             val fleetEnabled = remoteConfig?.notificationsEnabled ?: true
             val shouldNotify = notifyUser && fleetEnabled
 
             val seenIds = prefs.getSeenAttendanceIds()
+            val lastSeenId = prefs.getLastSeenAttendanceId()
             val isInitialBootstrap = !prefs.hasInitializedAttendanceHistory() || seenIds.isEmpty()
+
+            // Collect all current IDs and composite signatures from incoming logs
+            val allLogIds = logs.mapNotNull { if (it.id > 0) it.id else null }
+            val allLogSigs = logs.map { AttendanceChangeDetector.getRecordSignature(it) }
+            val maxLogId = allLogIds.maxOrNull() ?: 0L
 
             if (isInitialBootstrap) {
                 // First run: bootstrap history with existing records so we NEVER alert for past historical lectures
-                if (!logs.isNullOrEmpty()) {
-                    val currentIds = mutableSetOf<Long>()
-                    val currentSigs = mutableSetOf<String>()
-                    var maxId = 0L
-                    logs.forEach { item ->
-                        if (item.id > 0) {
-                            currentIds.add(item.id)
-                            currentSigs.add(AttendanceChangeDetector.getRecordSignature(item))
-                            if (item.id > maxId) maxId = item.id
-                        }
-                    }
-                    prefs.addSeenAttendanceIds(currentIds)
-                    prefs.addSeenSignatures(currentSigs)
-                    if (maxId > 0) prefs.saveLastSeenAttendanceId(maxId)
-                }
+                prefs.addSeenAttendanceIds(allLogIds)
+                prefs.addSeenSignatures(allLogSigs)
+                if (maxLogId > 0) prefs.saveLastSeenAttendanceId(maxLogId)
                 prefs.setInitializedAttendanceHistory(true)
                 return
             }
 
-            if (logs.isNullOrEmpty()) return
-
-            val lastSeenId = prefs.getLastSeenAttendanceId()
-
             // Subsequent sync: identify genuine newly marked records via pure domain detector
-            // Strict 48h date filter ensures past entries NEVER trigger alerts even across restarts
+            // Strict same-day filter ensures ONLY classes marked on the same date/time (today) trigger alerts
             val newlyMarkedItems: List<AttendanceMarkEvent.Marked> =
                 AttendanceChangeDetector.detectNewMarks(
                     logs = logs,
@@ -159,16 +151,11 @@ class AttendanceSyncWorker(
                     enforceDateFilter = true
                 )
 
-            if (newlyMarkedItems.isEmpty()) return
-
-            val newlySeenIds = mutableSetOf<Long>()
-            val newlySeenSigs = mutableSetOf<String>()
             val currentOverallPct = freshStats?.overallPercentage ?: 0.0
 
-            // Anti-flood throttle: post at most the 2 latest items to prevent drawer clutter
-            val itemsToNotify = if (newlyMarkedItems.size > 2) newlyMarkedItems.takeLast(2) else newlyMarkedItems
-            if (shouldNotify) {
-                itemsToNotify.forEach { newMark ->
+            // If a teacher marked Present or Absent for a class today, fire the notification for THAT particular class!
+            if (newlyMarkedItems.isNotEmpty() && shouldNotify) {
+                newlyMarkedItems.forEach { newMark ->
                     NotificationHelper.showAttendanceMarkedNotification(
                         context = context,
                         attendanceId = newMark.attendanceId,
@@ -183,27 +170,22 @@ class AttendanceSyncWorker(
                     )
                 }
                 // Group summary notification so notifications collapse into a single card on Android 13-16
-                NotificationHelper.showGroupSummaryNotification(
-                    context = context,
-                    totalCount = newlyMarkedItems.size,
-                    summaryText = "${newlyMarkedItems.size} new attendance marked"
-                )
-            }
-
-            // Record ALL newly seen IDs and composite signatures so they are permanently remembered
-            logs.forEach { item ->
-                if (newlyMarkedItems.any { it.attendanceId == item.id }) {
-                    newlySeenIds.add(item.id)
-                    newlySeenSigs.add(AttendanceChangeDetector.getRecordSignature(item))
+                if (newlyMarkedItems.size > 1) {
+                    NotificationHelper.showGroupSummaryNotification(
+                        context = context,
+                        totalCount = newlyMarkedItems.size,
+                        summaryText = "${newlyMarkedItems.size} new attendance marked"
+                    )
                 }
             }
 
-            // Persist synchronously to disk
-            prefs.addSeenAttendanceIds(newlySeenIds)
-            prefs.addSeenSignatures(newlySeenSigs)
-            val highestNewId = newlyMarkedItems.maxOfOrNull { it.attendanceId } ?: 0L
-            if (highestNewId > prefs.getLastSeenAttendanceId()) {
-                prefs.saveLastSeenAttendanceId(highestNewId)
+            // ZERO REPETITIONS GUARANTEE:
+            // ALWAYS permanently record ALL IDs and signatures from logs into seenIds using synchronous commit!
+            // This guarantees every past and current record is marked as seen so repetitions are mathematically impossible.
+            prefs.addSeenAttendanceIds(allLogIds)
+            prefs.addSeenSignatures(allLogSigs)
+            if (maxLogId > lastSeenId) {
+                prefs.saveLastSeenAttendanceId(maxLogId)
             }
         } catch (_: Exception) {
             // Silently ignore log parsing errors in background sync

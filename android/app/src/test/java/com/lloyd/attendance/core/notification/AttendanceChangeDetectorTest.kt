@@ -201,23 +201,27 @@ class AttendanceChangeDetectorTest {
     }
 
     @Test
-    fun dateEligibilityFilter_suppressesClassesOlderThan48Hours() {
+    fun dateEligibilityFilter_suppressesClassesNotMarkedToday() {
         val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
         val oldDate = "2024-01-15"
+        val yesterday = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("Asia/Kolkata")
+        }.format(java.util.Date(System.currentTimeMillis() - 86400000L))
 
         val oldItem = createItem(2001, "Old Lecture", "Present").apply { attendanceDate = oldDate }
-        val freshItem = createItem(2002, "Today Lecture", "Present").apply { attendanceDate = today }
+        val yesterdayItem = createItem(2002, "Yesterday Lecture", "Present").apply { attendanceDate = yesterday }
+        val freshItem = createItem(2003, "Today Lecture", "Present").apply { attendanceDate = today }
 
         val events = AttendanceChangeDetector.detectNewMarks(
-            logs = listOf(freshItem, oldItem),
+            logs = listOf(freshItem, yesterdayItem, oldItem),
             seenIds = emptySet(),
             isFirstBootstrap = false,
             lastSeenId = 0L,
             enforceDateFilter = true
         )
 
-        assertEquals(1, events.size)
-        assertEquals(2002L, events[0].attendanceId)
+        assertEquals("Only classes marked on the same day (today) should fire notifications", 1, events.size)
+        assertEquals(2003L, events[0].attendanceId)
         assertEquals("Today Lecture", events[0].subjectName)
     }
 
