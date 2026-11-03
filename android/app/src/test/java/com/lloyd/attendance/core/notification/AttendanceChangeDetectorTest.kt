@@ -199,4 +199,42 @@ class AttendanceChangeDetectorTest {
         assertEquals(1005L, events[0].attendanceId)
         assertEquals("Compiler Design", events[0].subjectName)
     }
+
+    @Test
+    fun dateEligibilityFilter_suppressesClassesOlderThan48Hours() {
+        val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+        val oldDate = "2024-01-15"
+
+        val oldItem = createItem(2001, "Old Lecture", "Present").apply { attendanceDate = oldDate }
+        val freshItem = createItem(2002, "Today Lecture", "Present").apply { attendanceDate = today }
+
+        val events = AttendanceChangeDetector.detectNewMarks(
+            logs = listOf(freshItem, oldItem),
+            seenIds = emptySet(),
+            isFirstBootstrap = false,
+            lastSeenId = 0L,
+            enforceDateFilter = true
+        )
+
+        assertEquals(1, events.size)
+        assertEquals(2002L, events[0].attendanceId)
+        assertEquals("Today Lecture", events[0].subjectName)
+    }
+
+    @Test
+    fun compositeSignature_preventsDuplicateAlerts() {
+        val item = createItem(3001, "Physics", "Present", "Prof. Verma", "1").apply {
+            attendanceDate = "2026-11-03"
+        }
+        val sig = AttendanceChangeDetector.getRecordSignature(item)
+
+        // When seenIds contains the composite signature
+        val events = AttendanceChangeDetector.detectNewMarks(
+            logs = listOf(item),
+            seenIds = setOf(sig),
+            isFirstBootstrap = false
+        )
+
+        assertTrue("Record with matching composite signature must be suppressed", events.isEmpty())
+    }
 }

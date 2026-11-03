@@ -26,7 +26,9 @@ data class FleetConfig(
     @SerializedName("maintenance_message")
     val maintenanceMessage: String? = null,
     @SerializedName("download_url")
-    val downloadUrl: String? = null
+    val downloadUrl: String? = null,
+    @SerializedName("notifications_enabled")
+    val notificationsEnabled: Boolean = true
 )
 
 sealed interface AccessDecision {
@@ -104,6 +106,13 @@ object AccessControlManager {
         } catch (e: Exception) {
             FleetConfig()
         }
+    }
+
+    @JvmStatic
+    fun getCachedFleetConfig(context: Context): FleetConfig? {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val json = prefs.getString(KEY_CACHED_CONFIG, null)
+        return if (!json.isNullOrBlank() && !json.startsWith("<")) parseFleetConfig(json) else null
     }
 
     suspend fun checkAccess(

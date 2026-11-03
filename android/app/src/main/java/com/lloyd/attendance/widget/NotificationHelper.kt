@@ -23,6 +23,7 @@ object NotificationHelper {
     const val CHANNEL_ID = "lloyd_attendance_marks"
     private const val CHANNEL_NAME = "Live Attendance Alerts"
     const val GROUP_ATTENDANCE_MARKS = "com.lloyd.attendance.ATTENDANCE_MARKS"
+    const val SUMMARY_NOTIFICATION_ID = 99999
 
     // Deep-link intent extras — consumed by MainComposeActivity on cold + warm start
     const val EXTRA_NAV_TARGET      = "EXTRA_NAV_TARGET"
@@ -214,5 +215,51 @@ object NotificationHelper {
         }
 
         manager.notify(notifId, notification)
+    }
+
+    /**
+     * Posts a group summary notification that bundles all individual attendance mark alerts
+     * into a single clean expandable card in the Android notification drawer.
+     */
+    @JvmStatic
+    fun showGroupSummaryNotification(
+        context: Context,
+        totalCount: Int,
+        summaryText: String = "$totalCount new attendance updates"
+    ) {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE)
+            as? NotificationManager ?: return
+
+        createNotificationChannel(context)
+
+        val intent = Intent(context, MainComposeActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_NAV_TARGET, NAV_TARGET_LOGS)
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            SUMMARY_NOTIFICATION_ID,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val summaryNotification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_school)
+            .setContentTitle("Lloyd Attendance")
+            .setContentText(summaryText)
+            .setGroup(GROUP_ATTENDANCE_MARKS)
+            .setGroupSummary(true)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) return
+        }
+
+        manager.notify(SUMMARY_NOTIFICATION_ID, summaryNotification)
     }
 }

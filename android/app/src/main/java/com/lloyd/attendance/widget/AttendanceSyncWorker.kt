@@ -115,20 +115,29 @@ class AttendanceSyncWorker(
         notifyUser: Boolean
     ) {
         try {
-            val isInitialBootstrap = !prefs.hasInitializedAttendanceHistory()
+            // Fleet remote kill-switch check: if disabled from admin portal, suppress all alerts
+            val remoteConfig = AccessControlManager.getCachedFleetConfig(context)
+            val fleetEnabled = remoteConfig?.notificationsEnabled ?: true
+            val shouldNotify = notifyUser && fleetEnabled
+
+            val seenIds = prefs.getSeenAttendanceIds()
+            val isInitialBootstrap = !prefs.hasInitializedAttendanceHistory() || seenIds.isEmpty()
 
             if (isInitialBootstrap) {
                 // First run: bootstrap history with existing records so we NEVER alert for past historical lectures
                 if (!logs.isNullOrEmpty()) {
                     val currentIds = mutableSetOf<Long>()
+                    val currentSigs = mutableSetOf<String>()
                     var maxId = 0L
                     logs.forEach { item ->
                         if (item.id > 0) {
                             currentIds.add(item.id)
+                            currentSigs.add(AttendanceChangeDetector.getRecordSignature(item))
                             if (item.id > maxId) maxId = item.id
                         }
                     }
                     prefs.addSeenAttendanceIds(currentIds)
+                    prefs.addSeenSignatures(currentSigs)
                     if (maxId > 0) prefs.saveLastSeenAttendanceId(maxId)
                 }
                 prefs.setInitializedAttendanceHistory(true)
@@ -137,23 +146,29 @@ class AttendanceSyncWorker(
 
             if (logs.isNullOrEmpty()) return
 
-            val seenIds = prefs.getSeenAttendanceIds()
             val lastSeenId = prefs.getLastSeenAttendanceId()
 
             // Subsequent sync: identify genuine newly marked records via pure domain detector
+            // Strict 48h date filter ensures past entries NEVER trigger alerts even across restarts
             val newlyMarkedItems: List<AttendanceMarkEvent.Marked> =
-                AttendanceChangeDetector.detectNewMarks(logs, seenIds, false, lastSeenId)
+                AttendanceChangeDetector.detectNewMarks(
+                    logs = logs,
+                    seenIds = seenIds,
+                    isFirstBootstrap = false,
+                    lastSeenId = lastSeenId,
+                    enforceDateFilter = true
+                )
 
             if (newlyMarkedItems.isEmpty()) return
 
             val newlySeenIds = mutableSetOf<Long>()
+            val newlySeenSigs = mutableSetOf<String>()
             val currentOverallPct = freshStats?.overallPercentage ?: 0.0
 
-            // Anti-flood throttle: If multiple records arrive simultaneously,
-            // post notifications for at most the 3 latest to prevent spamming the status bar.
-            val itemsToNotify = if (newlyMarkedItems.size > 3) newlyMarkedItems.takeLast(3) else newlyMarkedItems
-            itemsToNotify.forEach { newMark ->
-                if (notifyUser) {
+            // Anti-flood throttle: post at most the 2 latest items to prevent drawer clutter
+            val itemsToNotify = if (newlyMarkedItems.size > 2) newlyMarkedItems.takeLast(2) else newlyMarkedItems
+            if (shouldNotify) {
+                itemsToNotify.forEach { newMark ->
                     NotificationHelper.showAttendanceMarkedNotification(
                         context = context,
                         attendanceId = newMark.attendanceId,
@@ -167,13 +182,26 @@ class AttendanceSyncWorker(
                         subjectId = null
                     )
                 }
+                // Group summary notification so notifications collapse into a single card on Android 13-16
+                NotificationHelper.showGroupSummaryNotification(
+                    context = context,
+                    totalCount = newlyMarkedItems.size,
+                    summaryText = "${newlyMarkedItems.size} new attendance marked"
+                )
             }
-            // Record ALL newly seen IDs so historical marks are never re-evaluated
-            newlyMarkedItems.forEach { newlySeenIds.add(it.attendanceId) }
 
-            // Persist the newly seen record IDs
+            // Record ALL newly seen IDs and composite signatures so they are permanently remembered
+            logs.forEach { item ->
+                if (newlyMarkedItems.any { it.attendanceId == item.id }) {
+                    newlySeenIds.add(item.id)
+                    newlySeenSigs.add(AttendanceChangeDetector.getRecordSignature(item))
+                }
+            }
+
+            // Persist synchronously to disk
             prefs.addSeenAttendanceIds(newlySeenIds)
-            val highestNewId = newlyMarkedItems.last().attendanceId
+            prefs.addSeenSignatures(newlySeenSigs)
+            val highestNewId = newlyMarkedItems.maxOfOrNull { it.attendanceId } ?: 0L
             if (highestNewId > prefs.getLastSeenAttendanceId()) {
                 prefs.saveLastSeenAttendanceId(highestNewId)
             }

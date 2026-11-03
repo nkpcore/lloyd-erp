@@ -149,14 +149,16 @@ class AppPreferences private constructor(context: Context) {
 
     // ── Notification dedup ────────────────────────────────────────────────────
 
-    fun saveLastSeenAttendanceId(id: Long) { prefs.edit().putLong(KEY_LAST_SEEN_ATTENDANCE_ID, id).apply() }
+    fun saveLastSeenAttendanceId(id: Long) {
+        prefs.edit().putLong(KEY_LAST_SEEN_ATTENDANCE_ID, id).commit()
+    }
     fun getLastSeenAttendanceId(): Long = prefs.getLong(KEY_LAST_SEEN_ATTENDANCE_ID, 0)
 
     fun hasInitializedAttendanceHistory(): Boolean =
         prefs.getBoolean(KEY_INITIALIZED_ATTENDANCE_HISTORY, false)
 
     fun setInitializedAttendanceHistory(initialized: Boolean) {
-        prefs.edit().putBoolean(KEY_INITIALIZED_ATTENDANCE_HISTORY, initialized).apply()
+        prefs.edit().putBoolean(KEY_INITIALIZED_ATTENDANCE_HISTORY, initialized).commit()
     }
 
     fun getSeenAttendanceIds(): MutableSet<String> {
@@ -168,14 +170,26 @@ class AppPreferences private constructor(context: Context) {
         if (ids.isEmpty()) return
         val updated = LinkedHashSet(getSeenAttendanceIds())
         ids.forEach { id -> if (id > 0) updated.add(id.toString()) }
-        // Capacity of 5,000 historical records safely stores all 4 years of college lectures (~2,400)
-        // so historical records are NEVER dropped and re-alerted as new marks.
+        // Store up to 10,000 historical records safely (~4 years of lectures)
         val iterator = updated.iterator()
-        while (updated.size > 5000 && iterator.hasNext()) {
+        while (updated.size > 10000 && iterator.hasNext()) {
             iterator.next()
             iterator.remove()
         }
-        prefs.edit().putStringSet(KEY_SEEN_ATTENDANCE_IDS, updated).apply()
+        // Strict: Synchronous commit so background workers never lose seen IDs on process exit
+        prefs.edit().putStringSet(KEY_SEEN_ATTENDANCE_IDS, updated).commit()
+    }
+
+    fun addSeenSignatures(signatures: Collection<String>) {
+        if (signatures.isEmpty()) return
+        val updated = LinkedHashSet(getSeenAttendanceIds())
+        signatures.forEach { sig -> if (sig.isNotBlank()) updated.add(sig.trim()) }
+        val iterator = updated.iterator()
+        while (updated.size > 10000 && iterator.hasNext()) {
+            iterator.next()
+            iterator.remove()
+        }
+        prefs.edit().putStringSet(KEY_SEEN_ATTENDANCE_IDS, updated).commit()
     }
 
     // ── Auth Expiration ───────────────────────────────────────────────────────
