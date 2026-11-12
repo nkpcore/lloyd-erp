@@ -14,15 +14,15 @@ import com.lloyd.attendance.api.Models
 import com.lloyd.attendance.core.access.AccessControlManager
 import com.lloyd.attendance.core.access.AccessDecision
 import com.lloyd.attendance.core.data.AttendanceRepository
+import com.lloyd.attendance.core.data.DataSourceState
 import com.lloyd.attendance.core.data.SyncError
-import com.lloyd.attendance.core.notification.AttendanceChangeDetector
-import com.lloyd.attendance.core.notification.AttendanceMarkEvent
+import com.lloyd.attendance.core.notification.NotificationSyncCoordinator
 import com.lloyd.attendance.core.telemetry.TelemetryManager
 import com.lloyd.attendance.data.AppPreferences
 import java.util.concurrent.TimeUnit
 
 /**
- * Background worker responsible for periodic sync and live attendance alerts.
+ * Background worker responsible for periodic sync and background attendance alerts.
  * Strictly adheres to zero-spam policy: ONLY fires notifications when a faculty member
  * actually marks a student Present or Absent in the ERP.
  */
@@ -88,12 +88,14 @@ class AttendanceSyncWorker(
             AttendanceWidgetProvider.updateAllWidgets(context, freshStats, false, null)
 
             // 4. Check if faculty has marked any new attendance records using reconciled logs
+            val syncSucceeded = snapshot.error == null && snapshot.sourceState == DataSourceState.FRESH
             checkForNewAttendanceMarks(
                 context,
                 prefs,
                 snapshot.records,
                 freshStats,
-                prefs.isNotificationsEnabled()
+                prefs.isNotificationsEnabled(),
+                syncSucceeded
             )
 
             Result.success()
@@ -104,88 +106,49 @@ class AttendanceSyncWorker(
 
     /**
      * Inspects attendance logs and notifies when a new Present or Absent record has been added.
-     * Prevents false alerts on first install/login via bootstrap initialization.
-     * Always tracks seen IDs so re-enabling notifications later does not cause a burst.
+     * Handles empty-start bootstrap safely and tracks detected vs delivered IDs separately.
      */
     private fun checkForNewAttendanceMarks(
         context: Context,
         prefs: AppPreferences,
         logs: List<Models.StudentAttendanceItem>?,
         freshStats: Models.CalculatedStats?,
-        notifyUser: Boolean
+        notifyUser: Boolean,
+        syncSucceeded: Boolean
     ) {
         try {
-            if (logs.isNullOrEmpty()) return
-
             // Fleet remote kill-switch check: if disabled from admin portal, suppress all alerts
             val remoteConfig = AccessControlManager.getCachedFleetConfig(context)
             val fleetEnabled = remoteConfig?.notificationsEnabled ?: true
             val shouldNotify = notifyUser && fleetEnabled
-
-            val seenIds = prefs.getSeenAttendanceIds()
-            val lastSeenId = prefs.getLastSeenAttendanceId()
-            val isInitialBootstrap = !prefs.hasInitializedAttendanceHistory() || seenIds.isEmpty()
-
-            // Collect all current IDs and composite signatures from incoming logs
-            val allLogIds = logs.mapNotNull { if (it.id > 0) it.id else null }
-            val allLogSigs = logs.map { AttendanceChangeDetector.getRecordSignature(it) }
-            val maxLogId = allLogIds.maxOrNull() ?: 0L
-
-            if (isInitialBootstrap) {
-                // First run: bootstrap history with existing records so we NEVER alert for past historical lectures
-                prefs.addSeenAttendanceIds(allLogIds)
-                prefs.addSeenSignatures(allLogSigs)
-                if (maxLogId > 0) prefs.saveLastSeenAttendanceId(maxLogId)
-                prefs.setInitializedAttendanceHistory(true)
-                return
-            }
-
-            // Subsequent sync: identify genuine newly marked records via pure domain detector
-            // Strict same-day filter ensures ONLY classes marked on the same date/time (today) trigger alerts
-            val newlyMarkedItems: List<AttendanceMarkEvent.Marked> =
-                AttendanceChangeDetector.detectNewMarks(
-                    logs = logs,
-                    seenIds = seenIds,
-                    isFirstBootstrap = false,
-                    lastSeenId = lastSeenId,
-                    enforceDateFilter = true
-                )
-
             val currentOverallPct = freshStats?.overallPercentage ?: 0.0
 
-            // If a teacher marked Present or Absent for a class today, fire the notification for THAT particular class!
-            if (newlyMarkedItems.isNotEmpty() && shouldNotify) {
-                newlyMarkedItems.forEach { newMark ->
-                    NotificationHelper.showAttendanceMarkedNotification(
-                        context = context,
-                        attendanceId = newMark.attendanceId,
-                        subjectName = newMark.subjectName,
-                        teacherName = newMark.facultyName,
-                        lectureDetails = newMark.lectureDetails,
-                        isPresent = newMark.isPresent,
-                        overallPercentage = currentOverallPct,
-                        recordDate = newMark.attendanceDate,
-                        recordId = newMark.attendanceId.toString(),
-                        subjectId = null
-                    )
-                }
-                // Group summary notification so notifications collapse into a single card on Android 13-16
-                if (newlyMarkedItems.size > 1) {
-                    NotificationHelper.showGroupSummaryNotification(
-                        context = context,
-                        totalCount = newlyMarkedItems.size,
-                        summaryText = "${newlyMarkedItems.size} new attendance marked"
-                    )
-                }
+            val summary = NotificationSyncCoordinator.processLogs(
+                store = prefs,
+                logs = logs,
+                shouldNotify = shouldNotify,
+                syncSucceeded = syncSucceeded
+            ) { newMark ->
+                NotificationHelper.showAttendanceMarkedNotification(
+                    context = context,
+                    attendanceId = newMark.attendanceId,
+                    subjectName = newMark.subjectName,
+                    teacherName = newMark.facultyName,
+                    lectureDetails = newMark.lectureDetails,
+                    isPresent = newMark.isPresent,
+                    overallPercentage = currentOverallPct,
+                    recordDate = newMark.attendanceDate,
+                    recordId = newMark.attendanceId.toString(),
+                    subjectId = newMark.subjectId?.toString()
+                )
             }
 
-            // ZERO REPETITIONS GUARANTEE:
-            // ALWAYS permanently record ALL IDs and signatures from logs into seenIds using synchronous commit!
-            // This guarantees every past and current record is marked as seen so repetitions are mathematically impossible.
-            prefs.addSeenAttendanceIds(allLogIds)
-            prefs.addSeenSignatures(allLogSigs)
-            if (maxLogId > lastSeenId) {
-                prefs.saveLastSeenAttendanceId(maxLogId)
+            if (summary.deliveredIds.size > 1) {
+                NotificationHelper.showGroupSummaryNotification(
+                    context = context,
+                    totalCount = summary.deliveredIds.size,
+                    summaryText = "${summary.deliveredIds.size} new attendance marked"
+                )
             }
         } catch (_: Exception) {
             // Silently ignore log parsing errors in background sync

@@ -3,6 +3,8 @@ package com.lloyd.attendance.feature.logs
 import com.lloyd.attendance.api.Models
 import com.lloyd.attendance.core.domain.AttendanceCalculator
 import com.lloyd.attendance.core.domain.SubjectAttendance
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 data class AttendanceLogsSummary(
     val totalMarked: Int,
@@ -13,10 +15,33 @@ data class AttendanceLogsSummary(
 
 object AttendanceLogsProcessor {
 
+    private val DATE_FORMATTERS = listOf(
+        DateTimeFormatter.ISO_LOCAL_DATE,
+        DateTimeFormatter.ofPattern("dd-MM-yyyy")
+    )
+
+    fun extractLocalDate(item: Models.StudentAttendanceItem): LocalDate? {
+        return parseDateString(item.attendanceDate) ?: parseDateString(item.createdAt)
+    }
+
+    fun parseDateString(raw: String?): LocalDate? {
+        val trimmed = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val candidate = if (trimmed.contains("T")) trimmed.substringBefore("T") else trimmed.take(10)
+        for (formatter in DATE_FORMATTERS) {
+            try {
+                return LocalDate.parse(candidate, formatter)
+            } catch (_: Exception) {
+            }
+        }
+        return null
+    }
+
+    @JvmOverloads
     fun filterLogs(
         logs: List<Models.StudentAttendanceItem?>,
         searchQuery: String,
-        statusFilter: LogStatusFilter
+        statusFilter: LogStatusFilter,
+        dateFilter: LocalDate? = null
     ): List<Models.StudentAttendanceItem> {
         val nonNullLogs = logs.filterNotNull()
         val query = searchQuery.trim().lowercase()
@@ -37,7 +62,9 @@ object AttendanceLogsProcessor {
                     faculty.contains(query) ||
                     date.contains(query)
 
-            matchesFilter && matchesQuery
+            val matchesDate = dateFilter == null || extractLocalDate(item) == dateFilter
+
+            matchesFilter && matchesQuery && matchesDate
         }
     }
 

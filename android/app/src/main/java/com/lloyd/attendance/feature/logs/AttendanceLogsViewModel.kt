@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 enum class LogStatusFilter {
     ALL,
@@ -43,6 +44,12 @@ class AttendanceLogsViewModel @JvmOverloads constructor(
     private val _uiState = MutableStateFlow(AttendanceLogsUiState())
     val uiState: StateFlow<AttendanceLogsUiState> = _uiState.asStateFlow()
 
+    private val _dateFilter = MutableStateFlow<LocalDate?>(null)
+    val dateFilter: StateFlow<LocalDate?> = _dateFilter.asStateFlow()
+
+    private val _selectedRecordId = MutableStateFlow<String?>(null)
+    val selectedRecordId: StateFlow<String?> = _selectedRecordId.asStateFlow()
+
     init {
         viewModelScope.launch {
             repository.snapshot.collect { snapshot ->
@@ -72,6 +79,15 @@ class AttendanceLogsViewModel @JvmOverloads constructor(
         _uiState.value = recomputeFilteredState(updated)
     }
 
+    fun filterByDate(date: LocalDate?) {
+        _dateFilter.value = date
+        _uiState.value = recomputeFilteredState(_uiState.value)
+    }
+
+    fun scrollToRecord(id: String?) {
+        _selectedRecordId.value = id?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
     private fun applyLogs(
         logs: List<Models.StudentAttendanceItem>,
         isLoading: Boolean,
@@ -98,7 +114,8 @@ class AttendanceLogsViewModel @JvmOverloads constructor(
         val filtered = AttendanceLogsProcessor.filterLogs(
             logs = state.allLogs,
             searchQuery = state.searchQuery,
-            statusFilter = state.statusFilter
+            statusFilter = state.statusFilter,
+            dateFilter = _dateFilter.value
         )
         val grouped = AttendanceLogsProcessor.groupByDate(filtered)
 

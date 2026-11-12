@@ -12,18 +12,24 @@ import android.media.RingtoneManager
 import android.os.Build
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.lloyd.attendance.R
+import com.lloyd.attendance.core.notification.AttendanceChangeDetector
 import com.lloyd.attendance.ui.MainComposeActivity
+import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 
 object NotificationHelper {
 
     const val CHANNEL_ID = "lloyd_attendance_marks"
-    private const val CHANNEL_NAME = "Live Attendance Alerts"
+    const val CHANNEL_NAME = "Attendance Updates"
+    const val CHANNEL_DESCRIPTION =
+        "Background attendance checks (checks every 60 minutes, delivery not guaranteed due to Android battery optimization)"
     const val GROUP_ATTENDANCE_MARKS = "com.lloyd.attendance.ATTENDANCE_MARKS"
     const val SUMMARY_NOTIFICATION_ID = 99999
+    const val TEST_NOTIFICATION_ID = 99998
 
     // Deep-link intent extras — consumed by MainComposeActivity on cold + warm start
     const val EXTRA_NAV_TARGET      = "EXTRA_NAV_TARGET"
@@ -34,7 +40,40 @@ object NotificationHelper {
     /** Deep-link target value for the Logs tab */
     const val NAV_TARGET_LOGS = "LOGS"
 
-    fun createNotificationChannel(context: Context) {
+    @JvmStatic
+    fun hasNotificationPermission(context: Context): Boolean {
+        val osNotificationsEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
+        if (!osNotificationsEnabled) return false
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
+    @JvmStatic
+    @JvmOverloads
+    fun computeNotificationImportance(
+        recordDate: String?,
+        isAttendanceMark: Boolean,
+        referenceDate: Date? = null
+    ): Int {
+        val isSameDayMark = isAttendanceMark &&
+            !recordDate.isNullOrBlank() &&
+            AttendanceChangeDetector.isTodayRecord(recordDate, referenceDate)
+        return if (isSameDayMark) {
+            NotificationManager.IMPORTANCE_HIGH
+        } else {
+            NotificationManager.IMPORTANCE_DEFAULT
+        }
+    }
+
+    @JvmOverloads
+    fun createNotificationChannel(
+        context: Context,
+        importance: Int = NotificationManager.IMPORTANCE_DEFAULT
+    ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE)
                 as? NotificationManager ?: return
@@ -42,9 +81,9 @@ object NotificationHelper {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_HIGH
+                importance
             ).apply {
-                description = "Instant alerts when faculty marks attendance as Present or Absent"
+                description = CHANNEL_DESCRIPTION
                 enableLights(true)
                 lightColor = Color.parseColor("#1E40AF")
                 enableVibration(true)
@@ -66,8 +105,8 @@ object NotificationHelper {
         lectureDetails: String?,
         isPresent: Boolean,
         overallPercentage: Double,
-    ) {
-        showAttendanceMarkedNotification(
+    ): Boolean {
+        return showAttendanceMarkedNotification(
             context = context,
             attendanceId = System.currentTimeMillis(),
             subjectName = subjectName,
@@ -93,8 +132,8 @@ object NotificationHelper {
         lectureDetails: String?,
         isPresent: Boolean,
         overallPercentage: Double,
-    ) {
-        showAttendanceMarkedNotification(
+    ): Boolean {
+        return showAttendanceMarkedNotification(
             context = context,
             attendanceId = attendanceId,
             subjectName = subjectName,
@@ -114,6 +153,7 @@ object NotificationHelper {
      * @param recordDate ISO-8601 date string (e.g. "2024-11-15") for pre-filtering the Logs screen.
      * @param recordId   Server attendance record ID for direct lookup.
      * @param subjectId  Subject identifier to pre-filter the Logs screen.
+     * @return true if the notification was posted, false if skipped due to missing permission/manager.
      */
     @JvmStatic
     fun showAttendanceMarkedNotification(
@@ -127,11 +167,14 @@ object NotificationHelper {
         recordDate: String?,
         recordId: String?,
         subjectId: String?,
-    ) {
+    ): Boolean {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE)
-            as? NotificationManager ?: return
+            as? NotificationManager ?: return false
 
-        createNotificationChannel(context)
+        val importance = computeNotificationImportance(recordDate = recordDate, isAttendanceMark = true)
+        createNotificationChannel(context, importance)
+
+        if (!hasNotificationPermission(context)) return false
 
         val intent = Intent(context, MainComposeActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -159,7 +202,7 @@ object NotificationHelper {
         val detailPart  = if (!lectureDetails.isNullOrEmpty()) " • $lectureDetails" else ""
         val contentText = "By $facultyStr$detailPart • Overall: ${String.format(Locale.US, "%.1f%%", overallPercentage)}"
 
-        // RemoteViews for Dynamic Island-style heads-up banner
+        // RemoteViews for heads-up / expanded attendance card
         val views = RemoteViews(context.packageName, R.layout.notification_dynamic).apply {
             setTextViewText(R.id.notif_subject, cleanSubject)
             setTextViewText(
@@ -182,6 +225,12 @@ object NotificationHelper {
             )
         }
 
+        val priority = if (importance == NotificationManager.IMPORTANCE_HIGH) {
+            NotificationCompat.PRIORITY_HIGH
+        } else {
+            NotificationCompat.PRIORITY_DEFAULT
+        }
+
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_school)
             .setContentTitle(titleText)
@@ -190,7 +239,7 @@ object NotificationHelper {
             .setCustomContentView(views)
             .setCustomHeadsUpContentView(views)
             .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setPriority(priority)
             .setCategory(NotificationCompat.CATEGORY_EVENT)
             .setGroup(GROUP_ATTENDANCE_MARKS)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
@@ -209,12 +258,12 @@ object NotificationHelper {
         val rawId = if (attendanceId > 0) attendanceId else System.currentTimeMillis()
         val notifId = (abs(rawId.hashCode().toLong()) % (Int.MAX_VALUE / 2)).toInt()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) return
+        return try {
+            manager.notify(notifId, notification)
+            true
+        } catch (_: SecurityException) {
+            false
         }
-
-        manager.notify(notifId, notification)
     }
 
     /**
@@ -230,7 +279,8 @@ object NotificationHelper {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE)
             as? NotificationManager ?: return
 
-        createNotificationChannel(context)
+        createNotificationChannel(context, NotificationManager.IMPORTANCE_DEFAULT)
+        if (!hasNotificationPermission(context)) return
 
         val intent = Intent(context, MainComposeActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -252,14 +302,53 @@ object NotificationHelper {
             .setGroupSummary(true)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) return
+        try {
+            manager.notify(SUMMARY_NOTIFICATION_ID, summaryNotification)
+        } catch (_: SecurityException) {
+        }
+    }
+
+    /**
+     * Posts an immediate test notification on the Attendance Updates channel using
+     * default importance so the user can verify delivery in Profile settings.
+     */
+    @JvmStatic
+    fun showTestNotification(context: Context): Boolean {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE)
+            as? NotificationManager ?: return false
+
+        createNotificationChannel(context, NotificationManager.IMPORTANCE_DEFAULT)
+        if (!hasNotificationPermission(context)) return false
+
+        val intent = Intent(context, MainComposeActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_NAV_TARGET, NAV_TARGET_LOGS)
         }
 
-        manager.notify(SUMMARY_NOTIFICATION_ID, summaryNotification)
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            TEST_NOTIFICATION_ID,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_school)
+            .setContentTitle("Background Attendance Check")
+            .setContentText("Attendance updates are active (checked every 60 minutes in background).")
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+
+        return try {
+            manager.notify(TEST_NOTIFICATION_ID, notification)
+            true
+        } catch (_: SecurityException) {
+            false
+        }
     }
 }

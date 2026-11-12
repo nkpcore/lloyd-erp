@@ -463,6 +463,9 @@ fun ProfileScreen(
                 }
             }
 
+            // Notification Settings Card
+            NotificationSettingsCard(prefs = prefs)
+
             // Security Hardening Badge & Info
             ElevatedCard(
                 modifier = Modifier

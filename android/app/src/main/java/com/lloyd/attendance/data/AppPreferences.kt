@@ -3,13 +3,24 @@ package com.lloyd.attendance.data
 import android.content.Context
 import android.content.SharedPreferences
 import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.lloyd.attendance.BuildConfig
 import com.lloyd.attendance.api.Models
+import com.lloyd.attendance.core.notification.NotificationStateStore
 import com.lloyd.attendance.core.security.KeystoreTokenStore
 import com.lloyd.attendance.core.security.SecureTokenStore
 import java.util.UUID
 
-class AppPreferences private constructor(context: Context) {
+data class NotificationEvent(
+    val id: String,
+    val subject: String,
+    val status: String,
+    val timestamp: Long,
+    val delivered: Boolean,
+    val date: String = ""
+)
+
+class AppPreferences private constructor(context: Context) : NotificationStateStore {
 
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -147,12 +158,12 @@ class AppPreferences private constructor(context: Context) {
     /** Strict: Never default to Section A-1. Returns empty string when unset. */
     fun getSelectedSection(): String = prefs.getString(KEY_SELECTED_SECTION, "") ?: ""
 
-    // ── Notification dedup ────────────────────────────────────────────────────
+    // ── Notification dedup & delivery log ─────────────────────────────────────
 
-    fun saveLastSeenAttendanceId(id: Long) {
+    override fun saveLastSeenAttendanceId(id: Long) {
         prefs.edit().putLong(KEY_LAST_SEEN_ATTENDANCE_ID, id).commit()
     }
-    fun getLastSeenAttendanceId(): Long = prefs.getLong(KEY_LAST_SEEN_ATTENDANCE_ID, 0)
+    override fun getLastSeenAttendanceId(): Long = prefs.getLong(KEY_LAST_SEEN_ATTENDANCE_ID, 0)
 
     fun hasInitializedAttendanceHistory(): Boolean =
         prefs.getBoolean(KEY_INITIALIZED_ATTENDANCE_HISTORY, false)
@@ -161,35 +172,122 @@ class AppPreferences private constructor(context: Context) {
         prefs.edit().putBoolean(KEY_INITIALIZED_ATTENDANCE_HISTORY, initialized).commit()
     }
 
+    override fun isBootstrapComplete(): Boolean =
+        prefs.getBoolean(KEY_BOOTSTRAP_COMPLETE, false) || hasInitializedAttendanceHistory()
+
+    override fun setBootstrapComplete(timestamp: Long) {
+        prefs.edit()
+            .putBoolean(KEY_BOOTSTRAP_COMPLETE, true)
+            .putLong(KEY_BOOTSTRAP_TIMESTAMP, timestamp)
+            .putBoolean(KEY_INITIALIZED_ATTENDANCE_HISTORY, true)
+            .commit()
+    }
+
+    fun getBootstrapTimestamp(): Long = prefs.getLong(KEY_BOOTSTRAP_TIMESTAMP, 0L)
+
+    override fun getLastEmptyBootstrapAttempt(): Long =
+        prefs.getLong(KEY_LAST_EMPTY_BOOTSTRAP_ATTEMPT, 0L)
+
+    override fun setLastEmptyBootstrapAttempt(timestamp: Long) {
+        prefs.edit().putLong(KEY_LAST_EMPTY_BOOTSTRAP_ATTEMPT, timestamp).commit()
+    }
+
+    fun getLastNotificationCheckTimestamp(): Long =
+        prefs.getLong(KEY_LAST_NOTIFICATION_CHECK_TIMESTAMP, 0L)
+
+    override fun setLastNotificationCheckTimestamp(timestamp: Long) {
+        prefs.edit().putLong(KEY_LAST_NOTIFICATION_CHECK_TIMESTAMP, timestamp).commit()
+    }
+
     fun getSeenAttendanceIds(): MutableSet<String> {
         val set = prefs.getStringSet(KEY_SEEN_ATTENDANCE_IDS, null)
         return if (set != null) LinkedHashSet(set) else LinkedHashSet()
     }
 
     fun addSeenAttendanceIds(ids: Collection<Long>) {
-        if (ids.isEmpty()) return
-        val updated = LinkedHashSet(getSeenAttendanceIds())
-        ids.forEach { id -> if (id > 0) updated.add(id.toString()) }
-        // Store up to 10,000 historical records safely (~4 years of lectures)
-        val iterator = updated.iterator()
-        while (updated.size > 10000 && iterator.hasNext()) {
-            iterator.next()
-            iterator.remove()
-        }
-        // Strict: Synchronous commit so background workers never lose seen IDs on process exit
-        prefs.edit().putStringSet(KEY_SEEN_ATTENDANCE_IDS, updated).commit()
+        appendBoundedSet(KEY_SEEN_ATTENDANCE_IDS, ids.filter { it > 0 }.map { it.toString() })
     }
 
     fun addSeenSignatures(signatures: Collection<String>) {
-        if (signatures.isEmpty()) return
-        val updated = LinkedHashSet(getSeenAttendanceIds())
-        signatures.forEach { sig -> if (sig.isNotBlank()) updated.add(sig.trim()) }
+        appendBoundedSet(KEY_SEEN_ATTENDANCE_IDS, signatures.mapNotNull { it.trim().takeIf(String::isNotEmpty) })
+    }
+
+    override fun getDetectedIds(): MutableSet<String> {
+        val detected = prefs.getStringSet(KEY_DETECTED_ATTENDANCE_IDS, null)
+        val legacySeen = prefs.getStringSet(KEY_SEEN_ATTENDANCE_IDS, null)
+        val combined = LinkedHashSet<String>()
+        if (legacySeen != null) combined.addAll(legacySeen)
+        if (detected != null) combined.addAll(detected)
+        return combined
+    }
+
+    override fun addDetectedIds(ids: Collection<Long>) {
+        appendBoundedSet(KEY_DETECTED_ATTENDANCE_IDS, ids.filter { it > 0 }.map { it.toString() })
+    }
+
+    override fun addDetectedSignatures(signatures: Collection<String>) {
+        appendBoundedSet(KEY_DETECTED_ATTENDANCE_IDS, signatures.mapNotNull { it.trim().takeIf(String::isNotEmpty) })
+    }
+
+    override fun getDeliveredIds(): MutableSet<String> {
+        val set = prefs.getStringSet(KEY_DELIVERED_ATTENDANCE_IDS, null)
+        return if (set != null) LinkedHashSet(set) else LinkedHashSet()
+    }
+
+    override fun addDeliveredIds(ids: Collection<Long>) {
+        appendBoundedSet(KEY_DELIVERED_ATTENDANCE_IDS, ids.filter { it > 0 }.map { it.toString() })
+    }
+
+    @Synchronized
+    override fun saveNotificationEvent(
+        id: String,
+        subject: String,
+        status: String,
+        timestamp: Long,
+        delivered: Boolean,
+        date: String
+    ) {
+        val updated = getNotificationEvents().toMutableList()
+        updated.add(
+            NotificationEvent(
+                id = id,
+                subject = subject,
+                status = status,
+                timestamp = timestamp,
+                delivered = delivered,
+                date = date
+            )
+        )
+        while (updated.size > MAX_NOTIFICATION_EVENTS) {
+            updated.removeAt(0)
+        }
+        prefs.edit().putString(KEY_NOTIFICATION_EVENTS, gson.toJson(updated)).commit()
+    }
+
+    fun getNotificationEvents(): List<NotificationEvent> {
+        val json = prefs.getString(KEY_NOTIFICATION_EVENTS, null) ?: return emptyList()
+        return try {
+            val type = object : TypeToken<List<NotificationEvent>>() {}.type
+            gson.fromJson<List<NotificationEvent>>(json, type) ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun appendBoundedSet(key: String, entries: Iterable<String>) {
+        val items = entries.toList()
+        if (items.isEmpty()) return
+        val existing = prefs.getStringSet(key, null)
+        val updated = if (existing != null) LinkedHashSet(existing) else LinkedHashSet()
+        updated.addAll(items)
+        // Store up to 10,000 historical records safely (~4 years of lectures)
         val iterator = updated.iterator()
-        while (updated.size > 10000 && iterator.hasNext()) {
+        while (updated.size > MAX_TRACKED_IDS && iterator.hasNext()) {
             iterator.next()
             iterator.remove()
         }
-        prefs.edit().putStringSet(KEY_SEEN_ATTENDANCE_IDS, updated).commit()
+        // Strict: Synchronous commit so background workers never lose IDs on process exit
+        prefs.edit().putStringSet(key, updated).commit()
     }
 
     // ── Auth Expiration ───────────────────────────────────────────────────────
@@ -207,6 +305,20 @@ class AppPreferences private constructor(context: Context) {
     }
 
     fun isNotificationsEnabled(): Boolean = prefs.getBoolean(KEY_NOTIFICATION_ENABLED, true)
+
+    fun setNotificationPermissionState(granted: Boolean) {
+        prefs.edit().putBoolean(KEY_NOTIFICATION_PERMISSION_GRANTED, granted).apply()
+    }
+
+    fun getNotificationPermissionState(): Boolean =
+        prefs.getBoolean(KEY_NOTIFICATION_PERMISSION_GRANTED, false)
+
+    fun setNotificationPermissionDenied(denied: Boolean) {
+        prefs.edit().putBoolean(KEY_NOTIFICATION_PERMISSION_DENIED, denied).apply()
+    }
+
+    fun wasNotificationPermissionDenied(): Boolean =
+        prefs.getBoolean(KEY_NOTIFICATION_PERMISSION_DENIED, false)
 
     // ── Telemetry ─────────────────────────────────────────────────────────────
 
@@ -304,8 +416,19 @@ class AppPreferences private constructor(context: Context) {
         private const val KEY_STUDENT_ID = "student_id"
         private const val KEY_LAST_SEEN_ATTENDANCE_ID = "last_seen_attendance_id"
         private const val KEY_SEEN_ATTENDANCE_IDS = "seen_attendance_ids_set"
+        private const val KEY_DETECTED_ATTENDANCE_IDS = "detected_attendance_ids_set"
+        private const val KEY_DELIVERED_ATTENDANCE_IDS = "delivered_attendance_ids_set"
+        private const val KEY_NOTIFICATION_EVENTS = "notification_events_log"
         private const val KEY_INITIALIZED_ATTENDANCE_HISTORY = "initialized_attendance_history"
+        private const val KEY_BOOTSTRAP_COMPLETE = "bootstrap_complete"
+        private const val KEY_BOOTSTRAP_TIMESTAMP = "bootstrap_timestamp"
+        private const val KEY_LAST_EMPTY_BOOTSTRAP_ATTEMPT = "last_empty_bootstrap_attempt"
+        private const val KEY_LAST_NOTIFICATION_CHECK_TIMESTAMP = "last_notification_check_timestamp"
         private const val KEY_NOTIFICATION_ENABLED = "notification_enabled"
+        private const val KEY_NOTIFICATION_PERMISSION_GRANTED = "notification_permission_granted"
+        private const val KEY_NOTIFICATION_PERMISSION_DENIED = "notification_permission_denied"
+        private const val MAX_TRACKED_IDS = 10000
+        private const val MAX_NOTIFICATION_EVENTS = 50
         private const val KEY_SELECTED_SECTION = "selected_section"
         private const val KEY_TELEMETRY_ENDPOINT = "telemetry_endpoint"
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"

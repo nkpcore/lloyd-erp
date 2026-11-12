@@ -55,6 +55,8 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -115,6 +117,9 @@ import com.lloyd.attendance.widget.AttendanceWidgetProvider
 import androidx.lifecycle.lifecycleScope
 import com.lloyd.attendance.core.telemetry.TelemetryManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.widget.Toast
@@ -152,13 +157,13 @@ class MainComposeActivity : FragmentActivity() {
     private var isDownloadingUpdate by mutableStateOf(false)
     private var updateDownloadProgress by mutableStateOf(0f)
     private var pendingInstallApk by mutableStateOf<File?>(null)
-    /** Tab to open when the app is launched / resumed from a deep-link notification. */
-    private var deepLinkTab by mutableStateOf<MainTab?>(null)
+    /** Deep-link navigation request parsed from notification intents (cold + warm start). */
+    private val _navigationRequest = MutableStateFlow<NavigationRequest?>(null)
+    val navigationRequest: StateFlow<NavigationRequest?> = _navigationRequest.asStateFlow()
 
     private fun handleDeepLinkIntent(intent: Intent?) {
-        when (intent?.getStringExtra(NotificationHelper.EXTRA_NAV_TARGET)) {
-            NotificationHelper.NAV_TARGET_LOGS -> deepLinkTab = MainTab.LOGS
-        }
+        val req = NavigationRequest.fromIntent(intent) ?: return
+        _navigationRequest.value = req
     }
 
     private fun performAccessCheck() {
@@ -244,16 +249,27 @@ class MainComposeActivity : FragmentActivity() {
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { _ ->
-        // Permission result handled
+    ) { granted ->
+        val effectiveGranted = granted && NotificationHelper.hasNotificationPermission(this)
+        prefs.setNotificationPermissionState(effectiveGranted)
+        prefs.setNotificationPermissionDenied(!effectiveGranted)
     }
 
-    private fun checkNotificationPermission() {
+    private fun syncNotificationPermissionState() {
+        val granted = NotificationHelper.hasNotificationPermission(this)
+        prefs.setNotificationPermissionState(granted)
+        if (granted) {
+            prefs.setNotificationPermissionDenied(false)
+        }
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
                     this,
                     Manifest.permission.POST_NOTIFICATIONS
-                ) != PackageManager.PERMISSION_GRANTED
+                ) != PackageManager.PERMISSION_GRANTED &&
+                !prefs.wasNotificationPermissionDenied()
             ) {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
@@ -274,7 +290,7 @@ class MainComposeActivity : FragmentActivity() {
             return
         }
 
-        checkNotificationPermission()
+        syncNotificationPermissionState()
         AttendanceSyncWorker.schedulePeriodicSync(this)
 
         try {
@@ -334,7 +350,8 @@ class MainComposeActivity : FragmentActivity() {
                 } else {
                     MainAppShell(
                         prefs = prefs,
-                        initialTab = deepLinkTab?.also { deepLinkTab = null } ?: MainTab.DASHBOARD,
+                        navigationRequestFlow = navigationRequest,
+                        onConsumeNavigationRequest = { _navigationRequest.value = null },
                         dashboardViewModel = dashboardViewModel,
                         logsViewModel = logsViewModel,
                         subjectDetailViewModel = subjectDetailViewModel,
@@ -357,10 +374,13 @@ class MainComposeActivity : FragmentActivity() {
                                 prefs.isOnboardingCompleted = true
                                 showOnboarding = false
                             },
-                            onGetStarted = {
+                            onGetStarted = { enableNotifications ->
                                 prefs.isOnboardingCompleted = true
                                 showOnboarding = false
-                                checkNotificationPermission()
+                                prefs.setNotificationsEnabled(enableNotifications)
+                                if (enableNotifications) {
+                                    requestNotificationPermissionIfNeeded()
+                                }
                             }
                         )
                     }
@@ -454,6 +474,7 @@ class MainComposeActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        syncNotificationPermissionState()
         performAccessCheck()
         pendingInstallApk?.let { apkFile ->
             if (OtaUpdateManager.canInstallApk(this) && apkFile.exists()) {
@@ -542,6 +563,8 @@ sealed interface ScreenDestination {
 fun MainAppShell(
     prefs: AppPreferences,
     initialTab: MainTab = MainTab.DASHBOARD,
+    navigationRequestFlow: StateFlow<NavigationRequest?> = MutableStateFlow(null),
+    onConsumeNavigationRequest: () -> Unit = {},
     dashboardViewModel: DashboardViewModel,
     logsViewModel: AttendanceLogsViewModel,
     subjectDetailViewModel: SubjectDetailViewModel,
@@ -556,6 +579,20 @@ fun MainAppShell(
 ) {
     var selectedTab by remember { mutableStateOf(initialTab) }
     var destination by remember { mutableStateOf<ScreenDestination>(ScreenDestination.Main) }
+
+    val pendingNavigationRequest by navigationRequestFlow.collectAsState()
+    LaunchedEffect(pendingNavigationRequest) {
+        val req = pendingNavigationRequest ?: return@LaunchedEffect
+        destination = ScreenDestination.Main
+        selectedTab = MainTab.entries.getOrElse(req.tab) { MainTab.LOGS }
+        if (req.date != null) {
+            logsViewModel.filterByDate(req.date)
+        }
+        if (req.recordId != null) {
+            logsViewModel.scrollToRecord(req.recordId)
+        }
+        onConsumeNavigationRequest()
+    }
 
     BackHandler(enabled = destination != ScreenDestination.Main) {
         destination = when (val d = destination) {

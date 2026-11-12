@@ -1,6 +1,8 @@
 package com.lloyd.attendance.feature.logs
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -50,6 +53,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -64,6 +68,7 @@ import com.lloyd.attendance.api.Models
 import com.lloyd.attendance.core.designsystem.components.AttendanceCardSkeleton
 import com.lloyd.attendance.core.designsystem.theme.AttendanceColors
 import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -73,7 +78,30 @@ fun AttendanceLogsScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val dateFilter by viewModel.dateFilter.collectAsState()
+    val selectedRecordId by viewModel.selectedRecordId.collectAsState()
+    val listState = rememberLazyListState()
     val isDark = isSystemInDarkTheme()
+
+    LaunchedEffect(selectedRecordId, uiState.groupedByDate) {
+        val targetId = selectedRecordId ?: return@LaunchedEffect
+        var idx = 2 // Item 0 = search/filter bar, Item 1 = summary card
+        var foundIndex = -1
+        for ((_, itemsForDay) in uiState.groupedByDate) {
+            idx += 1 // DaySectionHeader
+            for (item in itemsForDay) {
+                if (item.id.toString() == targetId) {
+                    foundIndex = idx
+                    break
+                }
+                idx += 1
+            }
+            if (foundIndex >= 0) break
+        }
+        if (foundIndex >= 0) {
+            listState.animateScrollToItem(foundIndex)
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -133,6 +161,7 @@ fun AttendanceLogsScreen(
             }
         } else {
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
@@ -248,6 +277,34 @@ fun AttendanceLogsScreen(
                                 )
                             )
                         }
+
+                        if (dateFilter != null) {
+                            val formattedDate = dateFilter!!.format(DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.US))
+                            FilterChip(
+                                selected = true,
+                                onClick = { viewModel.filterByDate(null) },
+                                label = { Text("Showing $formattedDate") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.CalendarToday,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                    )
+                                },
+                                trailingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Clear,
+                                        contentDescription = "Clear date filter",
+                                        modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                    )
+                                },
+                                shape = CircleShape,
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            )
+                        }
                     }
                 }
 
@@ -346,7 +403,14 @@ fun AttendanceLogsScreen(
                                 if (item.id > 0) "day_${dateStr}_log_${item.id}_$index" else "day_${dateStr}_${item.attendanceDate}_${item.classLecture}_$index"
                             }
                         ) { _, item ->
-                            PerTeacherAttendanceCard(item = item)
+                            val isHighlighted = selectedRecordId != null && item.id.toString() == selectedRecordId
+                            PerTeacherAttendanceCard(
+                                item = item,
+                                isHighlighted = isHighlighted,
+                                onClick = if (isHighlighted) {
+                                    { viewModel.scrollToRecord(null) }
+                                } else null
+                            )
                         }
                     }
                 }
@@ -470,7 +534,9 @@ private fun DaySectionHeader(
 
 @Composable
 private fun PerTeacherAttendanceCard(
-    item: Models.StudentAttendanceItem
+    item: Models.StudentAttendanceItem,
+    isHighlighted: Boolean = false,
+    onClick: (() -> Unit)? = null
 ) {
     val isDark = isSystemInDarkTheme()
     val isPresent = item.isPresent
@@ -486,8 +552,22 @@ private fun PerTeacherAttendanceCard(
     }
 
     OutlinedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+        shape = RoundedCornerShape(16.dp),
+        border = if (isHighlighted) {
+            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+        } else {
+            CardDefaults.outlinedCardBorder()
+        },
+        colors = if (isHighlighted) {
+            CardDefaults.outlinedCardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+            )
+        } else {
+            CardDefaults.outlinedCardColors()
+        }
     ) {
         Column(
             modifier = Modifier

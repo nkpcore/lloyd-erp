@@ -14,7 +14,8 @@ sealed class AttendanceMarkEvent {
         val facultyName: String,
         val lectureDetails: String,
         val isPresent: Boolean,
-        val attendanceDate: String
+        val attendanceDate: String,
+        val subjectId: Int? = null
     ) : AttendanceMarkEvent()
 }
 
@@ -143,7 +144,8 @@ object AttendanceChangeDetector {
                         facultyName = item.facultyDisplayName,
                         lectureDetails = lectureStr,
                         isPresent = isPresent,
-                        attendanceDate = item.attendanceDate ?: ""
+                        attendanceDate = item.attendanceDate ?: "",
+                        subjectId = item.subjectId
                     )
                 )
             }

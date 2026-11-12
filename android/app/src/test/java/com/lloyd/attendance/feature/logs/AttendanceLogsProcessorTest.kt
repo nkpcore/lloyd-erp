@@ -4,6 +4,7 @@ import com.lloyd.attendance.api.Models
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.LocalDate
 
 class AttendanceLogsProcessorTest {
 
@@ -133,5 +134,24 @@ class AttendanceLogsProcessorTest {
         assertEquals(1, os.presentCount)
         assertEquals(2, os.totalClasses)
         assertEquals(50.0, os.percentage.numericValue ?: 0.0, 0.01)
+    }
+
+    @Test
+    fun filterLogs_byDateFilter_matchesAttendanceDateAndCreatedAtFallback() {
+        val log1 = createLog(10, "OS", "Dr. A", "2026-11-12", "Present")
+        val log2 = createLog(11, "DBMS", "Dr. B", "", "Absent").apply {
+            createdAt = "2026-11-12T10:15:00Z"
+        }
+        val log3 = createLog(12, "CN", "Dr. C", "2026-11-11", "Present")
+
+        val result = AttendanceLogsProcessor.filterLogs(
+            logs = listOf(log1, log2, log3),
+            searchQuery = "",
+            statusFilter = LogStatusFilter.ALL,
+            dateFilter = LocalDate.of(2026, 11, 12)
+        )
+
+        assertEquals(2, result.size)
+        assertEquals(listOf(10L, 11L), result.map { it.id })
     }
 }
