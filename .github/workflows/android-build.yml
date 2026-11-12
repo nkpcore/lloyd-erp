@@ -24,6 +24,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  node-api-tests:
+    name: Node API Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Run Node API tests
+        run: |
+          cd ${{ github.workspace }}
+          npm ci
+          npm test
+
   release:
     name: Build & Release APK
     runs-on: ubuntu-latest
