@@ -75,6 +75,29 @@ data class SubjectAttendance(
 )
 
 /**
+ * Serializable subject summary used as a fallback ("last good subject model")
+ * when detailed ledger logs are unavailable.
+ */
+data class SubjectSummary(
+    val subjectName: String,
+    val present: Int,
+    val absent: Int,
+    val total: Int,
+    val subjectCode: String = "",
+    val teacherName: String? = null
+) {
+    fun toSubjectAttendance(): SubjectAttendance = SubjectAttendance(
+        subjectCode = subjectCode,
+        subjectName = subjectName,
+        presentCount = present,
+        totalClasses = total,
+        absentCount = absent,
+        teacherName = teacherName,
+        thresholds = AttendanceCalculator.calculateAllThresholds(present, total)
+    )
+}
+
+/**
  * Overall aggregate attendance statistics.
  */
 data class OverallAttendance(

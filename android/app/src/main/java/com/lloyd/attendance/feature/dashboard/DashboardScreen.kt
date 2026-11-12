@@ -2,6 +2,7 @@ package com.lloyd.attendance.feature.dashboard
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -40,6 +41,7 @@ import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -53,6 +55,7 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -456,6 +459,69 @@ fun DashboardScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text("Interactive Bunk Simulator")
+                            }
+                        }
+                    }
+                }
+
+                // Partial Data / Non-Offline Warning Banner below Hero Card
+                val bannerError = uiState.errorMessage
+                if (bannerError != null && !uiState.isOffline) {
+                    item {
+                        val isDark = isSystemInDarkTheme()
+                        val containerColor = if (isDark) {
+                            AttendanceColors.BorderlineContainerDark
+                        } else {
+                            AttendanceColors.BorderlineContainerLight
+                        }
+                        val contentColor = if (isDark) {
+                            AttendanceColors.OnBorderlineContainerDark
+                        } else {
+                            AttendanceColors.OnBorderlineContainerLight
+                        }
+                        val bannerPrefix = if (uiState.isPartial) "Partial data" else "Sync issue"
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(MaterialTheme.shapes.small)
+                                .background(containerColor)
+                                .padding(horizontal = 14.dp, vertical = 10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = contentColor,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "$bannerPrefix — $bannerError",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = contentColor
+                                    )
+                                }
+                                TextButton(
+                                    onClick = { viewModel.refresh() },
+                                    modifier = Modifier.padding(start = 4.dp)
+                                ) {
+                                    Text(
+                                        text = "Retry",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = contentColor
+                                    )
+                                }
                             }
                         }
                     }

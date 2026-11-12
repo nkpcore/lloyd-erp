@@ -5,6 +5,7 @@ import com.lloyd.attendance.core.domain.AttendanceCalculator
 import com.lloyd.attendance.core.domain.SubjectAttendance
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 data class AttendanceLogsSummary(
     val totalMarked: Int,
@@ -15,25 +16,43 @@ data class AttendanceLogsSummary(
 
 object AttendanceLogsProcessor {
 
-    private val DATE_FORMATTERS = listOf(
+    private val fallbackDateFormatters = listOf(
         DateTimeFormatter.ISO_LOCAL_DATE,
-        DateTimeFormatter.ofPattern("dd-MM-yyyy")
+        DateTimeFormatter.ofPattern("dd-MMM-yyyy", Locale.US),
+        DateTimeFormatter.ofPattern("dd-MM-yyyy", Locale.US),
+        DateTimeFormatter.ofPattern("yyyy/MM/dd", Locale.US)
     )
 
-    fun extractLocalDate(item: Models.StudentAttendanceItem): LocalDate? {
-        return parseDateString(item.attendanceDate) ?: parseDateString(item.createdAt)
+    /**
+     * Single normalized date string extractor: tries [Models.StudentAttendanceItem.attendanceDate]
+     * first and falls back to [Models.StudentAttendanceItem.createdAt], stripping any time component.
+     */
+    fun extractDateString(item: Models.StudentAttendanceItem): String? {
+        val raw = item.attendanceDate?.trim().takeUnless { it.isNullOrEmpty() }
+            ?: item.createdAt?.trim().takeUnless { it.isNullOrEmpty() }
+            ?: return null
+        return raw.substringBefore("T").substringBefore(" ").trim().takeIf { it.isNotEmpty() }
     }
 
     fun parseDateString(raw: String?): LocalDate? {
         val trimmed = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-        val candidate = if (trimmed.contains("T")) trimmed.substringBefore("T") else trimmed.take(10)
-        for (formatter in DATE_FORMATTERS) {
+        val candidate = trimmed.substringBefore("T").substringBefore(" ").trim().takeIf { it.isNotEmpty() }
+            ?: return null
+        for (formatter in fallbackDateFormatters) {
             try {
                 return LocalDate.parse(candidate, formatter)
             } catch (_: Exception) {
             }
         }
         return null
+    }
+
+    /**
+     * Single normalized [LocalDate] extractor: tries [Models.StudentAttendanceItem.attendanceDate]
+     * first and falls back to [Models.StudentAttendanceItem.createdAt].
+     */
+    fun extractLocalDate(item: Models.StudentAttendanceItem): LocalDate? {
+        return parseDateString(item.attendanceDate) ?: parseDateString(item.createdAt)
     }
 
     @JvmOverloads
@@ -53,18 +72,18 @@ object AttendanceLogsProcessor {
                 LogStatusFilter.ABSENT -> !item.isPresent
             }
 
+            val matchesDate = dateFilter == null || extractLocalDate(item) == dateFilter
+
             val subject = (item.subjectName ?: "").lowercase()
             val faculty = (item.createdByName ?: "").lowercase()
-            val date = (item.attendanceDate ?: "").lowercase()
+            val date = (extractDateString(item) ?: "").lowercase()
 
             val matchesQuery = query.isEmpty() ||
                     subject.contains(query) ||
                     faculty.contains(query) ||
                     date.contains(query)
 
-            val matchesDate = dateFilter == null || extractLocalDate(item) == dateFilter
-
-            matchesFilter && matchesQuery && matchesDate
+            matchesFilter && matchesDate && matchesQuery
         }
     }
 
@@ -72,10 +91,7 @@ object AttendanceLogsProcessor {
         val nonNull = logs.filterNotNull()
         val grouped = LinkedHashMap<String, MutableList<Models.StudentAttendanceItem>>()
         for (item in nonNull) {
-            val raw = item.attendanceDate?.trim().takeUnless { it.isNullOrEmpty() }
-                ?: item.createdAt?.trim().takeUnless { it.isNullOrEmpty() }
-                ?: "Unknown Date"
-            val dateKey = if (raw.contains("T")) raw.substringBefore("T") else raw
+            val dateKey = extractDateString(item) ?: "Unknown Date"
             grouped.getOrPut(dateKey) { mutableListOf() }.add(item)
         }
         return grouped

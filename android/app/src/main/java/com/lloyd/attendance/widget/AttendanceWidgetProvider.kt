@@ -9,6 +9,7 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
+import android.view.View
 import android.widget.RemoteViews
 import com.lloyd.attendance.R
 import com.lloyd.attendance.api.Models
@@ -24,6 +25,34 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+
+enum class WidgetAttendanceStatus {
+    SAFE,
+    SHORTAGE,
+    NO_RECORDS,
+    UNKNOWN
+}
+
+enum class WidgetSyncStatus {
+    REFRESHING,
+    OFFLINE,
+    OK
+}
+
+data class WidgetUiModel(
+    val attendanceStatus: WidgetAttendanceStatus,
+    val syncStatus: WidgetSyncStatus,
+    val studentName: String,
+    val percentageText: String,
+    val percentageColorHex: String,
+    val badgeText: String,
+    val badgeColorHex: String,
+    val syncIndicatorText: String?,
+    val updatedText: String,
+    val classesText: String,
+    val bunkText: String,
+    val isAlertIcon: Boolean
+)
 
 class AttendanceWidgetProvider : AppWidgetProvider() {
 
@@ -95,8 +124,9 @@ class AttendanceWidgetProvider : AppWidgetProvider() {
                 }
 
                 val freshStats = prefs.getCachedStats()
+                val syncFailureStatus = if (snapshot?.error != null) "Offline: Sync failed" else null
                 Handler(Looper.getMainLooper()).post {
-                    updateAllWidgets(appContext, freshStats, isRefreshing = false, customStatus = null)
+                    updateAllWidgets(appContext, freshStats, isRefreshing = false, customStatus = syncFailureStatus)
                 }
             } catch (e: Exception) {
                 // If network failed, fall back to cached data
@@ -133,6 +163,125 @@ class AttendanceWidgetProvider : AppWidgetProvider() {
             }
         }
 
+        fun resolveWidgetUiModel(
+            stats: Models.CalculatedStats?,
+            isRefreshing: Boolean,
+            customStatus: String? = null
+        ): WidgetUiModel {
+            val attendanceStatus = when {
+                stats == null -> WidgetAttendanceStatus.UNKNOWN
+                stats.totalClasses == 0 -> WidgetAttendanceStatus.NO_RECORDS
+                stats.overallPercentage >= 75.0 -> WidgetAttendanceStatus.SAFE
+                else -> WidgetAttendanceStatus.SHORTAGE
+            }
+
+            val syncStatus = when {
+                isRefreshing -> WidgetSyncStatus.REFRESHING
+                !customStatus.isNullOrBlank() -> WidgetSyncStatus.OFFLINE
+                else -> WidgetSyncStatus.OK
+            }
+
+            val updatedText = when {
+                syncStatus == WidgetSyncStatus.REFRESHING -> "Syncing..."
+                stats != null && stats.lastUpdatedMillis > 0 -> {
+                    val sdf = SimpleDateFormat("hh:mm a", Locale.getDefault())
+                    sdf.format(Date(stats.lastUpdatedMillis))
+                }
+                else -> "Live"
+            }
+
+            val syncIndicatorText = when {
+                stats == null -> null
+                syncStatus == WidgetSyncStatus.REFRESHING -> "↻ Syncing"
+                syncStatus == WidgetSyncStatus.OFFLINE -> "⚠ Cached"
+                else -> null
+            }
+
+            if (stats != null) {
+                val displayName = stats.studentName?.takeIf { it.isNotEmpty() }?.uppercase() ?: "LLOYD ERP"
+                val classesText = "${stats.totalPresent} / ${stats.totalClasses} classes attended"
+
+                return when (attendanceStatus) {
+                    WidgetAttendanceStatus.NO_RECORDS -> WidgetUiModel(
+                        attendanceStatus = attendanceStatus,
+                        syncStatus = syncStatus,
+                        studentName = displayName,
+                        percentageText = "--.--%",
+                        percentageColorHex = "#C4C7C5",
+                        badgeText = "NO RECORDS",
+                        badgeColorHex = "#C4C7C5",
+                        syncIndicatorText = syncIndicatorText,
+                        updatedText = updatedText,
+                        classesText = classesText,
+                        bunkText = "No classes recorded yet",
+                        isAlertIcon = false
+                    )
+                    WidgetAttendanceStatus.SAFE -> {
+                        val bunkMsg = if (stats.bunkAllowance > 0) {
+                            val plural = if (stats.bunkAllowance > 1) "es" else ""
+                            "Can safely bunk ${stats.bunkAllowance} next class$plural"
+                        } else {
+                            "Safe for now! Don't miss next class."
+                        }
+                        WidgetUiModel(
+                            attendanceStatus = attendanceStatus,
+                            syncStatus = syncStatus,
+                            studentName = displayName,
+                            percentageText = String.format(Locale.US, "%.1f%%", stats.overallPercentage),
+                            percentageColorHex = "#6DD58C",
+                            badgeText = "SAFE (>= 75%)",
+                            badgeColorHex = "#6DD58C",
+                            syncIndicatorText = syncIndicatorText,
+                            updatedText = updatedText,
+                            classesText = classesText,
+                            bunkText = bunkMsg,
+                            isAlertIcon = false
+                        )
+                    }
+                    else -> {
+                        val plural = if (stats.neededToReach75 > 1) "es" else ""
+                        WidgetUiModel(
+                            attendanceStatus = attendanceStatus,
+                            syncStatus = syncStatus,
+                            studentName = displayName,
+                            percentageText = String.format(Locale.US, "%.1f%%", stats.overallPercentage),
+                            percentageColorHex = "#F2B8B5",
+                            badgeText = "SHORTAGE (< 75%)",
+                            badgeColorHex = "#F2B8B5",
+                            syncIndicatorText = syncIndicatorText,
+                            updatedText = updatedText,
+                            classesText = classesText,
+                            bunkText = "Attend next ${stats.neededToReach75} class$plural to reach 75%",
+                            isAlertIcon = true
+                        )
+                    }
+                }
+            } else {
+                // Only show customStatus when no stats exist at all
+                val custom = customStatus?.takeIf { it.isNotBlank() }
+                val badgeText = when {
+                    isRefreshing -> "REFRESHING"
+                    custom != null -> custom.uppercase()
+                    else -> "NOT LOGGED IN"
+                }
+                val badgeColorHex = if (isRefreshing) "#F6BD60" else "#F2B8B5"
+                return WidgetUiModel(
+                    attendanceStatus = attendanceStatus,
+                    syncStatus = syncStatus,
+                    studentName = "LLOYD ERP",
+                    percentageText = "--%",
+                    percentageColorHex = "#C4C7C5",
+                    badgeText = badgeText,
+                    badgeColorHex = badgeColorHex,
+                    syncIndicatorText = null,
+                    updatedText = updatedText,
+                    classesText = custom ?: "Tap here to log in",
+                    bunkText = if (isRefreshing) "Syncing attendance..." else "Sign in to track attendance",
+                    isAlertIcon = false
+                )
+            }
+        }
+
         private fun updateWidgetUI(
             context: Context,
             appWidgetManager: AppWidgetManager,
@@ -162,83 +311,26 @@ class AttendanceWidgetProvider : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.btn_widget_refresh, pendingRefresh)
 
-            when {
-                isRefreshing -> {
-                    views.setTextViewText(R.id.tv_widget_updated, "Syncing...")
-                    views.setTextViewText(R.id.tv_widget_badge, "REFRESHING")
-                }
-                stats != null && stats.lastUpdatedMillis > 0 -> {
-                    val sdf = SimpleDateFormat("hh:mm a", Locale.getDefault())
-                    views.setTextViewText(R.id.tv_widget_updated, sdf.format(Date(stats.lastUpdatedMillis)))
-                }
-                else -> {
-                    views.setTextViewText(R.id.tv_widget_updated, "Live")
-                }
-            }
+            val uiModel = resolveWidgetUiModel(stats, isRefreshing, customStatus)
 
-            if (stats != null) {
-                val displayName = stats.studentName?.takeIf { it.isNotEmpty() }?.uppercase() ?: "LLOYD ERP"
-                views.setTextViewText(R.id.tv_widget_student_name, displayName)
-                views.setTextViewText(
-                    R.id.tv_widget_classes,
-                    "${stats.totalPresent} / ${stats.totalClasses} classes attended"
-                )
+            views.setTextViewText(R.id.tv_widget_updated, uiModel.updatedText)
+            views.setTextViewText(R.id.tv_widget_student_name, uiModel.studentName)
+            views.setTextViewText(R.id.tv_widget_percentage, uiModel.percentageText)
+            views.setTextColor(R.id.tv_widget_percentage, Color.parseColor(uiModel.percentageColorHex))
+            views.setTextViewText(R.id.tv_widget_badge, uiModel.badgeText)
+            views.setTextColor(R.id.tv_widget_badge, Color.parseColor(uiModel.badgeColorHex))
+            views.setTextViewText(R.id.tv_widget_classes, uiModel.classesText)
+            views.setTextViewText(R.id.tv_widget_bunk, uiModel.bunkText)
+            views.setImageViewResource(
+                R.id.iv_widget_bunk_icon,
+                if (uiModel.isAlertIcon) R.drawable.ic_alert else R.drawable.ic_check
+            )
 
-                when {
-                    stats.totalClasses == 0 -> {
-                        views.setTextViewText(R.id.tv_widget_percentage, "--.--%")
-                        views.setTextColor(R.id.tv_widget_percentage, Color.parseColor("#C4C7C5"))
-                        views.setTextViewText(R.id.tv_widget_badge, "NO RECORDS")
-                        views.setTextColor(R.id.tv_widget_badge, Color.parseColor("#C4C7C5"))
-                        views.setTextViewText(R.id.tv_widget_bunk, "No classes recorded yet")
-                        views.setImageViewResource(R.id.iv_widget_bunk_icon, R.drawable.ic_check)
-                    }
-                    stats.overallPercentage >= 75.0 -> {
-                        views.setTextViewText(
-                            R.id.tv_widget_percentage,
-                            String.format(Locale.US, "%.1f%%", stats.overallPercentage)
-                        )
-                        views.setTextColor(R.id.tv_widget_percentage, Color.parseColor("#6DD58C")) // M3 Safe Green
-                        views.setTextViewText(R.id.tv_widget_badge, "SAFE (>= 75%)")
-                        views.setTextColor(R.id.tv_widget_badge, Color.parseColor("#6DD58C"))
-                        views.setImageViewResource(R.id.iv_widget_bunk_icon, R.drawable.ic_check)
-
-                        val bunkMsg = if (stats.bunkAllowance > 0) {
-                            val plural = if (stats.bunkAllowance > 1) "es" else ""
-                            "Can safely bunk ${stats.bunkAllowance} next class$plural"
-                        } else {
-                            "Safe for now! Don't miss next class."
-                        }
-                        views.setTextViewText(R.id.tv_widget_bunk, bunkMsg)
-                    }
-                    else -> {
-                        views.setTextViewText(
-                            R.id.tv_widget_percentage,
-                            String.format(Locale.US, "%.1f%%", stats.overallPercentage)
-                        )
-                        views.setTextColor(R.id.tv_widget_percentage, Color.parseColor("#F2B8B5")) // M3 Danger Red
-                        views.setTextViewText(R.id.tv_widget_badge, "SHORTAGE (< 75%)")
-                        views.setTextColor(R.id.tv_widget_badge, Color.parseColor("#F2B8B5"))
-                        views.setImageViewResource(R.id.iv_widget_bunk_icon, R.drawable.ic_alert)
-
-                        val plural = if (stats.neededToReach75 > 1) "es" else ""
-                        views.setTextViewText(
-                            R.id.tv_widget_bunk,
-                            "Attend next ${stats.neededToReach75} class$plural to reach 75%"
-                        )
-                    }
-                }
+            if (!uiModel.syncIndicatorText.isNullOrBlank()) {
+                views.setTextViewText(R.id.tv_widget_sync_status, uiModel.syncIndicatorText)
+                views.setViewVisibility(R.id.tv_widget_sync_status, View.VISIBLE)
             } else {
-                views.setTextViewText(R.id.tv_widget_student_name, "LLOYD ERP")
-                views.setTextViewText(R.id.tv_widget_percentage, "--%")
-                views.setTextColor(R.id.tv_widget_percentage, Color.parseColor("#C4C7C5"))
-                views.setTextViewText(R.id.tv_widget_badge, "NOT LOGGED IN")
-                views.setTextColor(R.id.tv_widget_badge, Color.parseColor("#F2B8B5"))
-                views.setTextViewText(
-                    R.id.tv_widget_classes,
-                    customStatus?.takeIf { it.isNotEmpty() } ?: "Tap here to log in"
-                )
-                views.setTextViewText(R.id.tv_widget_bunk, "Sign in to track attendance")
+                views.setViewVisibility(R.id.tv_widget_sync_status, View.GONE)
             }
 
             appWidgetManager.updateAppWidget(widgetId, views)

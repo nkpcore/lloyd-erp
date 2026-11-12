@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Update
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,6 +47,7 @@ private data class ServiceItem(
     val subtitle: String,
     val icon: ImageVector,
     val accentColor: Color,
+    val badge: String? = null,
     val onClick: () -> Unit
 )
 
@@ -58,6 +60,7 @@ fun ServicesHubScreen(
     onNavigateToFeeReceipts: () -> Unit,
     onNavigateToSimulation: () -> Unit,
     onNavigateToFeedback: () -> Unit,
+    onNavigateToCampusConnect: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val honeyBronze = Color(0xFFF6BD60)
@@ -66,16 +69,17 @@ fun ServicesHubScreen(
 
     val sections = listOf(
         "Academic" to listOf(
-            ServiceItem("Syllabus", "AKTU syllabus browser", Icons.AutoMirrored.Filled.MenuBook, honeyBronze, onNavigateToSyllabus),
-            ServiceItem("Calendar", "Attendance calendar", Icons.Default.DateRange, honeyBronze, onNavigateToCalendar),
-            ServiceItem("Latest Updates", "This week's attendance", Icons.Default.Update, honeyBronze, onNavigateToLatestAttendance)
+            ServiceItem("Syllabus", "AKTU syllabus browser", Icons.AutoMirrored.Filled.MenuBook, honeyBronze, onClick = onNavigateToSyllabus),
+            ServiceItem("Calendar", "Attendance calendar", Icons.Default.DateRange, honeyBronze, onClick = onNavigateToCalendar),
+            ServiceItem("Latest Updates", "This week's attendance", Icons.Default.Update, honeyBronze, onClick = onNavigateToLatestAttendance)
         ),
         "Finance" to listOf(
-            ServiceItem("Fee Receipts", "View & print receipts", Icons.Default.Receipt, mutedTeal, onNavigateToFeeReceipts)
+            ServiceItem("Fee Receipts", "View & print receipts", Icons.Default.Receipt, mutedTeal, onClick = onNavigateToFeeReceipts)
         ),
         "Tools" to listOf(
-            ServiceItem("Bunk Planner", "Simulate your attendance", Icons.Default.Calculate, lightCoral, onNavigateToSimulation),
-            ServiceItem("Feedback", "Report an issue", Icons.Default.Feedback, lightCoral, onNavigateToFeedback)
+            ServiceItem("Bunk Planner", "Simulate your attendance", Icons.Default.Calculate, lightCoral, onClick = onNavigateToSimulation),
+            ServiceItem("Campus Connect", "Campus Wi-Fi auto-login", Icons.Default.Wifi, mutedTeal, badge = "Beta", onClick = onNavigateToCampusConnect),
+            ServiceItem("Feedback", "Report an issue", Icons.Default.Feedback, lightCoral, onClick = onNavigateToFeedback)
         )
     )
 
@@ -137,21 +141,41 @@ fun ServicesHubScreen(
                                         verticalArrangement = Arrangement.Center,
                                         horizontalAlignment = Alignment.Start
                                     ) {
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = service.accentColor.copy(alpha = 0.18f),
-                                            modifier = Modifier.size(52.dp)
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.Top
                                         ) {
-                                            Box(
-                                                contentAlignment = Alignment.Center,
-                                                modifier = Modifier.fillMaxSize()
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = service.accentColor.copy(alpha = 0.18f),
+                                                modifier = Modifier.size(52.dp)
                                             ) {
-                                                Icon(
-                                                    imageVector = service.icon,
-                                                    contentDescription = null,
-                                                    tint = service.accentColor,
-                                                    modifier = Modifier.size(28.dp)
-                                                )
+                                                Box(
+                                                    contentAlignment = Alignment.Center,
+                                                    modifier = Modifier.fillMaxSize()
+                                                ) {
+                                                    Icon(
+                                                        imageVector = service.icon,
+                                                        contentDescription = null,
+                                                        tint = service.accentColor,
+                                                        modifier = Modifier.size(28.dp)
+                                                    )
+                                                }
+                                            }
+                                            if (!service.badge.isNullOrBlank()) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    color = MaterialTheme.colorScheme.secondaryContainer
+                                                ) {
+                                                    Text(
+                                                        text = service.badge,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                    )
+                                                }
                                             }
                                         }
                                         Spacer(modifier = Modifier.height(12.dp))

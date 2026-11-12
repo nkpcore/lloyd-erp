@@ -11,6 +11,7 @@ import com.lloyd.attendance.data.AppPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class DashboardUiState(
@@ -31,6 +32,7 @@ data class DashboardUiState(
     val errorMessage: String? = null
 ) {
     val isOffline: Boolean get() = sourceState == DataSourceState.OFFLINE || sourceState == DataSourceState.STALE
+    val isPartial: Boolean get() = sourceState == DataSourceState.PARTIAL
 }
 
 class DashboardViewModel(application: Application) : AndroidViewModel(application) {
@@ -42,21 +44,31 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
 
     init {
+        _uiState.update { it.copy(isLoading = true) }
+
         // Collect repository snapshot continuously
         viewModelScope.launch {
             repository.snapshot.collect { snap ->
                 val user = prefs.userProfile
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    sourceState = snap.sourceState,
-                    studentName = snap.overall.studentName.ifBlank { user?.name.orEmpty() },
-                    studentId = snap.overall.studentId,
-                    section = prefs.selectedSection.ifBlank { user?.section.orEmpty() },
-                    overall = snap.overall,
-                    reconciliation = snap.reconciliation,
-                    lastSyncMillis = snap.lastUpdatedMillis,
-                    errorMessage = snap.error?.let { "Unable to refresh latest attendance" }
-                )
+                val derivedError = when {
+                    snap.sourceState == DataSourceState.PARTIAL ->
+                        "Attendance summary updated; class history could not refresh"
+                    snap.error != null -> "Unable to refresh latest attendance"
+                    else -> null
+                }
+                _uiState.update { current ->
+                    current.copy(
+                        isLoading = false,
+                        sourceState = snap.sourceState,
+                        studentName = snap.overall.studentName.ifBlank { user?.name.orEmpty() },
+                        studentId = snap.overall.studentId,
+                        section = prefs.selectedSection.ifBlank { user?.section.orEmpty() },
+                        overall = snap.overall,
+                        reconciliation = snap.reconciliation,
+                        lastSyncMillis = snap.lastUpdatedMillis,
+                        errorMessage = derivedError
+                    )
+                }
             }
         }
 
@@ -65,14 +77,14 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun setBroadcastNotice(notice: String?) {
-        _uiState.value = _uiState.value.copy(broadcastNotice = notice)
+        _uiState.update { it.copy(broadcastNotice = notice) }
     }
 
     fun refresh() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isRefreshing = true)
+            _uiState.update { it.copy(isRefreshing = true) }
             repository.refresh(isForeground = true)
-            _uiState.value = _uiState.value.copy(isRefreshing = false)
+            _uiState.update { it.copy(isRefreshing = false) }
         }
     }
 

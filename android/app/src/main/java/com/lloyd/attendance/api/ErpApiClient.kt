@@ -339,8 +339,8 @@ class ErpApiClient(context: Context) {
             page++
         } while (page <= totalPages)
 
+        prefs.saveAttendanceLogs(gson.toJson(allItems))
         if (allItems.isNotEmpty()) {
-            prefs.saveAttendanceLogs(gson.toJson(allItems))
             val sample = allItems[0]
             val sem = sample.semesterId?.takeIf { it > 0 }?.let { "Semester $it" }
             prefs.updateOrEnrichUserProfile(

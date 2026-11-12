@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lloyd.attendance.api.Models
 import com.lloyd.attendance.core.data.AttendanceRepository
+import com.lloyd.attendance.feature.logs.AttendanceLogsProcessor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -69,10 +70,8 @@ class AttendanceCalendarViewModel @JvmOverloads constructor(
     }
 
     private fun findLogsForDate(date: LocalDate): List<Models.StudentAttendanceItem> {
-        val targetDateStr = date.toString() // YYYY-MM-DD
         return rawRecords.filter { item ->
-            val d = item.attendanceDate?.trim() ?: ""
-            d.startsWith(targetDateStr)
+            AttendanceLogsProcessor.extractLocalDate(item) == date
         }
     }
 
@@ -85,12 +84,12 @@ class AttendanceCalendarViewModel @JvmOverloads constructor(
         // Day of week for 1st day (1=Mon, 7=Sun)
         val startDayOfWeek = firstDayOfMonth.dayOfWeek.value // 1 to 7
 
-        // Map records by date string
-        val recordsByDate = mutableMapOf<String, MutableList<Models.StudentAttendanceItem>>()
+        // Map records by normalized LocalDate (tries attendanceDate first, falls back to createdAt)
+        val recordsByDate = mutableMapOf<LocalDate, MutableList<Models.StudentAttendanceItem>>()
         rawRecords.forEach { item ->
-            val dateStr = item.attendanceDate?.trim()?.take(10)
-            if (!dateStr.isNullOrEmpty()) {
-                recordsByDate.getOrPut(dateStr) { mutableListOf() }.add(item)
+            val extractedDate = AttendanceLogsProcessor.extractLocalDate(item)
+            if (extractedDate != null) {
+                recordsByDate.getOrPut(extractedDate) { mutableListOf() }.add(item)
             }
         }
 
@@ -120,8 +119,7 @@ class AttendanceCalendarViewModel @JvmOverloads constructor(
         // Current month days
         for (day in 1..daysInMonth) {
             val d = ym.atDay(day)
-            val dStr = d.toString()
-            val dayLogs = recordsByDate[dStr] ?: emptyList()
+            val dayLogs = recordsByDate[d] ?: emptyList()
 
             val status: DayAttendanceStatus
             val presentCount: Int

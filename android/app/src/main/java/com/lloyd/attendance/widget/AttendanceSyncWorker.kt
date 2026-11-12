@@ -85,7 +85,8 @@ class AttendanceSyncWorker(
             } catch (_: Exception) {}
 
             // 3. Update all widgets on home screen
-            AttendanceWidgetProvider.updateAllWidgets(context, freshStats, false, null)
+            val syncFailureStatus = if (snapshot.error != null) "Offline: Sync failed" else null
+            AttendanceWidgetProvider.updateAllWidgets(context, freshStats, false, syncFailureStatus)
 
             // 4. Check if faculty has marked any new attendance records using reconciled logs
             val syncSucceeded = snapshot.error == null && snapshot.sourceState == DataSourceState.FRESH

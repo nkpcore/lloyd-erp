@@ -149,6 +149,16 @@ class AppPreferences private constructor(context: Context) : NotificationStateSt
     fun saveAttendanceLogsJson(json: String) = saveAttendanceLogs(json)
     fun getAttendanceLogsJson(): String? = getAttendanceLogs()
 
+    fun saveLastSuccessfulLogSync(timestampMillis: Long) {
+        prefs.edit().putLong(KEY_LAST_SUCCESSFUL_LOG_SYNC, timestampMillis).apply()
+    }
+    fun getLastSuccessfulLogSync(): Long = prefs.getLong(KEY_LAST_SUCCESSFUL_LOG_SYNC, 0L)
+
+    fun saveLastGoodSubjectModel(json: String) {
+        prefs.edit().putString(KEY_LAST_GOOD_SUBJECT_MODEL, json).apply()
+    }
+    fun getLastGoodSubjectModel(): String? = prefs.getString(KEY_LAST_GOOD_SUBJECT_MODEL, null)
+
     // ── Section ──────────────────────────────────────────────────────────────
 
     fun saveSelectedSection(section: String) {
@@ -413,6 +423,8 @@ class AppPreferences private constructor(context: Context) : NotificationStateSt
         private const val KEY_MONTHLY_JSON = "monthly_json"
         private const val KEY_WEEKLY_JSON = "weekly_json"
         private const val KEY_ATTENDANCE_LOGS_JSON = "attendance_logs_json"
+        private const val KEY_LAST_SUCCESSFUL_LOG_SYNC = "last_successful_log_sync"
+        private const val KEY_LAST_GOOD_SUBJECT_MODEL = "last_good_subject_model"
         private const val KEY_STUDENT_ID = "student_id"
         private const val KEY_LAST_SEEN_ATTENDANCE_ID = "last_seen_attendance_id"
         private const val KEY_SEEN_ATTENDANCE_IDS = "seen_attendance_ids_set"

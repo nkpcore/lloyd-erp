@@ -30,6 +30,7 @@ data class AttendanceLogsUiState(
     val groupedByDate: Map<String, List<Models.StudentAttendanceItem>> = emptyMap(),
     val searchQuery: String = "",
     val statusFilter: LogStatusFilter = LogStatusFilter.ALL,
+    val selectedDate: LocalDate? = null,
     val totalMarked: Int = 0,
     val totalPresent: Int = 0,
     val totalAbsent: Int = 0,
@@ -41,11 +42,10 @@ class AttendanceLogsViewModel @JvmOverloads constructor(
     private val repository: AttendanceRepository = AttendanceRepository.getInstance(application)
 ) : AndroidViewModel(application) {
 
+    val dateFilter = MutableStateFlow<LocalDate?>(null)
+
     private val _uiState = MutableStateFlow(AttendanceLogsUiState())
     val uiState: StateFlow<AttendanceLogsUiState> = _uiState.asStateFlow()
-
-    private val _dateFilter = MutableStateFlow<LocalDate?>(null)
-    val dateFilter: StateFlow<LocalDate?> = _dateFilter.asStateFlow()
 
     private val _selectedRecordId = MutableStateFlow<String?>(null)
     val selectedRecordId: StateFlow<String?> = _selectedRecordId.asStateFlow()
@@ -80,8 +80,10 @@ class AttendanceLogsViewModel @JvmOverloads constructor(
     }
 
     fun filterByDate(date: LocalDate?) {
-        _dateFilter.value = date
-        _uiState.value = recomputeFilteredState(_uiState.value)
+        dateFilter.value = date
+        val current = _uiState.value
+        val updated = current.copy(selectedDate = date)
+        _uiState.value = recomputeFilteredState(updated)
     }
 
     fun scrollToRecord(id: String?) {
@@ -111,15 +113,17 @@ class AttendanceLogsViewModel @JvmOverloads constructor(
     }
 
     private fun recomputeFilteredState(state: AttendanceLogsUiState): AttendanceLogsUiState {
+        val activeDate = state.selectedDate ?: dateFilter.value
         val filtered = AttendanceLogsProcessor.filterLogs(
             logs = state.allLogs,
             searchQuery = state.searchQuery,
             statusFilter = state.statusFilter,
-            dateFilter = _dateFilter.value
+            dateFilter = activeDate
         )
         val grouped = AttendanceLogsProcessor.groupByDate(filtered)
 
         return state.copy(
+            selectedDate = activeDate,
             filteredLogs = filtered,
             groupedByDate = grouped
         )

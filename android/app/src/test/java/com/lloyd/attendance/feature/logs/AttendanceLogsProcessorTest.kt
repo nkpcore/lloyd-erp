@@ -2,6 +2,7 @@ package com.lloyd.attendance.feature.logs
 
 import com.lloyd.attendance.api.Models
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
@@ -153,5 +154,43 @@ class AttendanceLogsProcessorTest {
 
         assertEquals(2, result.size)
         assertEquals(listOf(10L, 11L), result.map { it.id })
+    }
+
+    @Test
+    fun extractLocalDate_prefersAttendanceDateAndFallsBackToCreatedAt() {
+        val withAttendanceDate = Models.StudentAttendanceItem().apply {
+            attendanceDate = "2026-10-05"
+            createdAt = "2026-10-06 09:00:00"
+        }
+        assertEquals(LocalDate.of(2026, 10, 5), AttendanceLogsProcessor.extractLocalDate(withAttendanceDate))
+
+        val fallbackCreatedAt = Models.StudentAttendanceItem().apply {
+            attendanceDate = null
+            createdAt = "2026-10-06T11:30:00Z"
+        }
+        assertEquals(LocalDate.of(2026, 10, 6), AttendanceLogsProcessor.extractLocalDate(fallbackCreatedAt))
+
+        val missingDates = Models.StudentAttendanceItem()
+        assertNull(AttendanceLogsProcessor.extractLocalDate(missingDates))
+    }
+
+    @Test
+    fun filterLogs_withDateFilter_matchesNormalizedDatesAcrossFormats() {
+        val logWithCreatedAtOnly = Models.StudentAttendanceItem().apply {
+            id = 99
+            subjectName = "Networks"
+            createdAt = "2026-10-05 14:00:00"
+            status = "Present"
+        }
+        val combined = sampleLogs + logWithCreatedAtOnly
+
+        val result = AttendanceLogsProcessor.filterLogs(
+            logs = combined,
+            searchQuery = "",
+            statusFilter = LogStatusFilter.ALL,
+            dateFilter = LocalDate.of(2026, 10, 5)
+        )
+        // sampleLogs has two "05-Oct-2026" records + 1 fallback createdAt record
+        assertEquals(3, result.size)
     }
 }

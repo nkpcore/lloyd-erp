@@ -112,9 +112,12 @@ import com.lloyd.attendance.feature.feedback.FeedbackViewModel
 import com.lloyd.attendance.feature.receipts.FeeReceiptsScreen
 import com.lloyd.attendance.feature.receipts.FeeReceiptsViewModel
 import com.lloyd.attendance.feature.services.ServicesHubScreen
+import com.lloyd.attendance.campus.ui.CampusConnectScreen
 import com.lloyd.attendance.widget.AttendanceSyncWorker
 import com.lloyd.attendance.widget.AttendanceWidgetProvider
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.lloyd.attendance.core.telemetry.TelemetryManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -124,6 +127,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.widget.Toast
 import com.lloyd.attendance.widget.NotificationHelper
+import java.time.LocalDate
 
 enum class MainTab(
     val title: String,
@@ -151,6 +155,7 @@ class MainComposeActivity : FragmentActivity() {
 
     private var isScreenOff = false
     private var isAuthenticating = false
+    private var snapshotObserverStarted = false
     private var isAppLocked by mutableStateOf(false)
     private var accessDecision by mutableStateOf<AccessDecision?>(null)
     private var pendingUpdateInfo by mutableStateOf<OtaReleaseInfo?>(null)
@@ -166,7 +171,7 @@ class MainComposeActivity : FragmentActivity() {
         _navigationRequest.value = req
     }
 
-    private fun performAccessCheck() {
+    private fun verifyAccessOnce() {
         lifecycleScope.launch(Dispatchers.IO) {
             val studentId = prefs.getStudentId()
             val deviceId = TelemetryManager.getOrCreateDeviceId(applicationContext)
@@ -193,20 +198,29 @@ class MainComposeActivity : FragmentActivity() {
                 )
             } catch (ignored: Exception) {
             }
+        }
+    }
 
-            // Also observe attendance snapshot to ensure real student name is reported once loaded
-            val repository = com.lloyd.attendance.core.data.AttendanceRepository.getInstance(applicationContext)
-            repository.snapshot.collect { snapshot ->
-                val resolvedName = snapshot.overall.studentName
-                if (resolvedName.isNotBlank() && resolvedName != prefs.userProfile?.name) {
-                    try {
-                        TelemetryManager.sendTelemetry(
-                            context = applicationContext,
-                            endpointUrl = prefs.telemetryEndpoint,
-                            studentId = snapshot.overall.studentId,
-                            studentName = resolvedName
-                        )
-                    } catch (ignored: Exception) {
+    private fun startSnapshotObserver() {
+        if (snapshotObserverStarted) return
+        snapshotObserverStarted = true
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                val repository = com.lloyd.attendance.core.data.AttendanceRepository.getInstance(applicationContext)
+                repository.snapshot.collect { snapshot ->
+                    val resolvedName = snapshot.overall.studentName
+                    if (resolvedName.isNotBlank() && resolvedName != prefs.userProfile?.name) {
+                        withContext(Dispatchers.IO) {
+                            try {
+                                TelemetryManager.sendTelemetry(
+                                    context = applicationContext,
+                                    endpointUrl = prefs.telemetryEndpoint,
+                                    studentId = snapshot.overall.studentId,
+                                    studentName = resolvedName
+                                )
+                            } catch (ignored: Exception) {
+                            }
+                        }
                     }
                 }
             }
@@ -299,7 +313,8 @@ class MainComposeActivity : FragmentActivity() {
         } catch (ignored: Exception) {
         }
 
-        performAccessCheck()
+        verifyAccessOnce()
+        startSnapshotObserver()
         checkForAppUpdate()
 
         handleDeepLinkIntent(intent)
@@ -335,7 +350,7 @@ class MainComposeActivity : FragmentActivity() {
                         decision = decision,
                         deviceId = deviceId,
                         onRetry = {
-                            performAccessCheck()
+                            verifyAccessOnce()
                         },
                         onUpdate = { url ->
                             OtaUpdateManager.downloadAndInstallApk(
@@ -475,7 +490,10 @@ class MainComposeActivity : FragmentActivity() {
     override fun onResume() {
         super.onResume()
         syncNotificationPermissionState()
-        performAccessCheck()
+        if (!prefs.isLoggedIn || prefs.isAuthExpired) {
+            handleAutoLogout("Session expired. Please sign in again.")
+            return
+        }
         pendingInstallApk?.let { apkFile ->
             if (OtaUpdateManager.canInstallApk(this) && apkFile.exists()) {
                 pendingInstallApk = null
@@ -557,6 +575,7 @@ sealed interface ScreenDestination {
     ) : ScreenDestination
     data object Feedback : ScreenDestination
     data object FeeReceipts : ScreenDestination
+    data object CampusConnect : ScreenDestination
 }
 
 @Composable
@@ -579,6 +598,7 @@ fun MainAppShell(
 ) {
     var selectedTab by remember { mutableStateOf(initialTab) }
     var destination by remember { mutableStateOf<ScreenDestination>(ScreenDestination.Main) }
+    val selectedCalendarDateFlow = remember { MutableStateFlow<LocalDate?>(null) }
 
     val pendingNavigationRequest by navigationRequestFlow.collectAsState()
     LaunchedEffect(pendingNavigationRequest) {
@@ -660,7 +680,10 @@ fun MainAppShell(
                 AttendanceCalendarScreen(
                     viewModel = calendarViewModel,
                     onNavigateBack = { destination = ScreenDestination.Main },
-                    onDateSelected = { _ ->
+                    onDateSelected = { dateStr ->
+                        val parsedDate = try { LocalDate.parse(dateStr) } catch (_: Exception) { null }
+                        selectedCalendarDateFlow.value = parsedDate
+                        logsViewModel.filterByDate(parsedDate)
                         selectedTab = MainTab.LOGS
                         destination = ScreenDestination.Main
                     }
@@ -714,6 +737,12 @@ fun MainAppShell(
             is ScreenDestination.FeeReceipts -> {
                 FeeReceiptsScreen(
                     viewModel = feeReceiptsViewModel,
+                    onNavigateBack = { destination = ScreenDestination.Main }
+                )
+            }
+
+            is ScreenDestination.CampusConnect -> {
+                CampusConnectScreen(
                     onNavigateBack = { destination = ScreenDestination.Main }
                 )
             }
@@ -798,6 +827,9 @@ fun MainAppShell(
                                     },
                                     onNavigateToFeedback = {
                                         destination = ScreenDestination.Feedback
+                                    },
+                                    onNavigateToCampusConnect = {
+                                        destination = ScreenDestination.CampusConnect
                                     }
                                 )
                             }

@@ -56,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -78,7 +79,7 @@ fun AttendanceLogsScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val dateFilter by viewModel.dateFilter.collectAsState()
+    val selectedDate by viewModel.dateFilter.collectAsState()
     val selectedRecordId by viewModel.selectedRecordId.collectAsState()
     val listState = rememberLazyListState()
     val isDark = isSystemInDarkTheme()
@@ -214,6 +215,44 @@ fun AttendanceLogsScreen(
                             )
                         )
 
+                        // Active Calendar Date Filter Chip
+                        selectedDate?.let { filterDate ->
+                            val formattedDate = remember(filterDate) {
+                                filterDate.format(DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.US))
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Start
+                            ) {
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { viewModel.filterByDate(null) },
+                                    label = { Text("Showing $formattedDate") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.CalendarToday,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                        )
+                                    },
+                                    trailingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Clear,
+                                            contentDescription = "Clear date filter",
+                                            modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                        )
+                                    },
+                                    shape = CircleShape,
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        selectedTrailingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                )
+                            }
+                        }
+
                         // Status Filter Chips with M3 selection indicators
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -274,34 +313,6 @@ fun AttendanceLogsScreen(
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
                                     selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                            )
-                        }
-
-                        if (dateFilter != null) {
-                            val formattedDate = dateFilter!!.format(DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.US))
-                            FilterChip(
-                                selected = true,
-                                onClick = { viewModel.filterByDate(null) },
-                                label = { Text("Showing $formattedDate") },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.CalendarToday,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(FilterChipDefaults.IconSize)
-                                    )
-                                },
-                                trailingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Clear,
-                                        contentDescription = "Clear date filter",
-                                        modifier = Modifier.size(FilterChipDefaults.IconSize)
-                                    )
-                                },
-                                shape = CircleShape,
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
                             )
                         }
@@ -380,7 +391,11 @@ fun AttendanceLogsScreen(
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = if (uiState.searchQuery.isNotEmpty()) "No attendance records match '${uiState.searchQuery}'" else "No attendance logs found",
+                                    text = when {
+                                        uiState.searchQuery.isNotEmpty() -> "No attendance records match '${uiState.searchQuery}'"
+                                        selectedDate != null -> "No attendance records for ${selectedDate!!.format(DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.US))}"
+                                        else -> "No attendance logs found"
+                                    },
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
