@@ -20,6 +20,28 @@ function safeAttr(str) {
     return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }
 
+function parseSemver(ver) {
+    return String(ver || '')
+        .trim()
+        .replace(/^[vV]/, '')
+        .split(/[.-]/)
+        .map(part => {
+            const n = parseInt(part, 10);
+            return Number.isNaN(n) ? 0 : n;
+        });
+}
+
+function compareSemverDesc(a, b) {
+    const pa = parseSemver(a);
+    const pb = parseSemver(b);
+    const len = Math.max(pa.length, pb.length);
+    for (let i = 0; i < len; i++) {
+        const diff = (pb[i] || 0) - (pa[i] || 0);
+        if (diff !== 0) return diff;
+    }
+    return String(b || '').localeCompare(String(a || ''));
+}
+
 const ICON_COPY = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
 const ICON_TRASH = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
 const ICON_DEVICE = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>`;
@@ -32,6 +54,10 @@ class TelemetryDashboard {
         this.records = [];
         this.filteredRecords = [];
         this.isFetching = false;
+        this.lastSyncAt = null;
+        this.baseSyncStatusText = '';
+        this.syncAgeTimer = null;
+        this.pollTimer = null;
         this.sortColumn = 'timestamp';
         this.sortDirection = 'desc';
         this.viewMode = (typeof window !== 'undefined' && window.innerWidth < 768) ? 'card' : 'table';
@@ -308,6 +334,8 @@ class TelemetryDashboard {
 
     lockPortal() {
         this.clearStoredPass();
+        this.stopPolling();
+        this.stopSyncAgeTimer();
         // Always navigate back to overview when locking so main-content is
         // visible (not feedback view) once the user re-authenticates.
         document.body.classList.remove('view-feedback');
@@ -323,8 +351,6 @@ class TelemetryDashboard {
         this.cfgLatestVersion = document.getElementById('cfgLatestVersion');
         this.cfgDownloadUrl = document.getElementById('cfgDownloadUrl');
         this.cfgBroadcastNotice = document.getElementById('cfgBroadcastNotice');
-        this.cfgBannedDevices = document.getElementById('cfgBannedDevices');
-        this.cfgBannedStudents = document.getElementById('cfgBannedStudents');
         this.cfgMaintenanceMessage = document.getElementById('cfgMaintenanceMessage');
         this.cfgMaintenanceMode = document.getElementById('cfgMaintenanceMode');
         this.saveConfigBtn = document.getElementById('saveConfigBtn');
@@ -338,6 +364,42 @@ class TelemetryDashboard {
             return `${clean}${route}`;
         }
         return `${clean}/api${route}`;
+    }
+
+    async _extractErrorText(res) {
+        try {
+            const text = await res.text();
+            if (!text) return `HTTP ${res.status}`;
+            try {
+                const parsed = JSON.parse(text);
+                if (parsed && parsed.error) return String(parsed.error);
+            } catch (_) {}
+            return text;
+        } catch (_) {
+            return `HTTP ${res.status}`;
+        }
+    }
+
+    _createSnapshot() {
+        return {
+            fleetConfig: JSON.parse(JSON.stringify(this.fleetConfig)),
+            records: JSON.parse(JSON.stringify(this.records))
+        };
+    }
+
+    _restoreSnapshot(snapshot) {
+        if (!snapshot) return;
+        this.fleetConfig = snapshot.fleetConfig;
+        this.records = snapshot.records;
+        localStorage.setItem('fleet_config', JSON.stringify(this.fleetConfig, null, 2));
+        this.populateGovernanceFields();
+        this.renderMaintenanceBanner();
+        this.renderOtaPausedBanner();
+        this.renderActiveBanChips();
+        this.populateVersionFilter();
+        this.computeKPIs();
+        this.renderVersionBars();
+        this.applyFilters();
     }
 
     populateGovernanceFields() {
@@ -354,12 +416,6 @@ class TelemetryDashboard {
         }
         if (this.quickBroadcastInput) {
             this.quickBroadcastInput.value = this.fleetConfig.broadcast_notice || '';
-        }
-        if (this.cfgBannedDevices) {
-            this.cfgBannedDevices.value = (this.fleetConfig.banned_devices || []).join(', ');
-        }
-        if (this.cfgBannedStudents) {
-            this.cfgBannedStudents.value = (this.fleetConfig.banned_students || []).join(', ');
         }
         if (this.cfgMaintenanceMessage) {
             this.cfgMaintenanceMessage.value = this.fleetConfig.maintenance_message || '';
@@ -398,11 +454,8 @@ class TelemetryDashboard {
     }
 
     async togglePauseUpdates(explicitState = null) {
-        const nextState = explicitState !== null ? !!explicitState : !this.fleetConfig.pause_updates;
-        this.fleetConfig.pause_updates = nextState;
-        if (this.cfgPauseUpdates) this.cfgPauseUpdates.checked = nextState;
-        this.renderOtaPausedBanner();
-        localStorage.setItem('fleet_config', JSON.stringify(this.fleetConfig, null, 2));
+        const prevState = !!this.fleetConfig.pause_updates;
+        const nextState = explicitState !== null ? !!explicitState : !prevState;
 
         try {
             const res = await fetch(this.getApiUrl('/config'), {
@@ -411,17 +464,29 @@ class TelemetryDashboard {
                 body: JSON.stringify({ pause_updates: nextState })
             });
             if (res.status === 401) {
+                if (this.cfgPauseUpdates) this.cfgPauseUpdates.checked = prevState;
                 this.showToast('Unauthorized: Please unlock admin portal.', 'error');
                 this.lockPortal();
                 return;
             }
+            if (!res.ok && res.status !== 401) {
+                if (this.cfgPauseUpdates) this.cfgPauseUpdates.checked = prevState;
+                const errText = await this._extractErrorText(res);
+                this.showToast(`Failed to update OTA pause state: ${errText}`, 'error');
+                return;
+            }
+            this.fleetConfig.pause_updates = nextState;
+            if (this.cfgPauseUpdates) this.cfgPauseUpdates.checked = nextState;
+            this.renderOtaPausedBanner();
+            localStorage.setItem('fleet_config', JSON.stringify(this.fleetConfig, null, 2));
             if (nextState) {
                 this.showToast('In-app OTA updates PAUSED fleet-wide.', 'info');
             } else {
                 this.showToast('In-app OTA updates RESUMED.', 'success');
             }
         } catch (e) {
-            this.showToast(`Updates ${nextState ? 'paused' : 'resumed'} locally (offline)`, 'info');
+            if (this.cfgPauseUpdates) this.cfgPauseUpdates.checked = prevState;
+            this.showToast(`Failed to update OTA pause state: ${e.message}`, 'error');
         }
     }
 
@@ -563,87 +628,95 @@ class TelemetryDashboard {
     }
 
     async saveConfig() {
-        const minVer = parseInt(this.cfgMinVersion.value) || 1;
+        const minVerRaw = this.cfgMinVersion ? (this.cfgMinVersion.value || '').trim() : '';
         const latestVer = this.cfgLatestVersion ? (this.cfgLatestVersion.value || '').trim() : '';
         const dlUrl = (this.cfgDownloadUrl ? this.cfgDownloadUrl.value : '').trim();
         const notice = (this.cfgBroadcastNotice ? this.cfgBroadcastNotice.value : '').trim();
-
-        const bannedDevStr = (this.cfgBannedDevices ? this.cfgBannedDevices.value : '').trim();
-        const bannedDevList = bannedDevStr
-            ? bannedDevStr.split(',').map(s => s.trim()).filter(Boolean)
-            : [];
-
-        const bannedStudentsStr = (this.cfgBannedStudents ? this.cfgBannedStudents.value : '').trim();
-        const bannedStudentsList = bannedStudentsStr
-            ? bannedStudentsStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n > 0)
-            : [];
-
         const maintMsg = (this.cfgMaintenanceMessage ? this.cfgMaintenanceMessage.value : '').trim();
         const isMaint = this.cfgMaintenanceMode ? this.cfgMaintenanceMode.checked : false;
         const pauseUpdates = this.cfgPauseUpdates ? this.cfgPauseUpdates.checked : false;
         const notifEnabled = this.cfgNotificationsEnabled ? this.cfgNotificationsEnabled.checked : true;
 
-        this.fleetConfig.min_version_code = minVer;
-        this.fleetConfig.latest_version_name = latestVer || null;
-        this.fleetConfig.download_url = dlUrl || null;
-        this.fleetConfig.broadcast_notice = notice || null;
-        this.fleetConfig.banned_devices = [...new Set(bannedDevList)];
-        this.fleetConfig.banned_students = [...new Set(bannedStudentsList)];
-        this.fleetConfig.maintenance_mode = isMaint;
-        this.fleetConfig.pause_updates = pauseUpdates;
-        this.fleetConfig.notifications_enabled = notifEnabled;
-        if (maintMsg) {
-            this.fleetConfig.maintenance_message = maintMsg;
-        }
-
-        localStorage.setItem('fleet_config', JSON.stringify(this.fleetConfig, null, 2));
-
-        if (this.endpointUrl) {
-            try {
-                const res = await fetch(this.getApiUrl('/config'), {
-                    method: 'POST',
-                    headers: this.getAuthHeaders(),
-                    body: JSON.stringify(this.fleetConfig)
-                });
-                if (res.status === 401) {
-                    this.showToast('Unauthorized: Please unlock admin portal with passkey.', 'error');
-                    this.lockPortal();
-                    return;
-                }
-                if (res.ok) {
-                    this.showToast('Config saved and deployed to fleet!', 'success');
-                } else {
-                    this.showToast(`Server returned status ${res.status}`, 'error');
-                }
-            } catch (err) {
-                console.warn('Could not sync remote config:', err);
-                this.showToast('Saved locally (network sync failed)', 'info');
+        // Build patch object only from filled fields; omit blank optional fields like download_url
+        const patch = {
+            maintenance_mode: isMaint,
+            pause_updates: pauseUpdates,
+            notifications_enabled: notifEnabled
+        };
+        if (minVerRaw !== '') {
+            const minVer = parseInt(minVerRaw, 10);
+            if (!Number.isInteger(minVer) || minVer < 0) {
+                this.showToast('Minimum Allowed Version Code must be a non-negative integer', 'error');
+                return;
             }
+            patch.min_version_code = minVer;
+        }
+        if (latestVer !== '') {
+            patch.latest_version_name = latestVer;
+        }
+        if (dlUrl !== '') {
+            patch.download_url = dlUrl;
+        }
+        if (notice !== '') {
+            patch.broadcast_notice = notice;
+        } else if (this.fleetConfig.broadcast_notice) {
+            patch.broadcast_notice = null;
+        }
+        if (maintMsg !== '') {
+            patch.maintenance_message = maintMsg;
         }
 
-        if (this.saveConfigBtn) {
-            const originalText = this.saveConfigBtn.innerHTML;
-            this.saveConfigBtn.innerHTML = `✓ Saved & Deployed`;
-            this.saveConfigBtn.style.background = '#84A59D';
-            setTimeout(() => {
-                this.saveConfigBtn.innerHTML = originalText;
-                this.saveConfigBtn.style.background = '';
-            }, 2000);
+        if (!this.endpointUrl) {
+            this.showToast('No API endpoint configured', 'error');
+            return;
         }
 
-        this.renderMaintenanceBanner();
-        this.renderOtaPausedBanner();
-        this.renderActiveBanChips();
-        this.computeKPIs();
-        this.renderCurrentView();
+        try {
+            const res = await fetch(this.getApiUrl('/config'), {
+                method: 'POST',
+                headers: this.getAuthHeaders(),
+                body: JSON.stringify(patch)
+            });
+            if (res.status === 401) {
+                this.showToast('Unauthorized: Please unlock admin portal with passkey.', 'error');
+                this.lockPortal();
+                return;
+            }
+            if (!res.ok) {
+                const errText = await this._extractErrorText(res);
+                this.showToast(`Failed to save config: ${errText}`, 'error');
+                return;
+            }
+
+            const data = await res.json().catch(() => ({}));
+            const savedConfig = (data && data.config) ? data.config : patch;
+            this.fleetConfig = { ...this.fleetConfig, ...savedConfig };
+            localStorage.setItem('fleet_config', JSON.stringify(this.fleetConfig, null, 2));
+
+            this.showToast('Config saved and deployed to fleet!', 'success');
+            if (this.saveConfigBtn) {
+                const originalText = this.saveConfigBtn.innerHTML;
+                this.saveConfigBtn.innerHTML = `✓ Saved & Deployed`;
+                this.saveConfigBtn.style.background = '#84A59D';
+                setTimeout(() => {
+                    this.saveConfigBtn.innerHTML = originalText;
+                    this.saveConfigBtn.style.background = '';
+                }, 2000);
+            }
+
+            this.populateGovernanceFields();
+            this.renderMaintenanceBanner();
+            this.renderOtaPausedBanner();
+            this.renderActiveBanChips();
+            this.computeKPIs();
+            this.renderCurrentView();
+        } catch (err) {
+            console.warn('Could not sync remote config:', err);
+            this.showToast(`Failed to save config: ${err.message}`, 'error');
+        }
     }
 
     async deactivateMaintenance() {
-        this.fleetConfig.maintenance_mode = false;
-        if (this.cfgMaintenanceMode) this.cfgMaintenanceMode.checked = false;
-        localStorage.setItem('fleet_config', JSON.stringify(this.fleetConfig, null, 2));
-        this.renderMaintenanceBanner();
-
         try {
             const res = await fetch(this.getApiUrl('/config'), {
                 method: 'POST',
@@ -655,21 +728,25 @@ class TelemetryDashboard {
                 this.lockPortal();
                 return;
             }
+            if (!res.ok && res.status !== 401) {
+                const errText = await this._extractErrorText(res);
+                this.showToast(`Failed to deactivate maintenance mode: ${errText}`, 'error');
+                return;
+            }
+            this.fleetConfig.maintenance_mode = false;
+            if (this.cfgMaintenanceMode) this.cfgMaintenanceMode.checked = false;
+            localStorage.setItem('fleet_config', JSON.stringify(this.fleetConfig, null, 2));
+            this.renderMaintenanceBanner();
+            this.computeKPIs();
+            this.renderCurrentView();
             this.showToast('Global maintenance mode deactivated! All students restored.', 'success');
         } catch (e) {
-            this.showToast('Deactivated locally', 'info');
+            this.showToast(`Failed to deactivate maintenance mode: ${e.message}`, 'error');
         }
-        this.computeKPIs();
-        this.renderCurrentView();
     }
 
     async pushBroadcast(noticeText = null) {
         const text = (noticeText !== null ? noticeText : (this.quickBroadcastInput ? this.quickBroadcastInput.value : '')).trim();
-        this.fleetConfig.broadcast_notice = text || null;
-        if (this.cfgBroadcastNotice) this.cfgBroadcastNotice.value = text;
-        if (this.quickBroadcastInput) this.quickBroadcastInput.value = text;
-
-        localStorage.setItem('fleet_config', JSON.stringify(this.fleetConfig, null, 2));
 
         try {
             const res = await fetch(this.getApiUrl('/config'), {
@@ -682,13 +759,18 @@ class TelemetryDashboard {
                 this.lockPortal();
                 return;
             }
-            if (res.ok) {
-                this.showToast(text ? 'Broadcast notice pushed to student dashboards!' : 'Broadcast notice cleared.', 'success');
-            } else {
-                this.showToast('Saved locally', 'info');
+            if (!res.ok && res.status !== 401) {
+                const errText = await this._extractErrorText(res);
+                this.showToast(`Failed to push broadcast: ${errText}`, 'error');
+                return;
             }
+            this.fleetConfig.broadcast_notice = text || null;
+            if (this.cfgBroadcastNotice) this.cfgBroadcastNotice.value = text;
+            if (this.quickBroadcastInput) this.quickBroadcastInput.value = text;
+            localStorage.setItem('fleet_config', JSON.stringify(this.fleetConfig, null, 2));
+            this.showToast(text ? 'Broadcast notice pushed to student dashboards!' : 'Broadcast notice cleared.', 'success');
         } catch (e) {
-            this.showToast('Saved locally (offline)', 'info');
+            this.showToast(`Failed to push broadcast: ${e.message}`, 'error');
         }
     }
 
@@ -732,6 +814,7 @@ class TelemetryDashboard {
         const currentBans = new Set((this.fleetConfig.banned_devices || []).map(d => String(d).trim()));
         const isBanned = currentBans.has(id);
         const action = explicitAction || (isBanned ? 'unban' : 'ban');
+        const snapshot = this._createSnapshot();
 
         // Optimistic UI update
         if (action === 'ban') {
@@ -754,6 +837,7 @@ class TelemetryDashboard {
                 body: JSON.stringify({ device_id: id, action })
             });
             if (res.status === 401) {
+                this._restoreSnapshot(snapshot);
                 this.showToast('Unauthorized: Please unlock admin portal.', 'error');
                 this.lockPortal();
                 return;
@@ -770,11 +854,13 @@ class TelemetryDashboard {
                 }
                 this.showToast(action === 'ban' ? `Device ${id} revoked successfully` : `Device ${id} restored successfully`, action === 'ban' ? 'error' : 'success');
             } else {
-                this.showToast(`Server returned HTTP ${res.status}`, 'error');
+                this._restoreSnapshot(snapshot);
+                this.showToast('Action failed — restored previous state', 'error');
             }
         } catch (err) {
             console.warn('Network call to /ban failed:', err);
-            this.showToast(`Action executed locally (offline)`, 'info');
+            this._restoreSnapshot(snapshot);
+            this.showToast('Action failed — restored previous state', 'error');
         }
     }
 
@@ -787,6 +873,7 @@ class TelemetryDashboard {
         const currentBans = new Set((this.fleetConfig.banned_students || []).map(s => parseInt(s)).filter(Boolean));
         const isBanned = currentBans.has(id);
         const action = explicitAction || (isBanned ? 'unban' : 'ban');
+        const snapshot = this._createSnapshot();
 
         // Optimistic UI update
         if (action === 'ban') {
@@ -809,6 +896,7 @@ class TelemetryDashboard {
                 body: JSON.stringify({ student_id: id, action })
             });
             if (res.status === 401) {
+                this._restoreSnapshot(snapshot);
                 this.showToast('Unauthorized: Please unlock admin portal.', 'error');
                 this.lockPortal();
                 return;
@@ -825,11 +913,13 @@ class TelemetryDashboard {
                 }
                 this.showToast(action === 'ban' ? `Student #${id} account banned` : `Student #${id} account restored`, action === 'ban' ? 'error' : 'success');
             } else {
-                this.showToast(`Server returned HTTP ${res.status}`, 'error');
+                this._restoreSnapshot(snapshot);
+                this.showToast('Action failed — restored previous state', 'error');
             }
         } catch (err) {
             console.warn('Network call to /ban failed:', err);
-            this.showToast(`Action executed locally (offline)`, 'info');
+            this._restoreSnapshot(snapshot);
+            this.showToast('Action failed — restored previous state', 'error');
         }
     }
 
@@ -866,6 +956,7 @@ class TelemetryDashboard {
             version_code: this.fleetConfig.min_version_code || 15,
             os_version: 'Android 16 (API 36)',
             device_model: 'Google Pixel 9 Pro',
+            is_test: true,
             timestamp: new Date().toISOString()
         };
 
@@ -966,6 +1057,7 @@ class TelemetryDashboard {
         if (!deviceId) return;
         if (!confirm(`Are you sure you want to remove device "${deviceId}" from telemetry?`)) return;
 
+        const snapshot = this._createSnapshot();
         this.records = this.records.filter(r => r.device_id !== deviceId);
         this.computeKPIs();
         this.renderVersionBars();
@@ -978,6 +1070,7 @@ class TelemetryDashboard {
                 signal: AbortSignal.timeout(5000)
             });
             if (res.status === 401) {
+                this._restoreSnapshot(snapshot);
                 this.showToast('Unauthorized: Please unlock admin portal.', 'error');
                 this.lockPortal();
                 return;
@@ -985,17 +1078,23 @@ class TelemetryDashboard {
             if (res.ok) {
                 this.showToast(`Removed device record`, 'success');
             } else {
-                this.showToast('Removed locally', 'info');
+                this._restoreSnapshot(snapshot);
+                this.showToast('Action failed — restored previous state', 'error');
             }
         } catch (e) {
-            this.showToast('Removed locally (offline)', 'info');
+            this._restoreSnapshot(snapshot);
+            this.showToast('Action failed — restored previous state', 'error');
         }
     }
 
     async purgeTestRecords() {
         if (!confirm('Purge all simulated test device records from telemetry?')) return;
 
-        this.records = this.records.filter(r => !(r.device_id && (r.device_id.startsWith('dev-test-') || r.device_id.startsWith('dev-unit-test-') || r.device_id.includes('test'))));
+        const snapshot = this._createSnapshot();
+        this.records = this.records.filter(r => !(
+            r.is_test === true ||
+            (r.device_id && (r.device_id.startsWith('dev-test-') || r.device_id.startsWith('dev-unit-test-') || r.device_id.includes('test')))
+        ));
         this.computeKPIs();
         this.renderVersionBars();
         this.applyFilters();
@@ -1007,6 +1106,7 @@ class TelemetryDashboard {
                 signal: AbortSignal.timeout(5000)
             });
             if (res.status === 401) {
+                this._restoreSnapshot(snapshot);
                 this.showToast('Unauthorized: Please unlock admin portal.', 'error');
                 this.lockPortal();
                 return;
@@ -1015,10 +1115,12 @@ class TelemetryDashboard {
                 const data = await res.json();
                 this.showToast(`Purged ${data.purged_count || 0} test records`, 'success');
             } else {
-                this.showToast('Test records purged locally', 'info');
+                this._restoreSnapshot(snapshot);
+                this.showToast('Action failed — restored previous state', 'error');
             }
         } catch (e) {
-            this.showToast('Purged locally (offline)', 'info');
+            this._restoreSnapshot(snapshot);
+            this.showToast('Action failed — restored previous state', 'error');
         }
     }
 
@@ -1226,6 +1328,55 @@ class TelemetryDashboard {
                 this.closeSidebar();
             }
         });
+
+        if (typeof document !== 'undefined') {
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') {
+                    this.stopPolling();
+                    this.stopSyncAgeTimer();
+                } else if (this.getStoredPass()) {
+                    this.loadTelemetry();
+                    this.startPolling();
+                    this.startSyncAgeTimer();
+                }
+            });
+        }
+    }
+
+    startPolling() {
+        if (this.pollTimer) return;
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+        this.pollTimer = setInterval(() => this.loadTelemetry(), 12000);
+    }
+
+    stopPolling() {
+        if (this.pollTimer) {
+            clearInterval(this.pollTimer);
+            this.pollTimer = null;
+        }
+    }
+
+    startSyncAgeTimer() {
+        if (this.syncAgeTimer) return;
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+        this.syncAgeTimer = setInterval(() => this.updateSyncStatusText(), 1000);
+    }
+
+    stopSyncAgeTimer() {
+        if (this.syncAgeTimer) {
+            clearInterval(this.syncAgeTimer);
+            this.syncAgeTimer = null;
+        }
+    }
+
+    updateSyncStatusText() {
+        if (!this.syncStatusEl || !this.baseSyncStatusText) return;
+        if (this.lastSyncAt) {
+            const secs = Math.max(0, Math.floor((Date.now() - this.lastSyncAt) / 1000));
+            this.syncStatusEl.textContent = `${this.baseSyncStatusText} · Updated ${secs} seconds ago`;
+        } else {
+            this.syncStatusEl.textContent = this.baseSyncStatusText;
+        }
     }
 
     async loadTelemetry() {
@@ -1250,47 +1401,72 @@ class TelemetryDashboard {
         }
 
         let connectedUrl = null;
+        let configOk = false;
+        let telemetryOk = false;
         let isAuthError = false;
 
         for (const candidate of candidates) {
-            try {
-                // Synchronize remote config if available
-                try {
-                    const cfgUrl = candidate + (candidate.includes('/api') ? '/config' : '/api/config');
-                    const cfgRes = await fetch(cfgUrl, { signal: AbortSignal.timeout(6000) });
-                    if (cfgRes.ok) {
-                        const remoteCfg = await cfgRes.json();
-                        this.fleetConfig = { ...this.fleetConfig, ...remoteCfg };
-                        localStorage.setItem('fleet_config', JSON.stringify(this.fleetConfig, null, 2));
-                        this.populateGovernanceFields();
-                        this.renderMaintenanceBanner();
-                        this.renderActiveBanChips();
-                        connectedUrl = candidate;
-                    }
-                } catch (e) { }
+            let candConfigOk = false;
+            let candTelemetryOk = false;
 
-                // Fetch telemetry heartbeats
+            // Synchronize remote admin config (includes banned_devices / banned_students)
+            try {
+                const cfgUrl = candidate + (candidate.includes('/api') ? '/config/admin' : '/api/config/admin');
+                const cfgRes = await fetch(cfgUrl, {
+                    headers: this.getAuthHeaders(),
+                    signal: AbortSignal.timeout(6000)
+                });
+                if (cfgRes.status === 401) {
+                    connectedUrl = candidate;
+                    isAuthError = true;
+                    break;
+                }
+                if (cfgRes.ok) {
+                    const remoteCfg = await cfgRes.json();
+                    this.fleetConfig = { ...this.fleetConfig, ...remoteCfg };
+                    localStorage.setItem('fleet_config', JSON.stringify(this.fleetConfig, null, 2));
+                    this.populateGovernanceFields();
+                    this.renderMaintenanceBanner();
+                    this.renderOtaPausedBanner();
+                    this.renderActiveBanChips();
+                    candConfigOk = true;
+                }
+            } catch (e) { }
+
+            // Fetch telemetry heartbeats
+            try {
                 const telUrl = candidate + (candidate.includes('/api') ? '/telemetry' : '/api/telemetry');
                 const res = await fetch(telUrl, {
                     headers: this.getAuthHeaders(),
                     signal: AbortSignal.timeout(6000)
                 });
-                if (res.ok) {
-                    this.records = await res.json();
-                    connectedUrl = candidate;
-                    break;
-                } else if (res.status === 401) {
+                if (res.status === 401) {
                     connectedUrl = candidate;
                     isAuthError = true;
                     break;
                 }
+                if (res.ok) {
+                    this.records = await res.json();
+                    candTelemetryOk = true;
+                }
             } catch (err) { }
+
+            if (candConfigOk || candTelemetryOk) {
+                connectedUrl = candidate;
+                configOk = candConfigOk;
+                telemetryOk = candTelemetryOk;
+                break;
+            }
         }
 
         this.isFetching = false;
 
         if (isAuthError) {
             this.clearStoredPass();
+            this.stopPolling();
+            this.stopSyncAgeTimer();
+            this.baseSyncStatusText = '';
+            this.lastSyncAt = null;
             this.showAuthOverlay();
             this.showAuthError('Session expired. Please re-enter your admin passkey.');
             if (this.syncStatusEl) {
@@ -1305,18 +1481,49 @@ class TelemetryDashboard {
             return;
         }
 
-        if (connectedUrl) {
+        if (connectedUrl && configOk && telemetryOk) {
             this.endpointUrl = connectedUrl;
             this.updateServerLabel();
+            this.lastSyncAt = Date.now();
+            this.baseSyncStatusText = `Connected (${connectedUrl.replace(/^https?:\/\//, '')})`;
+            this.updateSyncStatusText();
+            this.startSyncAgeTimer();
             if (this.syncStatusEl) {
-                this.syncStatusEl.textContent = `Connected (${connectedUrl.replace(/^https?:\/\//, '')})`;
                 this.syncStatusEl.style.color = '#84A59D';
             }
             if (this.liveDotEl) {
                 this.liveDotEl.style.backgroundColor = '#84A59D';
                 this.liveDotEl.style.boxShadow = '0 0 8px #84A59D';
             }
+        } else if (connectedUrl && configOk && !telemetryOk) {
+            this.endpointUrl = connectedUrl;
+            this.updateServerLabel();
+            this.baseSyncStatusText = 'Config OK · Telemetry unavailable';
+            this.updateSyncStatusText();
+            if (this.syncStatusEl) {
+                this.syncStatusEl.style.color = '#F6BD60';
+            }
+            if (this.liveDotEl) {
+                this.liveDotEl.style.backgroundColor = '#F6BD60';
+                this.liveDotEl.style.boxShadow = '0 0 8px #F6BD60';
+            }
+        } else if (connectedUrl && !configOk && telemetryOk) {
+            this.endpointUrl = connectedUrl;
+            this.updateServerLabel();
+            this.lastSyncAt = Date.now();
+            this.baseSyncStatusText = 'Telemetry OK · Config unavailable';
+            this.updateSyncStatusText();
+            this.startSyncAgeTimer();
+            if (this.syncStatusEl) {
+                this.syncStatusEl.style.color = '#F6BD60';
+            }
+            if (this.liveDotEl) {
+                this.liveDotEl.style.backgroundColor = '#F6BD60';
+                this.liveDotEl.style.boxShadow = '0 0 8px #F6BD60';
+            }
         } else {
+            this.baseSyncStatusText = '';
+            this.stopSyncAgeTimer();
             if (this.syncStatusEl) {
                 const isCloud = typeof window !== 'undefined' && window.location.protocol === 'https:';
                 this.syncStatusEl.textContent = isCloud ? 'Connecting to Fleet Server...' : 'Server Offline (Start server.js)';
@@ -1333,18 +1540,17 @@ class TelemetryDashboard {
         this.computeKPIs();
         this.renderVersionBars();
         this.renderMaintenanceBanner();
+        this.renderOtaPausedBanner();
         this.renderActiveBanChips();
         this.applyFilters();
 
-        // Setup background polling if not already started
-        if (!this.pollTimer) {
-            this.pollTimer = setInterval(() => this.loadTelemetry(), 12000);
-        }
+        // Setup background polling if visible and not already started
+        this.startPolling();
     }
 
     populateVersionFilter() {
         if (!this.versionFilter) return;
-        const uniqueVersions = [...new Set(this.records.map(r => r.app_version).filter(Boolean))].sort().reverse();
+        const uniqueVersions = [...new Set(this.records.map(r => r.app_version).filter(Boolean))].sort(compareSemverDesc);
         const currentVal = this.versionFilter.value;
         this.versionFilter.innerHTML = '<option value="ALL">All Versions</option>';
         uniqueVersions.forEach(ver => {
@@ -1359,25 +1565,26 @@ class TelemetryDashboard {
     }
 
     computeKPIs() {
-        const total = this.records.length;
+        const prodRecords = this.records.filter(r => r && r.is_test !== true);
+        const total = prodRecords.length;
         if (this.totalUsersEl) this.totalUsersEl.textContent = total.toLocaleString();
 
         const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
-        const activeToday = this.records.filter(r => {
+        const activeToday = prodRecords.filter(r => {
             const t = r.timestamp || r.server_received_at;
             return t && new Date(t).getTime() >= oneDayAgo;
         }).length;
         if (this.activeTodayEl) this.activeTodayEl.textContent = activeToday.toLocaleString();
 
-        // Calculate latest version and adoption rate purely from live data
+        // Calculate latest version and adoption rate purely from live production telemetry
         const versionCounts = {};
-        this.records.forEach(r => {
+        prodRecords.forEach(r => {
             if (r.app_version) {
                 versionCounts[r.app_version] = (versionCounts[r.app_version] || 0) + 1;
             }
         });
 
-        const sortedVersions = Object.keys(versionCounts).sort().reverse();
+        const sortedVersions = Object.keys(versionCounts).sort(compareSemverDesc);
         const latestVer = sortedVersions[0] || this.fleetConfig.latest_version_name || '--';
         const latestCount = versionCounts[latestVer] || 0;
         const adoptionPercent = total > 0 && latestVer !== '--' ? Math.round((latestCount / total) * 100) : 0;
@@ -1388,7 +1595,7 @@ class TelemetryDashboard {
         }
 
         // Modern OS share (API 34+)
-        const modernCount = this.records.filter(r => {
+        const modernCount = prodRecords.filter(r => {
             const os = r.os_version || '';
             return os.includes('API 34') || os.includes('API 35') || os.includes('API 36') ||
                 os.includes('Android 14') || os.includes('Android 15') || os.includes('Android 16');
@@ -1410,15 +1617,17 @@ class TelemetryDashboard {
 
     renderVersionBars() {
         if (!this.versionBarsEl) return;
+        const prodRecords = this.records.filter(r => r && r.is_test !== true);
         const versionCounts = {};
-        this.records.forEach(r => {
+        prodRecords.forEach(r => {
             if (r.app_version) {
                 versionCounts[r.app_version] = (versionCounts[r.app_version] || 0) + 1;
             }
         });
 
-        const sorted = Object.entries(versionCounts).sort((a, b) => b[1] - a[1]);
-        const total = this.records.length || 0;
+        const sortedKeys = Object.keys(versionCounts).sort(compareSemverDesc);
+        const sorted = sortedKeys.map(ver => [ver, versionCounts[ver]]);
+        const total = prodRecords.length || 0;
 
         this.versionBarsEl.innerHTML = '';
         if (sorted.length === 0) {
@@ -1436,7 +1645,7 @@ class TelemetryDashboard {
             item.className = 'version-bar-item';
             item.innerHTML = `
                 <div class="version-bar-labels">
-                    <strong>${ver}</strong>
+                    <strong>${escapeHtml(ver)}</strong>
                     <span>${count} devices (${pct}%)</span>
                 </div>
                 <div class="bar-track">
@@ -1491,9 +1700,8 @@ class TelemetryDashboard {
                 const valB = parseInt(b.student_id) || 0;
                 return this.sortDirection === 'asc' ? valA - valB : valB - valA;
             } else if (this.sortColumn === 'app_version') {
-                const valA = (a.app_version || '').toLowerCase();
-                const valB = (b.app_version || '').toLowerCase();
-                return this.sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                const cmp = compareSemverDesc(a.app_version, b.app_version);
+                return this.sortDirection === 'asc' ? -cmp : cmp;
             } else { // timestamp
                 const valA = (a.timestamp || a.server_received_at) ? new Date(a.timestamp || a.server_received_at).getTime() : 0;
                 const valB = (b.timestamp || b.server_received_at) ? new Date(b.timestamp || b.server_received_at).getTime() : 0;
@@ -1888,8 +2096,17 @@ class FeedbackPanel {
                 this.dashboard.lockPortal();
                 return;
             }
+            if (!res.ok && res.status !== 401) {
+                const errText = await this.dashboard._extractErrorText(res);
+                this.dashboard.showToast(`Failed to load feedback: ${errText}`, 'error');
+                return;
+            }
             const data = await res.json();
-            this.items = Array.isArray(data.feedback) ? data.feedback : [];
+            if (!data || !Array.isArray(data.feedback)) {
+                this.dashboard.showToast('Invalid feedback payload received from server', 'error');
+                return;
+            }
+            this.items = data.feedback;
             this.loaded = true;
             this.render();
         } catch (err) {
@@ -2043,14 +2260,21 @@ ${escapeHtml(f.message)}
                 body: JSON.stringify(body)
             });
             if (res.status === 401) { this.dashboard.lockPortal(); return; }
+            if (!res.ok) {
+                const errText = await this.dashboard._extractErrorText(res);
+                this.dashboard.showToast(`Update failed: ${errText}`, 'error');
+                return;
+            }
             const data = await res.json();
-            if (data.success) {
+            if (data && data.success) {
                 const idx = this.items.findIndex(f => f.id === id);
                 if (idx !== -1) this.items[idx] = data.feedback;
                 this.currentItem = data.feedback;
                 this._renderModal();
                 this.render();
                 this.dashboard.showToast('Feedback updated', 'success');
+            } else {
+                this.dashboard.showToast(data?.error || 'Update failed', 'error');
             }
         } catch (err) {
             this.dashboard.showToast('Update failed', 'error');
@@ -2063,12 +2287,19 @@ ${escapeHtml(f.message)}
         try {
             const res = await fetch(url, { method: 'DELETE', headers: this.dashboard.getAuthHeaders() });
             if (res.status === 401) { this.dashboard.lockPortal(); return; }
+            if (!res.ok) {
+                const errText = await this.dashboard._extractErrorText(res);
+                this.dashboard.showToast(`Delete failed: ${errText}`, 'error');
+                return;
+            }
             const data = await res.json();
-            if (data.success) {
+            if (data && data.success) {
                 this.items = this.items.filter(f => f.id !== id);
                 this.closeModal();
                 this.render();
                 this.dashboard.showToast('Feedback deleted', 'success');
+            } else {
+                this.dashboard.showToast(data?.error || 'Delete failed', 'error');
             }
         } catch (err) {
             this.dashboard.showToast('Delete failed', 'error');
