@@ -63,11 +63,11 @@ class FeeReceiptsViewModel(application: Application) : AndroidViewModel(applicat
         _isPrinting.value = true
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val html = apiClient.getReceiptPrintHtml(paidLogId)
+                val receiptData = apiClient.getReceiptPrintData(paidLogId)
                 withContext(Dispatchers.Main) {
                     _isPrinting.value = false
                     val jobName = if (receiptNo.isNotBlank()) "Receipt_$receiptNo" else "Fee_Receipt_$paidLogId"
-                    ReceiptPrintAdapter.printHtml(context, html, jobName)
+                    ReceiptPrintAdapter.printReceipt(context, receiptData, jobName)
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {

@@ -690,25 +690,31 @@ class ErpApiClient(context: Context) {
         }
     }
 
-    @Throws(Exception::class)
-    fun getReceiptPrintHtml(paidLogId: Long): String = getReceiptPrintHtml(paidLogId, false)
+    data class ReceiptData(
+        val isPdf: Boolean,
+        val pdfBytes: ByteArray? = null,
+        val htmlContent: String? = null
+    )
 
     @Throws(Exception::class)
-    private fun getReceiptPrintHtml(paidLogId: Long, isRetry: Boolean): String {
+    fun getReceiptPrintData(paidLogId: Long): ReceiptData = getReceiptPrintData(paidLogId, false)
+
+    @Throws(Exception::class)
+    private fun getReceiptPrintData(paidLogId: Long, isRetry: Boolean): ReceiptData {
         val token = ensureValidToken()
         val url = "$BASE_URL/account/receipts/paid-log/$paidLogId/print"
         val request = Request.Builder()
             .url(url)
             .get()
             .header("Authorization", "Bearer $token")
-            .header("Accept", "text/html,application/xhtml+xml,application/xml,application/json")
+            .header("Accept", "application/pdf,text/html,application/xhtml+xml,application/json")
             .build()
 
         client.newCall(request).execute().use { response ->
             if (response.code == 401) {
                 return if (!isRetry) {
                     handleUnauthorized()
-                    getReceiptPrintHtml(paidLogId, true)
+                    getReceiptPrintData(paidLogId, true)
                 } else {
                     prefs.saveTokens("", "")
                     throw ErpException("Session expired. Please sign in again.", true)
@@ -717,8 +723,31 @@ class ErpApiClient(context: Context) {
             if (!response.isSuccessful) {
                 throw ErpException("Failed to fetch receipt print view (${response.code})")
             }
-            return response.body?.string() ?: ""
+            val bodyBytes = response.body?.bytes() ?: ByteArray(0)
+            if (bodyBytes.isEmpty()) {
+                throw ErpException("Empty receipt response from server")
+            }
+
+            // Check if response is raw binary PDF (starts with %PDF-)
+            val isPdfHeader = bodyBytes.size >= 4 &&
+                    bodyBytes[0] == 0x25.toByte() && // %
+                    bodyBytes[1] == 0x50.toByte() && // P
+                    bodyBytes[2] == 0x44.toByte() && // D
+                    bodyBytes[3] == 0x46.toByte()    // F
+
+            val contentType = response.header("Content-Type")?.lowercase() ?: ""
+            return if (isPdfHeader || contentType.contains("application/pdf")) {
+                ReceiptData(isPdf = true, pdfBytes = bodyBytes)
+            } else {
+                ReceiptData(isPdf = false, htmlContent = String(bodyBytes, Charsets.UTF_8))
+            }
         }
+    }
+
+    @Throws(Exception::class)
+    fun getReceiptPrintHtml(paidLogId: Long): String {
+        val data = getReceiptPrintData(paidLogId)
+        return data.htmlContent ?: ""
     }
 
     // ─────────────────────────────────────────────────────────────────────────

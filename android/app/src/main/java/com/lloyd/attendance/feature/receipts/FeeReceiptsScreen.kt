@@ -286,7 +286,7 @@ private fun ReceiptCard(
                         )
                         receipt.receiptDate?.takeIf { it.isNotBlank() }?.let { dateStr ->
                             Text(
-                                text = dateStr,
+                                text = Models.formatToIndianDate(dateStr),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -396,7 +396,7 @@ private fun TransactionCard(transaction: Models.FeeTransactionItem) {
                         )
                         transaction.date?.takeIf { it.isNotBlank() }?.let { dateStr ->
                             Text(
-                                text = dateStr,
+                                text = Models.formatToIndianDate(dateStr),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

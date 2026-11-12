@@ -394,13 +394,17 @@ object Models {
 
     class FeeTransactionItem {
         @JvmField var id: Long = 0
-        @SerializedName(value = "transaction_id", alternate = ["tx_id", "txn_id", "reference_no"])
+        @SerializedName(value = "transaction_id", alternate = ["tx_id", "txn_id", "reference_no", "gateway_id"])
         @JvmField var transactionId: String? = null
-        @SerializedName(value = "receipt_no", alternate = ["receipt_number", "receiptNo"])
+        @SerializedName(value = "receipt_no", alternate = ["receipt_number", "receiptNo", "challan_no", "invoice_no"])
         @JvmField var receiptNo: String? = null
-        @SerializedName(value = "amount", alternate = ["paid_amount", "total_amount"])
+        @SerializedName(value = "amount", alternate = [
+            "paid_amount", "total_amount", "tx_amount", "txn_amount", "transaction_amount",
+            "net_amount", "fee_amount", "received_amount", "deposit_amount", "settled_amount",
+            "receipt_amount", "total", "fees", "fee", "amount_paid", "payable_amount"
+        ])
         @JvmField var amount: Double = 0.0
-        @SerializedName(value = "date", alternate = ["payment_date", "created_at", "trans_date"])
+        @SerializedName(value = "date", alternate = ["payment_date", "created_at", "trans_date", "tx_date", "txn_date"])
         @JvmField var date: String? = null
         @SerializedName(value = "mode", alternate = ["payment_mode", "payment_method", "mode_of_payment"])
         @JvmField var mode: String? = null
@@ -410,19 +414,64 @@ object Models {
         @JvmField var academicYear: String? = null
         @SerializedName(value = "semester", alternate = ["semester_name", "sem"])
         @JvmField var semester: String? = null
-        @SerializedName(value = "paid_log_id", alternate = ["paidLogId", "log_id"])
+        @SerializedName(value = "paid_log_id", alternate = ["paidLogId", "log_id", "payment_log_id", "gateway_log_id"])
         @JvmField var paidLogId: Long? = null
         @SerializedName(value = "remarks", alternate = ["description", "remark", "notes"])
         @JvmField var remarks: String? = null
     }
 
+    /**
+     * Formats a raw UTC ISO date string to a human-readable IST date/time string.
+     * Tries multiple common formats returned by the ERP API.
+     * Returns the raw string unchanged on parse failure.
+     *
+     * Example output: "21 Oct 2026, 06:34 PM"
+     */
+    fun formatToIndianDate(raw: String?): String {
+        if (raw.isNullOrBlank()) return raw ?: ""
+        val trimmed = raw.trim()
+        val istZone = java.time.ZoneId.of("Asia/Kolkata")
+        val outFormatter = java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a", Locale.ENGLISH)
+
+        // Try parsing with java.time for ISO-8601 with fractional seconds
+        try {
+            if (trimmed.contains("T")) {
+                val zonedDateTime = try {
+                    java.time.OffsetDateTime.parse(trimmed).atZoneSameInstant(istZone)
+                } catch (_: Exception) {
+                    try {
+                        java.time.Instant.parse(trimmed).atZone(istZone)
+                    } catch (_: Exception) {
+                        // Truncate microsecond string to millisecond if needed
+                        val cleanIso = if (trimmed.length > 23 && trimmed[19] == '.') {
+                            val dotIdx = trimmed.indexOf('.')
+                            val timePart = trimmed.substring(0, minOf(dotIdx + 4, trimmed.length))
+                            timePart
+                        } else trimmed
+                        java.time.LocalDateTime.parse(cleanIso).atZone(java.time.ZoneOffset.UTC).withZoneSameInstant(istZone)
+                    }
+                }
+                return zonedDateTime.format(outFormatter)
+            } else if (trimmed.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) {
+                val localDate = java.time.LocalDate.parse(trimmed)
+                return localDate.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH))
+            }
+        } catch (_: Exception) {}
+
+        return raw
+    }
+
     class FeeReceiptItem {
         @JvmField var id: Long = 0
-        @SerializedName(value = "receipt_no", alternate = ["receipt_number", "receiptNo"])
+        @SerializedName(value = "receipt_no", alternate = ["receipt_number", "receiptNo", "challan_no", "invoice_no", "reference_no"])
         @JvmField var receiptNo: String? = null
-        @SerializedName(value = "receipt_date", alternate = ["date", "created_at", "issue_date"])
+        @SerializedName(value = "receipt_date", alternate = ["date", "created_at", "issue_date", "payment_date", "trans_date", "tx_date", "txn_date"])
         @JvmField var receiptDate: String? = null
-        @SerializedName(value = "amount", alternate = ["paid_amount", "total_amount"])
+        @SerializedName(value = "amount", alternate = [
+            "paid_amount", "total_amount", "tx_amount", "txn_amount", "transaction_amount",
+            "net_amount", "fee_amount", "received_amount", "deposit_amount", "settled_amount",
+            "receipt_amount", "total", "fees", "fee", "amount_paid", "payable_amount"
+        ])
         @JvmField var amount: Double = 0.0
         @SerializedName(value = "fee_head", alternate = ["fee_type", "head_name", "category"])
         @JvmField var feeHead: String? = null
@@ -430,7 +479,7 @@ object Models {
         @JvmField var academicYear: String? = null
         @SerializedName(value = "semester", alternate = ["semester_name", "sem"])
         @JvmField var semester: String? = null
-        @SerializedName(value = "paid_log_id", alternate = ["paidLogId", "log_id"])
+        @SerializedName(value = "paid_log_id", alternate = ["paidLogId", "log_id", "payment_log_id", "gateway_log_id", "payment_id"])
         @JvmField var paidLogId: Long? = null
         @SerializedName(value = "slip_status", alternate = ["status", "is_slip_generated"])
         @JvmField var slipStatus: String? = null

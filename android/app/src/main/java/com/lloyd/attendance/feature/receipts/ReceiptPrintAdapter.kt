@@ -1,47 +1,275 @@
 package com.lloyd.attendance.feature.receipts
 
 import android.content.Context
+import android.os.Bundle
+import android.os.CancellationSignal
+import android.os.Handler
+import android.os.Looper
+import android.os.ParcelFileDescriptor
+import android.print.PageRange
 import android.print.PrintAttributes
+import android.print.PrintDocumentAdapter
+import android.print.PrintDocumentInfo
 import android.print.PrintManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.google.gson.JsonParser
+import com.lloyd.attendance.api.ErpApiClient
+import java.io.FileOutputStream
 
 object ReceiptPrintAdapter {
 
+    // Retain strong reference to prevent WebView garbage collection during background print spooling
+    private var activeWebView: WebView? = null
+
+    /**
+     * Prints the official receipt from the ERP website.
+     * If the server returned an exact binary PDF, it sends raw PDF bytes directly to the
+     * PrintManager with zero conversion or corruption.
+     * If the server returned HTML, it renders and prints via a properly-retained WebView.
+     * ZERO developer branding is injected.
+     */
+    fun printReceipt(
+        context: Context,
+        receiptData: ErpApiClient.ReceiptData,
+        jobName: String = "Lloyd_Fee_Receipt"
+    ) {
+        if (receiptData.isPdf && receiptData.pdfBytes != null && receiptData.pdfBytes.isNotEmpty()) {
+            printDirectPdf(context, receiptData.pdfBytes, jobName)
+        } else if (!receiptData.htmlContent.isNullOrBlank()) {
+            printHtml(context, receiptData.htmlContent, jobName)
+        } else {
+            throw IllegalArgumentException("No receipt content available to print")
+        }
+    }
+
+    /**
+     * Directly streams exact binary PDF bytes from the ERP server into Android's print spooler.
+     * Guarantees 100% byte-for-byte fidelity with the website ERP receipt.
+     */
+    fun printDirectPdf(
+        context: Context,
+        pdfBytes: ByteArray,
+        jobName: String = "Lloyd_Fee_Receipt"
+    ) {
+        val printManager = context.getSystemService(Context.PRINT_SERVICE) as? PrintManager
+            ?: throw IllegalStateException("Print service is not available on this device")
+
+        val printAttributes = PrintAttributes.Builder()
+            .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+            .setResolution(PrintAttributes.Resolution("res_id", "Default", 300, 300))
+            .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+            .build()
+
+        printManager.print(
+            jobName,
+            object : PrintDocumentAdapter() {
+                override fun onLayout(
+                    oldAttributes: PrintAttributes?,
+                    newAttributes: PrintAttributes?,
+                    cancellationSignal: CancellationSignal?,
+                    callback: LayoutResultCallback?,
+                    extras: Bundle?
+                ) {
+                    if (cancellationSignal?.isCanceled == true) {
+                        callback?.onLayoutCancelled()
+                        return
+                    }
+                    val info = PrintDocumentInfo.Builder(jobName)
+                        .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+                        .setPageCount(PrintDocumentInfo.PAGE_COUNT_UNKNOWN)
+                        .build()
+                    callback?.onLayoutFinished(info, true)
+                }
+
+                override fun onWrite(
+                    pages: Array<out PageRange>?,
+                    destination: ParcelFileDescriptor?,
+                    cancellationSignal: CancellationSignal?,
+                    callback: WriteResultCallback?
+                ) {
+                    if (destination == null) {
+                        callback?.onWriteFailed("Print destination descriptor is null")
+                        return
+                    }
+                    if (cancellationSignal?.isCanceled == true) {
+                        callback?.onWriteCancelled()
+                        return
+                    }
+                    try {
+                        FileOutputStream(destination.fileDescriptor).use { out ->
+                            out.write(pdfBytes)
+                            out.flush()
+                        }
+                        callback?.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+                    } catch (e: Exception) {
+                        callback?.onWriteFailed(e.message ?: "Failed to write PDF receipt")
+                    }
+                }
+            },
+            printAttributes
+        )
+    }
+
     /**
      * Prints the official receipt HTML using Android's PrintManager and an offscreen WebView.
-     * ZERO developer branding is injected.
+     * Retains WebView instance across print spooling to prevent empty/corrupted PDFs.
      */
     fun printHtml(
         context: Context,
         htmlContent: String,
         jobName: String = "Lloyd_Fee_Receipt"
     ) {
-        val webView = WebView(context)
-        webView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                return false
+        val sanitizedHtml = preparePrintableHtml(htmlContent, jobName)
+
+        val webView = WebView(context).apply {
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                loadsImagesAutomatically = true
+                useWideViewPort = true
+                loadWithOverviewMode = true
             }
+        }
+        activeWebView = webView
+
+        webView.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean = false
 
             override fun onPageFinished(view: WebView, url: String) {
-                val printManager = context.getSystemService(Context.PRINT_SERVICE) as? PrintManager
-                    ?: return
+                // Post with 500ms delay to let fonts, CSS and layout settle
+                Handler(Looper.getMainLooper()).postDelayed({
+                    val printManager = context.getSystemService(Context.PRINT_SERVICE) as? PrintManager
+                    if (printManager == null) {
+                        activeWebView = null
+                        return@postDelayed
+                    }
 
-                val printAdapter = webView.createPrintDocumentAdapter(jobName)
-                val printAttributes = PrintAttributes.Builder()
-                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
-                    .setResolution(PrintAttributes.Resolution("id", "res", 300, 300))
-                    .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
-                    .build()
+                    val adapter = view.createPrintDocumentAdapter(jobName)
+                    val printAttributes = PrintAttributes.Builder()
+                        .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                        .setResolution(PrintAttributes.Resolution("res_id", "Default", 300, 300))
+                        .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                        .build()
 
-                printManager.print(jobName, printAdapter, printAttributes)
+                    printManager.print(
+                        jobName,
+                        object : PrintDocumentAdapter() {
+                            override fun onLayout(
+                                oldAttributes: PrintAttributes?,
+                                newAttributes: PrintAttributes?,
+                                cancellationSignal: CancellationSignal?,
+                                callback: LayoutResultCallback?,
+                                extras: Bundle?
+                            ) {
+                                adapter.onLayout(oldAttributes, newAttributes, cancellationSignal, callback, extras)
+                            }
+
+                            override fun onWrite(
+                                pages: Array<out PageRange>?,
+                                destination: ParcelFileDescriptor?,
+                                cancellationSignal: CancellationSignal?,
+                                callback: WriteResultCallback?
+                            ) {
+                                adapter.onWrite(pages, destination, cancellationSignal, callback)
+                            }
+
+                            override fun onFinish() {
+                                super.onFinish()
+                                adapter.onFinish()
+                                activeWebView = null
+                            }
+                        },
+                        printAttributes
+                    )
+                }, 500L)
             }
         }
 
-        // Load HTML with base URL
-        webView.loadDataWithBaseURL("https://erp.lloydcollege.in", htmlContent, "text/html", "UTF-8", null)
+        webView.loadDataWithBaseURL("https://erp.lloydcollege.in", sanitizedHtml, "text/html", "UTF-8", null)
+    }
+
+    /**
+     * Unwraps JSON envelopes if the server returns HTML inside a JSON payload,
+     * and injects clean A4 print styling.
+     */
+    private fun preparePrintableHtml(rawContent: String, title: String): String {
+        val trimmed = rawContent.trim()
+        var html = trimmed
+
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            try {
+                val element = JsonParser.parseString(trimmed)
+                if (element.isJsonObject) {
+                    val obj = element.asJsonObject
+                    if (obj.has("data") && obj.get("data").isJsonPrimitive && obj.get("data").asJsonPrimitive.isString) {
+                        html = obj.get("data").asString
+                    } else if (obj.has("html") && obj.get("html").isJsonPrimitive && obj.get("html").asJsonPrimitive.isString) {
+                        html = obj.get("html").asString
+                    } else if (obj.has("content") && obj.get("content").isJsonPrimitive && obj.get("content").asJsonPrimitive.isString) {
+                        html = obj.get("content").asString
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        val printCss = """
+            <style>
+                @page {
+                    size: A4 portrait;
+                    margin: 8mm;
+                }
+                html, body {
+                    width: 100% !important;
+                    height: auto !important;
+                    background: #FFFFFF !important;
+                    color: #000000 !important;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+                    font-size: 11pt !important;
+                    margin: 0 !important;
+                    padding: 8px !important;
+                    box-sizing: border-box !important;
+                }
+                table {
+                    width: 100% !important;
+                    border-collapse: collapse !important;
+                }
+                img {
+                    max-width: 100% !important;
+                    height: auto !important;
+                }
+                @media print {
+                    body {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+                    .no-print, button, input[type="button"], input[type="submit"] {
+                        display: none !important;
+                    }
+                }
+            </style>
+        """.trimIndent()
+
+        return if (html.contains("<head>", ignoreCase = true)) {
+            html.replaceFirst("(?i)<head>".toRegex(), "<head>$printCss")
+        } else if (html.contains("<html>", ignoreCase = true)) {
+            html.replaceFirst("(?i)<html>".toRegex(), "<html><head>$printCss</head>")
+        } else {
+            """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>$title</title>
+                $printCss
+            </head>
+            <body>
+                $html
+            </body>
+            </html>
+            """.trimIndent()
+        }
     }
 }
