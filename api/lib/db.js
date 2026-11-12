@@ -9,11 +9,14 @@ const path = require('path');
 
 let redisClient = null;
 let isConnecting = false;
-let redisFailed = false;
+let redisFailedAt = 0;
+let lastRedisError = null;
+const REDIS_RETRY_COOLDOWN_MS = 5000;
 
 // In-memory runtime cache for serverless container lifecycle
 let memConfig = null;
 let memTelemetry = {};
+let memFeedback = null;
 
 function getLocalConfigPath() {
     return path.join(process.cwd(), 'fleet_config.json');
@@ -21,6 +24,21 @@ function getLocalConfigPath() {
 
 function getLocalTelemetryPath() {
     return path.join(process.cwd(), 'fleet_telemetry.json');
+}
+
+function getLocalFeedbackPath() {
+    return path.join(process.cwd(), 'feedback_store.json');
+}
+
+function readDiskFeedback() {
+    try {
+        const p = getLocalFeedbackPath();
+        if (fs.existsSync(p)) {
+            const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+            if (Array.isArray(data)) return data;
+        }
+    } catch (_) {}
+    return [];
 }
 
 function readDiskConfig() {
@@ -68,9 +86,14 @@ function getUpstashRestConfig() {
     return null;
 }
 
-async function upstashRestCmd(command, ...args) {
+function hasRedisTcpConfigured() {
+    const redisUrl = process.env.REDIS_URL || process.env.KV_URL;
+    return Boolean(redisUrl && redisUrl !== '[SENSITIVE]');
+}
+
+async function upstashRestExec(command, ...args) {
     const conf = getUpstashRestConfig();
-    if (!conf) return null;
+    if (!conf) return { ok: false, configured: false, error: 'Upstash REST not configured' };
     try {
         const resp = await fetch(`${conf.url}`, {
             method: 'POST',
@@ -81,17 +104,32 @@ async function upstashRestCmd(command, ...args) {
             body: JSON.stringify([command, ...args]),
             signal: AbortSignal.timeout(1200)
         });
-        if (!resp.ok) return null;
+        if (!resp.ok) {
+            const errText = await resp.text().catch(() => '');
+            return { ok: false, configured: true, error: `Upstash HTTP ${resp.status}${errText ? ': ' + errText : ''}` };
+        }
         const data = await resp.json();
-        return data.result;
-    } catch (_) {
-        return null;
+        if (data && data.error) {
+            return { ok: false, configured: true, error: String(data.error) };
+        }
+        return { ok: true, configured: true, result: data ? data.result : null };
+    } catch (err) {
+        return { ok: false, configured: true, error: (err && err.message) ? err.message : 'Upstash request failed' };
     }
+}
+
+async function upstashRestCmd(command, ...args) {
+    const res = await upstashRestExec(command, ...args);
+    return res.ok ? res.result : null;
 }
 
 async function getRedis() {
     const redisUrl = process.env.REDIS_URL || process.env.KV_URL;
-    if (!redisUrl || redisUrl === '[SENSITIVE]' || redisFailed) {
+    if (!redisUrl || redisUrl === '[SENSITIVE]') {
+        return null;
+    }
+
+    if (redisFailedAt && (Date.now() - redisFailedAt < REDIS_RETRY_COOLDOWN_MS)) {
         return null;
     }
 
@@ -112,9 +150,9 @@ async function getRedis() {
             }
         });
 
-        client.on('error', () => {
-            // Silently mark as failed to prevent log spam
-            redisFailed = true;
+        client.on('error', (err) => {
+            redisFailedAt = Date.now();
+            lastRedisError = (err && err.message) ? err.message : 'Redis client error';
         });
 
         const connectPromise = client.connect();
@@ -124,13 +162,72 @@ async function getRedis() {
 
         await Promise.race([connectPromise, timeoutPromise]);
         redisClient = client;
+        redisFailedAt = 0;
+        lastRedisError = null;
         isConnecting = false;
         return client;
     } catch (e) {
-        redisFailed = true;
+        redisFailedAt = Date.now();
+        lastRedisError = (e && e.message) ? e.message : 'Redis connection failed';
         isConnecting = false;
         return null;
     }
+}
+
+async function redisTcpExec(op) {
+    if (!hasRedisTcpConfigured()) {
+        return { ok: false, configured: false, error: 'Redis TCP not configured' };
+    }
+    try {
+        const redis = await getRedis();
+        if (!redis) {
+            return { ok: false, configured: true, error: lastRedisError || 'Redis client unavailable' };
+        }
+        const result = await Promise.race([
+            op(redis),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Redis write timeout')), 1500))
+        ]);
+        return { ok: true, configured: true, result };
+    } catch (err) {
+        return { ok: false, configured: true, error: (err && err.message) ? err.message : 'Redis write failed' };
+    }
+}
+
+/**
+ * Executes durable write against configured remote stores (Upstash REST first, then Redis TCP).
+ * When no remote store is configured (local dev), succeeds immediately so memory/disk fallback works.
+ * When at least one remote store is configured, returns { ok: false, error } if durable write fails.
+ */
+async function durableWrite(upstashOp, redisOp) {
+    const upstashConfigured = Boolean(getUpstashRestConfig());
+    const redisConfigured = hasRedisTcpConfigured();
+
+    if (!upstashConfigured && !redisConfigured) {
+        return { ok: true, mode: 'local' };
+    }
+
+    let lastError = null;
+
+    if (upstashConfigured) {
+        const upRes = await upstashOp();
+        if (upRes.ok) {
+            if (redisConfigured) {
+                await redisTcpExec(redisOp).catch(() => {});
+            }
+            return { ok: true, mode: 'upstash' };
+        }
+        lastError = upRes.error || 'Upstash write failed';
+    }
+
+    if (redisConfigured) {
+        const redRes = await redisTcpExec(redisOp);
+        if (redRes.ok) {
+            return { ok: true, mode: 'redis' };
+        }
+        lastError = redRes.error || lastError || 'Redis write failed';
+    }
+
+    return { ok: false, error: lastError || 'Durable storage write failed' };
 }
 
 async function getConfig() {
@@ -169,30 +266,26 @@ async function getConfig() {
 }
 
 async function saveConfig(config) {
-    memConfig = { ...readDiskConfig(), ...config };
+    const nextConfig = { ...readDiskConfig(), ...config };
+    const serialized = JSON.stringify(nextConfig);
 
-    // 1. Write via Upstash REST API if configured
-    try {
-        await upstashRestCmd('set', 'lloyd_fleet_config', JSON.stringify(memConfig));
-    } catch (_) {}
+    const writeRes = await durableWrite(
+        () => upstashRestExec('set', 'lloyd_fleet_config', serialized),
+        (redis) => redis.set('lloyd_fleet_config', serialized)
+    );
 
-    // 2. Write to Redis TCP (await with timeout to ensure serverless persistence)
-    try {
-        const redis = await getRedis();
-        if (redis) {
-            await Promise.race([
-                redis.set('lloyd_fleet_config', JSON.stringify(memConfig)),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500))
-            ]).catch(() => {});
-        }
-    } catch (_) {}
+    if (!writeRes.ok) {
+        return { ok: false, error: writeRes.error };
+    }
 
-    // 3. Write to disk if local writable
+    memConfig = nextConfig;
+
+    // Best-effort disk sync for local dev
     try {
         fs.writeFileSync(getLocalConfigPath(), JSON.stringify(memConfig, null, 2), 'utf8');
     } catch (_) {}
 
-    return memConfig;
+    return { ok: true, config: memConfig };
 }
 
 async function getTelemetryRecords() {
@@ -281,7 +374,9 @@ function ensureMemTelemetryLoaded() {
 }
 
 async function upsertTelemetryRecord(record) {
-    if (!record || !record.device_id) return false;
+    if (!record || !record.device_id) {
+        return { ok: false, error: 'device_id is required' };
+    }
 
     ensureMemTelemetryLoaded();
 
@@ -289,91 +384,166 @@ async function upsertTelemetryRecord(record) {
         ...record,
         server_received_at: new Date().toISOString()
     };
+    const serialized = JSON.stringify(payload);
+
+    const writeRes = await durableWrite(
+        () => upstashRestExec('hset', 'lloyd_fleet_telemetry', record.device_id, serialized),
+        (redis) => redis.hSet('lloyd_fleet_telemetry', record.device_id, serialized)
+    );
+
+    if (!writeRes.ok) {
+        return { ok: false, error: writeRes.error };
+    }
 
     memTelemetry[record.device_id] = payload;
 
-    // 1. Write via Upstash REST API if configured
-    try {
-        await upstashRestCmd('hset', 'lloyd_fleet_telemetry', record.device_id, JSON.stringify(payload));
-    } catch (_) {}
-
-    // 2. Write to Redis TCP with timeout (crucial for serverless lifecycle persistence)
-    try {
-        const redis = await getRedis();
-        if (redis) {
-            await Promise.race([
-                redis.hSet('lloyd_fleet_telemetry', record.device_id, JSON.stringify(payload)),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500))
-            ]).catch(() => {});
-        }
-    } catch (_) {}
-
-    // 3. Best-effort local file write
+    // Best-effort local file write
     try {
         const all = Object.values(memTelemetry);
         fs.writeFileSync(getLocalTelemetryPath(), JSON.stringify(all, null, 2), 'utf8');
     } catch (_) {}
 
-    return true;
+    return { ok: true, record: payload };
 }
 
 async function deleteTelemetryRecord(deviceId) {
-    if (!deviceId) return false;
+    if (!deviceId) {
+        return { ok: false, error: 'device_id is required' };
+    }
     const cleanId = String(deviceId).trim();
 
     ensureMemTelemetryLoaded();
+
+    const writeRes = await durableWrite(
+        () => upstashRestExec('hdel', 'lloyd_fleet_telemetry', cleanId),
+        (redis) => redis.hDel('lloyd_fleet_telemetry', cleanId)
+    );
+
+    if (!writeRes.ok) {
+        return { ok: false, error: writeRes.error };
+    }
+
     delete memTelemetry[cleanId];
 
-    // 1. Delete from Upstash REST
-    try {
-        await upstashRestCmd('hdel', 'lloyd_fleet_telemetry', cleanId);
-    } catch (_) {}
-
-    // 2. Delete from Redis TCP
-    try {
-        const redis = await getRedis();
-        if (redis) {
-            await Promise.race([
-                redis.hDel('lloyd_fleet_telemetry', cleanId),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500))
-            ]).catch(() => {});
-        }
-    } catch (_) {}
-
-    // 3. Update local file
+    // Update local file
     try {
         const all = Object.values(memTelemetry);
         fs.writeFileSync(getLocalTelemetryPath(), JSON.stringify(all, null, 2), 'utf8');
     } catch (_) {}
 
-    return true;
+    return { ok: true, deleted: cleanId };
 }
 
 async function purgeTestTelemetry() {
     await getTelemetryRecords();
     const removedIds = [];
 
-    for (const id of Object.keys(memTelemetry)) {
-        if (id.startsWith('dev-test-') || id.startsWith('dev-unit-test-') || id.includes('test')) {
-            delete memTelemetry[id];
+    for (const [id, rec] of Object.entries(memTelemetry)) {
+        if (
+            (rec && rec.is_test === true) ||
+            id.startsWith('dev-test-') ||
+            id.startsWith('dev-unit-test-') ||
+            id.includes('test')
+        ) {
             removedIds.push(id);
         }
     }
 
-    for (const id of removedIds) {
-        try { await upstashRestCmd('hdel', 'lloyd_fleet_telemetry', id); } catch (_) {}
+    if (removedIds.length > 0) {
+        const writeRes = await durableWrite(
+            () => upstashRestExec('hdel', 'lloyd_fleet_telemetry', ...removedIds),
+            (redis) => redis.hDel('lloyd_fleet_telemetry', removedIds)
+        );
+
+        if (!writeRes.ok) {
+            return { ok: false, error: writeRes.error };
+        }
+
+        for (const id of removedIds) {
+            delete memTelemetry[id];
+        }
+
         try {
-            const redis = await getRedis();
-            if (redis) await redis.hDel('lloyd_fleet_telemetry', id).catch(() => {});
+            const all = Object.values(memTelemetry);
+            fs.writeFileSync(getLocalTelemetryPath(), JSON.stringify(all, null, 2), 'utf8');
         } catch (_) {}
     }
 
+    return { ok: true, purged: removedIds };
+}
+
+const FEEDBACK_REDIS_KEY = 'lloyd_fleet_feedback';
+
+async function getFeedbackRecords() {
+    if (memFeedback === null) {
+        memFeedback = readDiskFeedback();
+    }
+
+    const byId = {};
+    for (const item of memFeedback) {
+        if (item && item.id) byId[item.id] = item;
+    }
+
+    const mergeList = (parsed) => {
+        if (!Array.isArray(parsed)) return;
+        for (const item of parsed) {
+            if (item && item.id) {
+                const existing = byId[item.id];
+                const itemDate = new Date(item.submitted_at || 0);
+                const existDate = existing ? new Date(existing.submitted_at || 0) : 0;
+                if (!existing || itemDate >= existDate) {
+                    byId[item.id] = item;
+                }
+            }
+        }
+    };
+
     try {
-        const all = Object.values(memTelemetry);
-        fs.writeFileSync(getLocalTelemetryPath(), JSON.stringify(all, null, 2), 'utf8');
+        const raw = await upstashRestCmd('get', FEEDBACK_REDIS_KEY);
+        if (raw) {
+            mergeList(typeof raw === 'string' ? JSON.parse(raw) : raw);
+        }
     } catch (_) {}
 
-    return removedIds;
+    try {
+        const redis = await getRedis();
+        if (redis) {
+            const raw = await Promise.race([
+                redis.get(FEEDBACK_REDIS_KEY),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500))
+            ]);
+            if (raw) {
+                mergeList(JSON.parse(raw));
+            }
+        }
+    } catch (_) {}
+
+    const list = Object.values(byId);
+    list.sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at));
+    memFeedback = list;
+    return list;
+}
+
+async function saveFeedback(list) {
+    const nextList = Array.isArray(list) ? list : [];
+    const serialized = JSON.stringify(nextList);
+
+    const writeRes = await durableWrite(
+        () => upstashRestExec('set', FEEDBACK_REDIS_KEY, serialized),
+        (redis) => redis.set(FEEDBACK_REDIS_KEY, serialized)
+    );
+
+    if (!writeRes.ok) {
+        return { ok: false, error: writeRes.error };
+    }
+
+    memFeedback = nextList;
+
+    try {
+        fs.writeFileSync(getLocalFeedbackPath(), JSON.stringify(memFeedback, null, 2), 'utf8');
+    } catch (_) {}
+
+    return { ok: true, feedback: memFeedback };
 }
 
 module.exports = {
@@ -381,6 +551,10 @@ module.exports = {
     saveConfig,
     getTelemetryRecords,
     upsertTelemetryRecord,
+    saveTelemetry: upsertTelemetryRecord,
     deleteTelemetryRecord,
-    purgeTestTelemetry
+    deleteTelemetry: deleteTelemetryRecord,
+    purgeTestTelemetry,
+    getFeedbackRecords,
+    saveFeedback
 };

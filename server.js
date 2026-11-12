@@ -230,7 +230,8 @@ const CONFIG_ALLOWLIST = new Set([
 
 // ── Fleet stats aggregation ───────────────────────────────────────────────────
 
-function computeStats(records, config) {
+function computeStats(allRecords, config) {
+    const records    = (allRecords || []).filter(r => r && r.is_test !== true);
     const now        = Date.now();
     const dayMs      = 86_400_000;
     const bannedSet  = new Set((config.banned_devices || []).map(String));
@@ -371,7 +372,7 @@ const server = http.createServer(async (req, res) => {
             ...publicConfig,
             latest_version_name:  latestVersion,
             download_url:         downloadUrl,
-            live_active_devices:  records.length,
+            live_active_devices:  records.filter(r => r && r.is_test !== true).length,
             release_source:       gh ? 'github_release' : 'persisted',
         });
         return;
@@ -433,14 +434,18 @@ const server = http.createServer(async (req, res) => {
                 update.notifications_enabled = Boolean(update.notifications_enabled);
 
             // Preserve ban arrays — they are immutable via this endpoint
-            const saved = await db.saveConfig({
+            const saveResult = await db.saveConfig({
                 ...current,
                 ...update,
                 banned_devices:  current.banned_devices,
                 banned_students: current.banned_students,
             });
+            if (!saveResult || !saveResult.ok) {
+                json(res, 503, { error: saveResult?.error || 'Failed to persist configuration' });
+                return;
+            }
 
-            const { banned_devices, banned_students, ...safe } = saved; // eslint-disable-line no-unused-vars
+            const { banned_devices, banned_students, ...safe } = saveResult.config; // eslint-disable-line no-unused-vars
             json(res, 200, { success: true, config: safe });
         } catch (err) {
             json(res, 400, { error: err.message });
@@ -560,7 +565,7 @@ const server = http.createServer(async (req, res) => {
                 'device_id', 'student_id', 'student_name',
                 'app_version', 'version_code',
                 'app_version_code', 'app_version_name',
-                'os_version', 'device_model', 'timestamp',
+                'os_version', 'device_model', 'timestamp', 'is_test',
             ];
             const MAX_STR = 128;
             const sanitized = {};
@@ -569,6 +574,11 @@ const server = http.createServer(async (req, res) => {
                 const v = payload[key];
                 if (typeof v === 'string')  sanitized[key] = v.trim().replace(/[\x00-\x1F\x7F]/g, '').slice(0, MAX_STR);
                 else if (typeof v === 'number' || typeof v === 'boolean') sanitized[key] = v;
+            }
+            if (payload.is_test === true) {
+                sanitized.is_test = true;
+            } else {
+                delete sanitized.is_test;
             }
             if (sanitized.app_version && !sanitized.app_version_name) {
                 sanitized.app_version_name = sanitized.app_version;
@@ -583,7 +593,11 @@ const server = http.createServer(async (req, res) => {
             }
             if (!sanitized.device_id) { json(res, 400, { error: 'device_id empty after sanitize' }); return; }
 
-            await db.upsertTelemetryRecord(sanitized);
+            const saveResult = await db.upsertTelemetryRecord(sanitized);
+            if (!saveResult || !saveResult.ok) {
+                json(res, 503, { error: saveResult?.error || 'Failed to persist telemetry record' });
+                return;
+            }
             json(res, 200, { success: true, timestamp: new Date().toISOString() });
         } catch (err) {
             json(res, 400, { error: err.message });
@@ -611,13 +625,22 @@ const server = http.createServer(async (req, res) => {
             const purge    = query.purge === 'test' || body.purge === 'test';
 
             if (purge) {
-                const removed = await db.purgeTestTelemetry();
+                const purgeResult = await db.purgeTestTelemetry();
+                if (!purgeResult || !purgeResult.ok) {
+                    json(res, 503, { error: purgeResult?.error || 'Failed to purge test telemetry' });
+                    return;
+                }
+                const removed = purgeResult.purged || [];
                 json(res, 200, { success: true, purged_count: removed.length, purged: removed });
                 return;
             }
             if (!deviceId) { json(res, 400, { error: 'device_id required' }); return; }
 
-            await db.deleteTelemetryRecord(deviceId);
+            const delResult = await db.deleteTelemetryRecord(deviceId);
+            if (!delResult || !delResult.ok) {
+                json(res, 503, { error: delResult?.error || 'Failed to delete telemetry record' });
+                return;
+            }
             json(res, 200, { success: true, deleted: deviceId });
         } catch (err) {
             json(res, 500, { error: err.message });
@@ -659,7 +682,12 @@ const server = http.createServer(async (req, res) => {
                 isStudentBanned = set.has(studentId);
             }
 
-            await db.saveConfig(config);
+            const saveResult = await db.saveConfig(config);
+            if (!saveResult || !saveResult.ok) {
+                json(res, 503, { error: saveResult?.error || 'Failed to persist ban configuration' });
+                return;
+            }
+            const saved = saveResult.config;
 
             json(res, 200, {
                 success:           true,
@@ -667,8 +695,8 @@ const server = http.createServer(async (req, res) => {
                 student_id:        studentId || null,
                 is_device_banned:  isDeviceBanned,
                 is_student_banned: isStudentBanned,
-                banned_devices:    config.banned_devices,
-                banned_students:   config.banned_students,
+                banned_devices:    saved.banned_devices,
+                banned_students:   saved.banned_students,
             });
         } catch (err) {
             json(res, 500, { error: err.message });

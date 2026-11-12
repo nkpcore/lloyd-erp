@@ -48,7 +48,7 @@ module.exports = async function handler(req, res) {
                 'device_id', 'student_id', 'student_name',
                 'app_version', 'version_code',
                 'app_version_code', 'app_version_name',
-                'os_version', 'device_model', 'timestamp'
+                'os_version', 'device_model', 'timestamp', 'is_test'
             ];
             const MAX_STR_LEN = 128;
             const sanitized = {};
@@ -60,6 +60,12 @@ module.exports = async function handler(req, res) {
                 } else if (typeof val === 'number' || typeof val === 'boolean') {
                     sanitized[key] = val;
                 }
+            }
+
+            if (body.is_test === true) {
+                sanitized.is_test = true;
+            } else {
+                delete sanitized.is_test;
             }
 
             // Normalize version fields for backwards compatibility and KPI aggregation
@@ -81,7 +87,11 @@ module.exports = async function handler(req, res) {
                 return;
             }
 
-            await db.upsertTelemetryRecord(sanitized);
+            const saveResult = await db.upsertTelemetryRecord(sanitized);
+            if (!saveResult || !saveResult.ok) {
+                res.status(503).json({ error: saveResult?.error || 'Failed to persist telemetry record' });
+                return;
+            }
             res.status(200).json({ success: true, timestamp: new Date().toISOString() });
             return;
         }
@@ -102,7 +112,12 @@ module.exports = async function handler(req, res) {
             const purge = req.query?.purge === 'test' || body.purge === 'test';
 
             if (purge) {
-                const purged = await db.purgeTestTelemetry();
+                const purgeResult = await db.purgeTestTelemetry();
+                if (!purgeResult || !purgeResult.ok) {
+                    res.status(503).json({ error: purgeResult?.error || 'Failed to purge test telemetry' });
+                    return;
+                }
+                const purged = purgeResult.purged || [];
                 res.status(200).json({ success: true, purged_count: purged.length, purged });
                 return;
             }
@@ -112,7 +127,11 @@ module.exports = async function handler(req, res) {
                 return;
             }
 
-            await db.deleteTelemetryRecord(deviceId);
+            const delResult = await db.deleteTelemetryRecord(deviceId);
+            if (!delResult || !delResult.ok) {
+                res.status(503).json({ error: delResult?.error || 'Failed to delete telemetry record' });
+                return;
+            }
             res.status(200).json({ success: true, deleted: deviceId });
             return;
         }

@@ -94,6 +94,7 @@ async function getLiveGitHubRelease() {
             assetId: apkAsset ? apkAsset.id : null,
             assetUrl: apkAsset ? apkAsset.url : null,
             browserDownloadUrl: apkAsset ? apkAsset.browser_download_url : null,
+            sha256BrowserUrl: sha256Asset ? sha256Asset.browser_download_url : null,
             sha256: sha256
         };
         lastGhCheckTime = now;
@@ -118,8 +119,35 @@ module.exports = async function handler(req, res) {
 
     try {
         const isDownload = req.query.download === 'latest' || req.query.download === 'true' || req.query.download === '1';
+        const isSha256 = req.query.sha256 === 'true' || req.query.sha256 === '1';
         const config = await db.getConfig();
         const ghRelease = await getLiveGitHubRelease();
+
+        if (isSha256) {
+            if (ghRelease && ghRelease.sha256) {
+                res.status(200).json({
+                    sha256: ghRelease.sha256,
+                    version: ghRelease.version,
+                    source: 'github_releases'
+                });
+                return;
+            }
+            if (ghRelease && ghRelease.sha256BrowserUrl && isValidOtaUrl(ghRelease.sha256BrowserUrl)) {
+                res.writeHead(302, { 'Location': ghRelease.sha256BrowserUrl });
+                res.end();
+                return;
+            }
+            if (config && config.sha256) {
+                res.status(200).json({
+                    sha256: config.sha256,
+                    version: config.latest_version_name || null,
+                    source: 'fleet_governance'
+                });
+                return;
+            }
+            res.status(404).json({ error: 'SHA256 checksum not available for latest release' });
+            return;
+        }
 
         const host = req.headers['x-forwarded-host'] || req.headers.host || '';
         const proto = req.headers['x-forwarded-proto'] || 'https';

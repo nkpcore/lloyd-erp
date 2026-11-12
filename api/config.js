@@ -65,6 +65,14 @@ module.exports = async function handler(req, res) {
 
     try {
         if (req.method === 'GET') {
+            const urlPath = (req.url || '').split('?')[0].replace(/\/+$/, '');
+            const isAdminRoute = req.query?.admin === '1' || req.query?.admin === 'true' || urlPath.endsWith('/admin');
+
+            if (isAdminRoute && !verifyAdminAuth(req)) {
+                res.status(401).json({ error: 'Unauthorized: Admin access required' });
+                return;
+            }
+
             const config = await db.getConfig();
 
             // Prioritize live GitHub Release dynamically (strictly no hardcoded fallback)
@@ -79,6 +87,16 @@ module.exports = async function handler(req, res) {
                 if (telemetry.length > 0 && telemetry[0].app_version) {
                     config.latest_version_name = telemetry[0].app_version;
                 }
+            }
+
+            if (isAdminRoute) {
+                res.status(200).json({
+                    ...config,
+                    banned_devices: Array.isArray(config.banned_devices) ? config.banned_devices : [],
+                    banned_students: Array.isArray(config.banned_students) ? config.banned_students : [],
+                    github_release: gh
+                });
+                return;
             }
 
             // SECURITY: Strip ban lists from public response.
@@ -160,10 +178,14 @@ module.exports = async function handler(req, res) {
             updated.banned_devices = current.banned_devices;
             updated.banned_students = current.banned_students;
 
-            await db.saveConfig(updated);
+            const saveResult = await db.saveConfig(updated);
+            if (!saveResult || !saveResult.ok) {
+                res.status(503).json({ error: saveResult?.error || 'Failed to persist configuration' });
+                return;
+            }
 
             // Strip bans from POST response as well
-            const { banned_devices: _bd, banned_students: _bs, ...safeUpdated } = updated;
+            const { banned_devices: _bd, banned_students: _bs, ...safeUpdated } = saveResult.config;
             res.status(200).json({ success: true, config: safeUpdated });
             return;
         }
@@ -171,7 +193,6 @@ module.exports = async function handler(req, res) {
         res.status(405).json({ error: 'Method not allowed' });
     } catch (err) {
         console.error('[API/CONFIG] Handler error:', err);
-        const fallback = await db.getConfig();
-        res.status(200).json(fallback);
+        res.status(500).json({ error: err.message || 'Internal server error' });
     }
 };

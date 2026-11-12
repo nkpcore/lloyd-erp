@@ -82,7 +82,12 @@ module.exports = async function handler(req, res) {
             config.banned_students = Array.from(studentBans);
         }
 
-        const saved = await db.saveConfig(config);
+        const saveResult = await db.saveConfig(config);
+        if (!saveResult || !saveResult.ok) {
+            res.status(503).json({ error: saveResult?.error || 'Failed to persist ban configuration' });
+            return;
+        }
+        const saved = saveResult.config;
 
         res.status(200).json({
             success: true,
