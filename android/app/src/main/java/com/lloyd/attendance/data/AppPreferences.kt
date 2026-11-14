@@ -139,6 +139,17 @@ class AppPreferences private constructor(context: Context) : NotificationStateSt
     fun getMonthlyData(): String? = prefs.getString(KEY_MONTHLY_JSON, null)
     fun getMonthlyAttendanceJson(): String? = getMonthlyData()
 
+    fun saveMonthlyCacheMetadata(etag: String?, lastModified: String?, fetchTimeMillis: Long = System.currentTimeMillis()) {
+        prefs.edit()
+            .putString(KEY_MONTHLY_ETAG, etag)
+            .putString(KEY_MONTHLY_LAST_MODIFIED, lastModified)
+            .putLong(KEY_MONTHLY_LAST_FETCH_TIME, fetchTimeMillis)
+            .apply()
+    }
+    fun getMonthlyEtag(): String? = prefs.getString(KEY_MONTHLY_ETAG, null)
+    fun getMonthlyLastModified(): String? = prefs.getString(KEY_MONTHLY_LAST_MODIFIED, null)
+    fun getMonthlyLastFetchTime(): Long = prefs.getLong(KEY_MONTHLY_LAST_FETCH_TIME, 0L)
+
 
 
     fun saveWeeklyData(json: String) { prefs.edit().putString(KEY_WEEKLY_JSON, json).apply() }
@@ -421,6 +432,9 @@ class AppPreferences private constructor(context: Context) : NotificationStateSt
         private const val KEY_USER_PROFILE = "user_profile"
         private const val KEY_CACHED_STATS = "cached_stats"
         private const val KEY_MONTHLY_JSON = "monthly_json"
+        private const val KEY_MONTHLY_ETAG = "monthly_etag"
+        private const val KEY_MONTHLY_LAST_MODIFIED = "monthly_last_modified"
+        private const val KEY_MONTHLY_LAST_FETCH_TIME = "monthly_last_fetch_time"
         private const val KEY_WEEKLY_JSON = "weekly_json"
         private const val KEY_ATTENDANCE_LOGS_JSON = "attendance_logs_json"
         private const val KEY_LAST_SUCCESSFUL_LOG_SYNC = "last_successful_log_sync"

@@ -25,6 +25,9 @@ class FeeReceiptsViewModel(application: Application) : AndroidViewModel(applicat
     private val _isPrinting = MutableStateFlow(false)
     val isPrinting: StateFlow<Boolean> = _isPrinting.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     private val _printError = MutableStateFlow<String?>(null)
     val printError: StateFlow<String?> = _printError.asStateFlow()
 
@@ -34,6 +37,35 @@ class FeeReceiptsViewModel(application: Application) : AndroidViewModel(applicat
 
     fun selectTab(tab: FeeTab) {
         _selectedTab.value = tab
+    }
+
+    fun refresh() {
+        if (_isRefreshing.value) return
+        _isRefreshing.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val transactions = apiClient.getFeeTransactions(page = 1, size = 50)
+                val receipts = apiClient.getFeeReceipts(page = 1, size = 50)
+                withContext(Dispatchers.Main) {
+                    _uiState.value = FeeReceiptsUiState.Success(
+                        transactions = transactions,
+                        receipts = receipts
+                    )
+                }
+            } catch (e: Exception) {
+                if (_uiState.value !is FeeReceiptsUiState.Success) {
+                    withContext(Dispatchers.Main) {
+                        _uiState.value = FeeReceiptsUiState.Error(
+                            e.message ?: "Failed to load fee records. Please check connection."
+                        )
+                    }
+                }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    _isRefreshing.value = false
+                }
+            }
+        }
     }
 
     fun loadData() {

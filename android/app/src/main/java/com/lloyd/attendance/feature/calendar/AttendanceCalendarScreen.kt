@@ -30,6 +30,9 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
@@ -71,6 +74,7 @@ fun AttendanceCalendarScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val monthFormatter = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault())
+    val haptic = LocalHapticFeedback.current
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -106,10 +110,15 @@ fun AttendanceCalendarScreen(
             )
         }
     ) { innerPadding ->
-        LazyColumn(
+        PullToRefreshBox(
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = { viewModel.refresh() },
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding)
+        ) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 start = 16.dp, end = 16.dp, top = 4.dp, bottom = 88.dp
             ),
@@ -230,6 +239,7 @@ fun AttendanceCalendarScreen(
                                 isSelected = isSelected,
                                 onClick = {
                                     if (dayInfo.isCurrentMonth) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         viewModel.selectDate(dayInfo.date)
                                         onDateSelected(dayInfo.date.toString())
                                     }
@@ -351,6 +361,7 @@ fun AttendanceCalendarScreen(
             }
         }
     }
+}
 }
 
 // ─── Month KPI strip ──────────────────────────────────────────────────────────

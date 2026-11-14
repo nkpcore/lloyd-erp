@@ -165,14 +165,31 @@ class ErpApiClient(context: Context) {
     @Throws(Exception::class)
     private fun getMonthlyAttendance(isRetry: Boolean): Models.MonthlyAttendanceData {
         val token = ensureValidToken()
-        val request = Request.Builder()
+        val requestBuilder = Request.Builder()
             .url("$BASE_URL/student/me/monthly-attendance")
             .get()
             .header("Authorization", "Bearer $token")
             .header("Accept", "application/json")
-            .build()
+
+        prefs.getMonthlyEtag()?.let { etag ->
+            if (etag.isNotBlank()) requestBuilder.header("If-None-Match", etag)
+        }
+        prefs.getMonthlyLastModified()?.let { lastMod ->
+            if (lastMod.isNotBlank()) requestBuilder.header("If-Modified-Since", lastMod)
+        }
+
+        val request = requestBuilder.build()
 
         client.newCall(request).execute().use { response ->
+            if (response.code == 304) {
+                val cached = prefs.getMonthlyData()
+                if (!cached.isNullOrBlank()) {
+                    val type = object : TypeToken<Models.ApiResponse<Models.MonthlyAttendanceData>>() {}.type
+                    val apiRes = gson.fromJson<Models.ApiResponse<Models.MonthlyAttendanceData>>(cached, type)
+                    apiRes?.data?.let { return it }
+                }
+            }
+
             if (response.code == 401) {
                 return if (!isRetry) {
                     handleUnauthorized()
@@ -201,6 +218,9 @@ class ErpApiClient(context: Context) {
                 )
             }
             prefs.saveMonthlyData(resStr)
+            val etag = response.header("ETag")
+            val lastModified = response.header("Last-Modified")
+            prefs.saveMonthlyCacheMetadata(etag, lastModified)
             return data
         }
     }

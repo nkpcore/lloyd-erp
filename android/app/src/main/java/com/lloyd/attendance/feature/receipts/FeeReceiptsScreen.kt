@@ -39,6 +39,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -57,7 +58,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -76,8 +79,10 @@ fun FeeReceiptsScreen(
     val uiState by viewModel.uiState.collectAsState()
     val selectedTab by viewModel.selectedTab.collectAsState()
     val isPrinting by viewModel.isPrinting.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
     val printError by viewModel.printError.collectAsState()
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(printError) {
@@ -143,7 +148,10 @@ fun FeeReceiptsScreen(
                 FeeTab.entries.forEach { tab ->
                     Tab(
                         selected = selectedTab == tab,
-                        onClick = { viewModel.selectTab(tab) },
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewModel.selectTab(tab)
+                        },
                         text = {
                             Text(
                                 text = tab.title,
@@ -155,7 +163,12 @@ fun FeeReceiptsScreen(
                 }
             }
 
-            when (val state = uiState) {
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = { viewModel.refresh() },
+                modifier = Modifier.fillMaxSize()
+            ) {
+                when (val state = uiState) {
                 is FeeReceiptsUiState.Loading -> {
                     LazyColumn(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
@@ -239,6 +252,7 @@ fun FeeReceiptsScreen(
             }
         }
     }
+}
 }
 
 @Composable
