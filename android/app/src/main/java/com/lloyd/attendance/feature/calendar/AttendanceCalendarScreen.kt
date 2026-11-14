@@ -49,7 +49,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.lloyd.attendance.api.Models
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -196,8 +195,7 @@ fun AttendanceCalendarScreen(
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f),
-                            textAlign = TextAlign.Center,
-                            fontSize = 10.sp
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
@@ -545,7 +543,7 @@ fun HeatmapDayCell(
                 ) {
                     Text(
                         text = "${dayInfo.dayOfMonth}",
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFFF6BD60),
                         textAlign = TextAlign.Center
@@ -554,7 +552,7 @@ fun HeatmapDayCell(
             } else {
                 Text(
                     text = "${dayInfo.dayOfMonth}",
-                    fontSize = 12.sp,
+                    style = MaterialTheme.typography.bodySmall,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                     color = textColor,
                     textAlign = TextAlign.Center
@@ -596,8 +594,7 @@ private fun LegendDot(color: Color, label: String) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 10.sp
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -697,8 +694,7 @@ fun LectureLogItemCard(
                         Text(
                             text = lectureTime,
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
-                            fontSize = 10.sp
+                            color = MaterialTheme.colorScheme.outline
                         )
                     }
                 }
@@ -726,8 +722,7 @@ fun LectureLogItemCard(
                             text = badgeText,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = badgeColor,
-                            fontSize = 10.sp
+                            color = badgeColor
                         )
                     }
                 }

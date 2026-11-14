@@ -762,9 +762,9 @@ class ErpApiClient(context: Context) {
             get() = _sharedClient ?: synchronized(this) {
                 _sharedClient ?: OkHttpClient.Builder()
                     .connectionPool(CONNECTION_POOL)
-                    .connectTimeout(10, TimeUnit.SECONDS)
-                    .readTimeout(10, TimeUnit.SECONDS)
-                    .writeTimeout(10, TimeUnit.SECONDS)
+                    .connectTimeout(15, TimeUnit.SECONDS)
+                    .readTimeout(30, TimeUnit.SECONDS)
+                    .writeTimeout(20, TimeUnit.SECONDS)
                     .retryOnConnectionFailure(true)
                     .build().also { _sharedClient = it }
             }

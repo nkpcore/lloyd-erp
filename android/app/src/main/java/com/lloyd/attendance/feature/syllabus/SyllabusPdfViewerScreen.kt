@@ -100,8 +100,8 @@ fun SyllabusPdfViewerScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var currentPageIndex by remember(initialPage) { mutableIntStateOf(initialPage.coerceIn(0, 32)) }
-    var totalPages by remember { mutableIntStateOf(33) }
+    var currentPageIndex by remember(initialPage) { mutableIntStateOf(initialPage.coerceAtLeast(0)) }
+    var totalPages by remember { mutableIntStateOf(0) }
     var currentBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }

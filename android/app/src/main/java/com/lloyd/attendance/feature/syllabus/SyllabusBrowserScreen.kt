@@ -268,7 +268,7 @@ fun SyllabusBrowserScreen(
                         }
                     }
 
-                    items(uiState.filteredCourses, key = { it.id }) { course ->
+                    items(uiState.filteredCourses, key = { "${it.code}_${it.id}" }) { course ->
                         SyllabusCourseCard(
                             course = course,
                             onClick = { onSelectCourse(course) }

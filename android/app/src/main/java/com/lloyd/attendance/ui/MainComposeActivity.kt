@@ -606,7 +606,6 @@ fun MainAppShell(
 ) {
     var selectedTab by remember { mutableStateOf(initialTab) }
     var destination by remember { mutableStateOf<ScreenDestination>(ScreenDestination.Main) }
-    val selectedCalendarDateFlow = remember { MutableStateFlow<LocalDate?>(null) }
 
     val pendingNavigationRequest by navigationRequestFlow.collectAsState()
     LaunchedEffect(pendingNavigationRequest) {
