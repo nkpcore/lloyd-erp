@@ -644,9 +644,10 @@ fun DashboardScreen(
                             val code = subject.subjectCode.ifBlank { subject.subjectName }
                             if (code.isNotBlank()) "${code}_$index" else "subj_$index"
                         }
-                    ) { _, subject ->
+                    ) { index, subject ->
                         AttendanceCard(
                             subject = subject,
+                            animationIndex = index,
                             onClick = { onNavigateToSubjectDetail(subject) }
                         )
                     }

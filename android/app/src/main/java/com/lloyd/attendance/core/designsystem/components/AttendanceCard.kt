@@ -22,11 +22,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -39,14 +44,30 @@ import com.lloyd.attendance.core.domain.SubjectAttendance
 fun AttendanceCard(
     subject: SubjectAttendance,
     modifier: Modifier = Modifier,
+    animationIndex: Int = 0,
     onClick: () -> Unit = {}
 ) {
     val isDark = androidx.compose.foundation.isSystemInDarkTheme()
     val cardShape = MaterialTheme.shapes.large
+    // Staggered entry: fade + slide up
+    var entered by remember { mutableFloatStateOf(0f) }
+    val alpha by animateFloatAsState(
+        targetValue = entered,
+        animationSpec = tween(durationMillis = 400, delayMillis = animationIndex * 60, easing = FastOutSlowInEasing),
+        label = "card_alpha"
+    )
+    val translationY by animateFloatAsState(
+        targetValue = if (entered == 1f) 0f else 24f,
+        animationSpec = tween(durationMillis = 400, delayMillis = animationIndex * 60, easing = FastOutSlowInEasing),
+        label = "card_slide"
+    )
+    LaunchedEffect(Unit) { entered = 1f }
+
     ElevatedCard(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
+            .graphicsLayer { this.alpha = alpha; this.translationY = translationY }
             .then(if (isDark) Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, cardShape) else Modifier),
         shape = cardShape,
         colors = androidx.compose.material3.CardDefaults.elevatedCardColors(
