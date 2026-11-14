@@ -113,7 +113,6 @@ import com.lloyd.attendance.feature.feedback.FeedbackViewModel
 import com.lloyd.attendance.feature.receipts.FeeReceiptsScreen
 import com.lloyd.attendance.feature.receipts.FeeReceiptsViewModel
 import com.lloyd.attendance.feature.services.ServicesHubScreen
-import com.lloyd.attendance.campus.ui.CampusConnectScreen
 import com.lloyd.attendance.widget.AttendanceSyncWorker
 import com.lloyd.attendance.widget.AttendanceWidgetProvider
 import androidx.lifecycle.Lifecycle
@@ -585,7 +584,6 @@ sealed interface ScreenDestination {
     ) : ScreenDestination
     data object Feedback : ScreenDestination
     data object FeeReceipts : ScreenDestination
-    data object CampusConnect : ScreenDestination
 }
 
 @Composable
@@ -692,10 +690,7 @@ fun MainAppShell(
                     onNavigateBack = { destination = ScreenDestination.Main },
                     onDateSelected = { dateStr ->
                         val parsedDate = try { LocalDate.parse(dateStr) } catch (_: Exception) { null }
-                        selectedCalendarDateFlow.value = parsedDate
-                        logsViewModel.filterByDate(parsedDate)
-                        selectedTab = MainTab.LOGS
-                        destination = ScreenDestination.Main
+                        parsedDate?.let { calendarViewModel.selectDate(it) }
                     }
                 )
             }
@@ -751,11 +746,6 @@ fun MainAppShell(
                 )
             }
 
-            is ScreenDestination.CampusConnect -> {
-                CampusConnectScreen(
-                    onNavigateBack = { destination = ScreenDestination.Main }
-                )
-            }
 
             is ScreenDestination.Main -> {
                 Column(
@@ -837,9 +827,6 @@ fun MainAppShell(
                                     },
                                     onNavigateToFeedback = {
                                         destination = ScreenDestination.Feedback
-                                    },
-                                    onNavigateToCampusConnect = {
-                                        destination = ScreenDestination.CampusConnect
                                     }
                                 )
                             }

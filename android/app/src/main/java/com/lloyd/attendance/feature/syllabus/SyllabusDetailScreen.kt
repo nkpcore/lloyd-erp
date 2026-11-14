@@ -40,10 +40,11 @@ fun SyllabusDetailScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = course.shortTitle,
+                        text = course.shortTitle.ifBlank { course.title },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 },
                 navigationIcon = {
@@ -232,8 +233,8 @@ fun SyllabusDetailScreen(
             }
 
             // 5 Units
-            val safeUnits = course.units ?: emptyList()
-            items(safeUnits, key = { it.unitNumber }) { unit ->
+            val safeUnits = (course.units ?: emptyList()).distinctBy { it.unitNumber }
+            items(safeUnits, key = { "unit_${it.unitNumber}" }) { unit ->
                 ExpandableUnitCard(unit = unit)
             }
 

@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Fingerprint
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Share
@@ -306,7 +305,7 @@ fun ProfileScreen(
                             }
                         }
                         Spacer(modifier = Modifier.width(14.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             val resolvedName = userProfile?.name?.takeIf { it.isNotBlank() }
                                 ?: stats?.studentName?.takeIf { it.isNotBlank() }
                                 ?: prefs.cachedStats?.studentName?.takeIf { it.isNotBlank() }
@@ -314,7 +313,9 @@ fun ProfileScreen(
                             Text(
                                 text = resolvedName,
                                 style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 2,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )
                             val resolvedId = if (studentId > 0) studentId
                             else if ((userProfile?.id ?: 0) > 0) userProfile?.id

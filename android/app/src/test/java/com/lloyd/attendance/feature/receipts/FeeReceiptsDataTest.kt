@@ -117,3 +117,4 @@ class FeeReceiptsDataTest {
         assertEquals("<html><body>Receipt</body></html>", htmlData.htmlContent)
     }
 }
+

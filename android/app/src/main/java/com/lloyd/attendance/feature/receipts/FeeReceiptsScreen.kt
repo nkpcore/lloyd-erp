@@ -54,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lloyd.attendance.api.Models
@@ -255,52 +256,54 @@ private fun ReceiptCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // Row 1: Icon + receipt number (1 line max)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Receipt,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Column {
+                    Icon(
+                        imageVector = Icons.Default.Receipt,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = receipt.receiptNo?.takeIf { it.isNotBlank() } ?: "Receipt #${receipt.id}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    receipt.receiptDate?.takeIf { it.isNotBlank() }?.let { dateStr ->
                         Text(
-                            text = receipt.receiptNo?.takeIf { it.isNotBlank() } ?: "Receipt #${receipt.id}",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            text = Models.formatToIndianDate(dateStr),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        receipt.receiptDate?.takeIf { it.isNotBlank() }?.let { dateStr ->
-                            Text(
-                                text = Models.formatToIndianDate(dateStr),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
                     }
                 }
-
-                Text(
-                    text = "₹${"%,.2f".format(receipt.amount)}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = AttendanceColors.Present
-                )
             }
+
+            // Row 2: Amount on its own line, never wraps
+            Text(
+                text = "\u20B9" + "%,.2f".format(receipt.amount),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.ExtraBold,
+                color = AttendanceColors.Present,
+                maxLines = 1,
+                modifier = Modifier.fillMaxWidth()
+            )
+
 
             if (!receipt.feeHead.isNullOrBlank() || !receipt.academicYear.isNullOrBlank()) {
                 Row(
@@ -405,7 +408,7 @@ private fun TransactionCard(transaction: Models.FeeTransactionItem) {
                 }
 
                 Text(
-                    text = "₹${"%,.2f".format(transaction.amount)}",
+                    text = "Ã¢â€šÂ¹${"%,.2f".format(transaction.amount)}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary

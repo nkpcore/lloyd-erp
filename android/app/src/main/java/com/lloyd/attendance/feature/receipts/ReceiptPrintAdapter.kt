@@ -203,12 +203,27 @@ object ReceiptPrintAdapter {
                 val element = JsonParser.parseString(trimmed)
                 if (element.isJsonObject) {
                     val obj = element.asJsonObject
-                    if (obj.has("data") && obj.get("data").isJsonPrimitive && obj.get("data").asJsonPrimitive.isString) {
-                        html = obj.get("data").asString
-                    } else if (obj.has("html") && obj.get("html").isJsonPrimitive && obj.get("html").asJsonPrimitive.isString) {
-                        html = obj.get("html").asString
-                    } else if (obj.has("content") && obj.get("content").isJsonPrimitive && obj.get("content").asJsonPrimitive.isString) {
-                        html = obj.get("content").asString
+                    when {
+                        // ERP returns: {"status":true,"data":{"log_id":...,"html":"..."}}
+                        obj.has("data") && obj.get("data").isJsonObject -> {
+                            val dataObj = obj.getAsJsonObject("data")
+                            html = when {
+                                dataObj.has("html") && dataObj.get("html").isJsonPrimitive
+                                    -> dataObj.get("html").asString
+                                dataObj.has("content") && dataObj.get("content").isJsonPrimitive
+                                    -> dataObj.get("content").asString
+                                else -> html
+                            }
+                        }
+                        obj.has("data") && obj.get("data").isJsonPrimitive
+                            && obj.get("data").asJsonPrimitive.isString ->
+                            html = obj.get("data").asString
+                        obj.has("html") && obj.get("html").isJsonPrimitive
+                            && obj.get("html").asJsonPrimitive.isString ->
+                            html = obj.get("html").asString
+                        obj.has("content") && obj.get("content").isJsonPrimitive
+                            && obj.get("content").asJsonPrimitive.isString ->
+                            html = obj.get("content").asString
                     }
                 }
             } catch (_: Exception) {}
@@ -218,22 +233,43 @@ object ReceiptPrintAdapter {
             <style>
                 @page {
                     size: A4 portrait;
-                    margin: 8mm;
+                    margin: 10mm 12mm;
                 }
                 html, body {
                     width: 100% !important;
                     height: auto !important;
                     background: #FFFFFF !important;
-                    color: #000000 !important;
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+                    color: #1a1a1a !important;
+                    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
                     font-size: 11pt !important;
                     margin: 0 !important;
-                    padding: 8px !important;
+                    padding: 0 !important;
                     box-sizing: border-box !important;
+                    line-height: 1.5 !important;
                 }
                 table {
                     width: 100% !important;
                     border-collapse: collapse !important;
+                    margin-bottom: 8px !important;
+                }
+                th, td {
+                    padding: 6px 10px !important;
+                    border: 1px solid #cccccc !important;
+                    text-align: left !important;
+                    font-size: 10.5pt !important;
+                    vertical-align: top !important;
+                    word-break: break-word !important;
+                }
+                th {
+                    background-color: #f0f0f0 !important;
+                    font-weight: 600 !important;
+                }
+                tr:nth-child(even) td {
+                    background-color: #fafafa !important;
+                }
+                h1, h2, h3, h4 {
+                    margin: 8px 0 4px 0 !important;
+                    font-weight: 700 !important;
                 }
                 img {
                     max-width: 100% !important;
@@ -244,9 +280,11 @@ object ReceiptPrintAdapter {
                         -webkit-print-color-adjust: exact !important;
                         print-color-adjust: exact !important;
                     }
-                    .no-print, button, input[type="button"], input[type="submit"] {
+                    .no-print, button, a[href^="javascript"],
+                    input[type="button"], input[type="submit"] {
                         display: none !important;
                     }
+                    table { page-break-inside: avoid !important; }
                 }
             </style>
         """.trimIndent()

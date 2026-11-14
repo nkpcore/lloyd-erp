@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Update
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -60,7 +59,6 @@ fun ServicesHubScreen(
     onNavigateToFeeReceipts: () -> Unit,
     onNavigateToSimulation: () -> Unit,
     onNavigateToFeedback: () -> Unit,
-    onNavigateToCampusConnect: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val honeyBronze = Color(0xFFF6BD60)
@@ -78,7 +76,6 @@ fun ServicesHubScreen(
         ),
         "Tools" to listOf(
             ServiceItem("Bunk Planner", "Simulate your attendance", Icons.Default.Calculate, lightCoral, onClick = onNavigateToSimulation),
-            ServiceItem("Campus Connect", "Campus Wi-Fi auto-login", Icons.Default.Wifi, mutedTeal, badge = "Beta", onClick = onNavigateToCampusConnect),
             ServiceItem("Feedback", "Report an issue", Icons.Default.Feedback, lightCoral, onClick = onNavigateToFeedback)
         )
     )

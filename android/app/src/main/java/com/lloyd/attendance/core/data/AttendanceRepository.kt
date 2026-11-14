@@ -15,6 +15,8 @@ import com.lloyd.attendance.core.domain.SubjectSummary
 import com.lloyd.attendance.data.AppPreferences
 import com.lloyd.attendance.feature.logs.AttendanceLogsProcessor
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -102,30 +104,41 @@ class AttendanceRepository(
     suspend fun refresh(isForeground: Boolean = true): Result<AttendanceSnapshot> = withContext(Dispatchers.IO) {
         syncMutex.withLock {
             try {
-                // 1. Transactional Fetch: Monthly aggregate
-                val monthlyData = apiClient.monthlyAttendance
+                val cachedStudentId = prefs.studentId
 
-                // Fetch authentic student profile details from /profile/me
-                try {
-                    apiClient.profile
-                } catch (ignored: Exception) {
-                }
-
-                // 2. Transactional Fetch: Class detailed logs
-                val studentId = if (monthlyData.studentId > 0) monthlyData.studentId else prefs.studentId
-                var logsFetchSucceeded = false
-                val freshLogs: List<Models.StudentAttendanceItem> = if (studentId > 0) {
-                    try {
-                        val fetched = apiClient.getStudentAttendanceLogs(studentId)
-                        logsFetchSucceeded = true
-                        fetched
-                    } catch (e: Exception) {
-                        logsFetchSucceeded = false
-                        emptyList()
+                // Run monthly + profile in parallel, and logs too if we have a cached id.
+                // coroutineScope ensures structured concurrency: all children cancelled on failure.
+                val (monthlyData, freshLogs, logsFetchSucceeded) = coroutineScope {
+                    val monthlyDef = async { apiClient.monthlyAttendance }
+                    val profileDef = async {
+                        try { apiClient.profile } catch (_: Exception) { null }
                     }
-                } else {
-                    emptyList()
+                    val logsDef = if (cachedStudentId > 0) {
+                        async {
+                            try { apiClient.getStudentAttendanceLogs(cachedStudentId) }
+                            catch (_: Exception) { null }
+                        }
+                    } else null
+
+                    val monthly = monthlyDef.await()
+                    profileDef.await()
+
+                    val effectiveId = if (monthly.studentId > 0) monthly.studentId else cachedStudentId
+                    val (logs, succeeded) = when {
+                        logsDef != null -> {
+                            val result = logsDef.await()
+                            if (result != null) result to true else emptyList<Models.StudentAttendanceItem>() to false
+                        }
+                        effectiveId > 0 -> {
+                            try { apiClient.getStudentAttendanceLogs(effectiveId) to true }
+                            catch (_: Exception) { emptyList<Models.StudentAttendanceItem>() to false }
+                        }
+                        else -> emptyList<Models.StudentAttendanceItem>() to false
+                    }
+                    Triple(monthly, logs, succeeded)
                 }
+
+                val studentId = if (monthlyData.studentId > 0) monthlyData.studentId else cachedStudentId
 
                 val nowMillis = System.currentTimeMillis()
 

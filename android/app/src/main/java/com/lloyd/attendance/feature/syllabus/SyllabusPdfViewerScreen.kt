@@ -71,7 +71,12 @@ fun getPdfPageForCourse(courseCode: String?, courseTitle: String?): Int {
     return when {
         code.contains("101E") || code.contains("201E") || title.contains("quantum") || title.contains("physics") -> 1 // Page 2
         code.contains("102D") || code.contains("202D") || title.contains("chemistry") -> 3 // Page 4
-        code.contains("103D") || title.contains("calculus") -> 5 // Page 6
+        code.contains("103D") || title.contains("calculus")
+            || title.contains("applied mathematics")
+            || title.contains("mathematics-i")
+            || title.contains("mathematics 1")
+            || title.contains("maths-i")
+            || title.contains("maths 1") -> 5 // Page 6
         code.contains("203D") || title.contains("numerical") -> 7 // Page 8
         code.contains("AEE") || title.contains("electrical") -> 9 // Page 10
         code.contains("AEC") || title.contains("electronics") -> 11 // Page 12

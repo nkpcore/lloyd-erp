@@ -527,40 +527,6 @@ fun DashboardScreen(
                     }
                 }
 
-                // Log-Monthly Reconciliation Gap Banner
-                val recon = uiState.reconciliation
-                val dataGap = recon.aggregateTotal - recon.ledgerTotal
-                if (!recon.isReconciled && dataGap > 0) {
-                    item {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(MaterialTheme.shapes.small),
-                            color = MaterialTheme.colorScheme.secondaryContainer
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Warning,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "⚠ $dataGap class record(s) counted in your monthly summary are not yet available in detailed logs. Data may still be syncing from the ERP server.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                            }
-                        }
-                    }
-                }
-
                 // Official AKTU Syllabus In-App PDF Card
                 item {
                     ElevatedCard(
