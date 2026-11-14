@@ -130,6 +130,8 @@ object ReceiptPrintAdapter {
                 loadsImagesAutomatically = true
                 useWideViewPort = true
                 loadWithOverviewMode = true
+                allowFileAccess = false
+                allowContentAccess = false
             }
         }
         activeWebView = webView

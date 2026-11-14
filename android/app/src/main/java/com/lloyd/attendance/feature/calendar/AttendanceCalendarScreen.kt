@@ -1,17 +1,14 @@
 package com.lloyd.attendance.feature.calendar
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
@@ -323,42 +320,32 @@ fun AttendanceCalendarScreen(
                 // Empty state
                 if (uiState.selectedDateLogs.isEmpty()) {
                     item {
-                        AnimatedVisibility(
-                            visible = true,
-                            enter = fadeIn(tween(300)) + expandVertically(tween(300))
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            border = BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                            )
                         ) {
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                border = BorderStroke(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                                )
-                            ) {
-                                Text(
-                                    text = "No lectures recorded for this day",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(vertical = 24.dp, horizontal = 16.dp)
-                                )
-                            }
+                            Text(
+                                text = "No lectures recorded for this day",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(vertical = 24.dp, horizontal = 16.dp)
+                            )
                         }
                     }
                 } else {
-                    items(uiState.selectedDateLogs) { log ->
-                        AnimatedVisibility(
-                            visible = true,
-                            enter = fadeIn(tween(200)) + slideInVertically(tween(220)) { it / 3 }
-                        ) {
-                            LectureLogItemCard(
-                                log = log,
-                                modifier = Modifier.padding(bottom = 8.dp)
-                            )
-                        }
+                    items(uiState.selectedDateLogs, key = { it.id }) { log ->
+                        LectureLogItemCard(
+                            log = log,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
                     }
                 }
             }
