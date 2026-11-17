@@ -312,7 +312,7 @@ fun SyllabusCourseCard(
                     color = MaterialTheme.colorScheme.secondaryContainer
                 ) {
                     Text(
-                        text = course.code,
+                        text = course.code ?: "",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -340,7 +340,7 @@ fun SyllabusCourseCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = course.title,
+                text = course.title ?: "",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,

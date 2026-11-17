@@ -139,7 +139,7 @@ jobs:
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.create_release == true || inputs.create_release == 'true'))
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && (inputs.create_release == true || inputs.create_release == 'true'))
         with:
           tag_name: ${{ inputs.version_tag != '' && inputs.version_tag || (startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v1.0.{0}', github.run_number)) }}
           name: ${{ inputs.version_tag != '' && format('Lloyd Attendance {0}', inputs.version_tag) || (startsWith(github.ref, 'refs/tags/v') && format('Lloyd Attendance {0}', github.ref_name) || format('Lloyd Attendance v1.0.{0}', github.run_number)) }}
@@ -168,7 +168,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Broadcast Release to Fleet Server
-        if: success() && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.create_release == true || inputs.create_release == 'true')))
+        if: success() && (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && (inputs.create_release == true || inputs.create_release == 'true')))
         env:
           FLEET_SERVER_URL: ${{ secrets.FLEET_SERVER_URL }}
           FLEET_ADMIN_TOKEN: ${{ secrets.FLEET_ADMIN_TOKEN }}

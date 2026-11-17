@@ -40,7 +40,7 @@ fun SyllabusDetailScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = course.shortTitle.ifBlank { course.title },
+                        text = course.shortTitle?.ifBlank { course.title ?: "" } ?: course.title ?: "",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -97,7 +97,7 @@ fun SyllabusDetailScreen(
                                 color = MaterialTheme.colorScheme.primaryContainer
                             ) {
                                 Text(
-                                    text = course.code,
+                                    text = course.code ?: "",
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -114,7 +114,7 @@ fun SyllabusDetailScreen(
                         Spacer(modifier = Modifier.height(10.dp))
 
                         Text(
-                            text = course.title,
+                            text = course.title ?: "",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -128,7 +128,7 @@ fun SyllabusDetailScreen(
                                 color = MaterialTheme.colorScheme.surfaceVariant
                             ) {
                                 Text(
-                                    text = course.category,
+                                    text = course.category ?: "",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -139,7 +139,7 @@ fun SyllabusDetailScreen(
                                 color = MaterialTheme.colorScheme.surfaceVariant
                             ) {
                                 Text(
-                                    text = course.type,
+                                    text = course.type ?: "",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -269,7 +269,7 @@ fun SyllabusDetailScreen(
                                         color = MaterialTheme.colorScheme.tertiaryContainer
                                     ) {
                                         Text(
-                                            text = co.code + if (!co.bloomsLevel.isNullOrBlank()) " (${co.bloomsLevel})" else "",
+                                            text = (co.code ?: "") + if (!co.bloomsLevel.isNullOrBlank()) " (${co.bloomsLevel})" else "",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -277,7 +277,7 @@ fun SyllabusDetailScreen(
                                         )
                                     }
                                     Text(
-                                        text = co.text,
+                                        text = co.text ?: "",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurface,
                                         modifier = Modifier.weight(1f)

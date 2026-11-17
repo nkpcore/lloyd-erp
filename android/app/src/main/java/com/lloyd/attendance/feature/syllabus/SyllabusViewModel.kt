@@ -45,7 +45,7 @@ class SyllabusViewModel(application: Application) : AndroidViewModel(application
                     state.copy(
                         isLoading = false,
                         payload = payload,
-                        filteredCourses = applyFilters(payload.courses, state.searchQuery, state.selectedSemester, state.selectedCategory)
+                        filteredCourses = applyFilters(payload.courses ?: emptyList(), state.searchQuery, state.selectedSemester, state.selectedCategory)
                     )
                 }
             } catch (e: Exception) {

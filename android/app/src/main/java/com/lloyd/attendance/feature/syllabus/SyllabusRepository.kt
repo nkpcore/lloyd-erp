@@ -16,7 +16,12 @@ class SyllabusRepository private constructor(private val context: Context) {
         val assetManager = context.assets
         assetManager.open("aktu_cse_syllabus_2026_27.json").use { stream ->
             InputStreamReader(stream, Charsets.UTF_8).use { reader ->
-                val payload = gson.fromJson(reader, SyllabusPayload::class.java)
+                val raw = gson.fromJson(reader, SyllabusPayload::class.java)
+                // Gson bypasses Kotlin constructors, so null-collection fields
+                // declared with default values are still null at runtime.
+                // Normalize every course so callers never receive null collections.
+                val normalizedCourses = raw.safeCourses()
+                val payload = raw.copy(courses = normalizedCourses)
                 cachedPayload = payload
                 payload
             }
@@ -24,7 +29,7 @@ class SyllabusRepository private constructor(private val context: Context) {
     }
 
     suspend fun getCourseById(courseId: String): SyllabusCourse? = withContext(Dispatchers.IO) {
-        getSyllabus().courses.firstOrNull { it.id.equals(courseId, ignoreCase = true) }
+        getSyllabus().courses?.firstOrNull { it.id.equals(courseId, ignoreCase = true) }
     }
 
     companion object {
